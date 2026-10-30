@@ -155,7 +155,7 @@
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.04em;
-  text-transform: uppercase;
+  text-transform: none;
   color: var(--lg-soft);
   border-bottom: 1px solid var(--lg-border);
   white-space: nowrap;
@@ -288,14 +288,14 @@
   background: var(--lg-muted);
 }
 
-.definitionList dt { font-size: 11px; color: var(--lg-soft); text-transform: uppercase; letter-spacing: 0.04em; }
+.definitionList dt { font-size: 11px; color: var(--lg-soft); text-transform: none; letter-spacing: 0.04em; }
 .definitionList dd { margin: 0; font-size: 14px; font-variant-numeric: tabular-nums; }
 
 .sectionTitle {
   font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  letter-spacing: normal;
+  text-transform: none;
   color: var(--lg-soft);
   margin: 0;
 }
@@ -389,7 +389,7 @@
   .dataTable thead { display: none; }
   .dataTable tbody tr { display: grid; gap: 4px; padding: 10px 12px; border-bottom: 1px solid var(--lg-border); }
   .dataTable td { display: grid; grid-template-columns: 110px 1fr; gap: 8px; padding: 2px 0; border: none; }
-  .dataTable td::before { content: attr(data-label); font-size: 11px; color: var(--lg-soft); text-transform: uppercase; }
+  .dataTable td::before { content: attr(data-label); font-size: 11px; color: var(--lg-soft); text-transform: none; }
   .amount { text-align: left; }
   .drawer { width: 100%; padding: 16px; }
 }

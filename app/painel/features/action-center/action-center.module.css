@@ -20,7 +20,7 @@
 .header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
 .header h2 { margin: 3px 0 4px; font-size: 1.02rem; }
 .header p { margin: 0; color: var(--ac-soft); font-size: .78rem; }
-.eyebrow { color: var(--ac-soft); font-size: .75rem; font-weight: 820; letter-spacing: .11em; }
+.eyebrow { color: var(--ac-soft); font-size: .75rem; font-weight: 820; letter-spacing: normal; }
 
 .refresh {
   display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 0 13px;

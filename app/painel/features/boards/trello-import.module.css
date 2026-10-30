@@ -5,7 +5,7 @@
   background: var(--ui-surface); color: var(--ui-text);
 }
 .header > div { display: grid; gap: 4px; max-width: 70ch; }
-.eyebrow { color: var(--ui-text-soft); font-size: .75rem; font-weight: 800; letter-spacing: .09em; }
+.eyebrow { color: var(--ui-text-soft); font-size: .75rem; font-weight: 800; letter-spacing: normal; }
 .title { margin: 0; font-size: 1rem; }
 .lead, .hint, .found { margin: 0; color: var(--ui-text-soft); font-size: .8rem; line-height: 1.45; }
 .subtitle { margin: 6px 0 0; font-size: .86rem; }
@@ -43,7 +43,7 @@
 .plan { display: grid; gap: 10px; }
 .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
 .summary article { display: grid; gap: 3px; min-width: 0; padding: 11px 12px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md, 10px); }
-.summary small { color: var(--ui-text-soft); font-size: .75rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.summary small { color: var(--ui-text-soft); font-size: .75rem; font-weight: 800; letter-spacing: .04em; text-transform: none; }
 .summary strong { font-size: .95rem; font-variant-numeric: tabular-nums; }
 .summary span { overflow-wrap: anywhere; color: var(--ui-text-soft); font-size: .78rem; }
 

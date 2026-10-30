@@ -91,7 +91,7 @@ export function EpiDashboardPanel({ dashboard, month, onMonth, onPeople, onRequi
 
     <div className={styles.dashboardColumns}>
       <section className={styles.chartPanel}>
-        <header><div><span>UTILIZAÇÃO EM {month}</span><h3>EPIs mais entregues</h3></div><BarChart3 aria-hidden="true" /></header>
+        <header><div><span>Utilização em {month}</span><h3>EPIs mais entregues</h3></div><BarChart3 aria-hidden="true" /></header>
         {dashboard.utilization.length ? <div className={styles.usageList}>
           {dashboard.utilization.map((item) => <div key={item.productId} className={styles.usageRow}>
             <div><strong>{item.productName}</strong><small>{item.delivered} entregue(s) · {item.returned} devolvido(s) · saldo {item.availableQuantity}</small></div>

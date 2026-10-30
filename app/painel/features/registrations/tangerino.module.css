@@ -126,7 +126,7 @@
   border-bottom: 1px solid var(--tg-border);
   background: var(--tg-muted);
 }
-.result header span { display: block; color: var(--tg-accent-text); font-size: 12px; font-weight: 800; letter-spacing: .09em; }
+.result header span { display: block; color: var(--tg-accent-text); font-size: 12px; font-weight: 800; letter-spacing: normal; }
 .result header strong { display: block; margin-top: 4px; font-size: 15px; letter-spacing: -.02em; }
 /* Situação não reconhecida não se disfarça de resposta: ela avisa, e o texto
    original logo abaixo é quem responde de verdade. */
@@ -156,7 +156,7 @@
   gap: 12px;
 }
 .result dl > div { min-width: 0; }
-.result dt { color: var(--tg-soft); font-size: 12px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+.result dt { color: var(--tg-soft); font-size: 12px; font-weight: 750; letter-spacing: normal; text-transform: none; }
 .result dd { margin: 4px 0 0; overflow-wrap: anywhere; font-size: 12px; }
 
 .history { border: 1px solid var(--tg-border); border-radius: 12px; overflow: hidden; }

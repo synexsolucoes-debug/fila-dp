@@ -30,7 +30,7 @@
   background: var(--erp-surface);
 }
 .menu > header { display: grid; gap: 2px; padding: 4px 6px 8px; border-bottom: 1px solid var(--erp-border); }
-.menu > header span { color: var(--erp-accent-text); font-size: .78rem; font-weight: 800; letter-spacing: .12em; }
+.menu > header span { color: var(--erp-accent-text); font-size: .78rem; font-weight: 800; letter-spacing: normal; }
 .menu > header small { color: var(--erp-soft); font-size: .78rem; }
 .menu ul { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
 .menu li button {
@@ -48,7 +48,7 @@
 .exit:hover { background: var(--erp-muted); }
 
 .work { display: grid; gap: 16px; min-width: 0; }
-.workHeader span { color: var(--erp-accent-text); font-size: .75rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.workHeader span { color: var(--erp-accent-text); font-size: .75rem; font-weight: 800; letter-spacing: normal; text-transform: none; }
 .workHeader h1 { margin: 2px 0 0; font-size: 1.35rem; }
 
 .stack { display: grid; gap: 14px; min-width: 0; }
@@ -113,10 +113,10 @@ label.secondary { position: relative; }
 .recordTabs button.recordTabActive strong { color: var(--erp-accent-text); }
 .actionCard { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--erp-border); border-radius: 12px; background: var(--erp-surface); }
 .actionCard > header { display: grid; gap: 2px; }
-.actionCard > header span { color: var(--erp-accent-text); font-size: .75rem; font-weight: 800; letter-spacing: .1em; }
+.actionCard > header span { color: var(--erp-accent-text); font-size: .75rem; font-weight: 800; letter-spacing: normal; }
 .actionCard > header strong { font-size: .9rem; }
 .recordHead { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 14px; border: 1px solid var(--erp-border); border-radius: 12px; background: var(--erp-surface); }
-.recordHead small { color: var(--erp-soft); font-size: .75rem; font-weight: 800; letter-spacing: .06em; }
+.recordHead small { color: var(--erp-soft); font-size: .75rem; font-weight: 800; letter-spacing: normal; }
 .recordHead h2 { margin: 2px 0; font-size: 1.1rem; }
 .recordHead span { color: var(--erp-soft); font-size: .76rem; }
 .actionsRow { display: flex; flex-wrap: wrap; gap: 8px; }

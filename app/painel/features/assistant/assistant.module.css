@@ -65,7 +65,7 @@
 .panel > header button svg { width: 15px; height: 15px; }
 
 /* Sobre o navy do cabeçalho os tokens de superfície clara não leem. */
-.eyebrow { color: var(--brand-accent-on-dark, #6fb4ff); font-size: .75rem; font-weight: 820; letter-spacing: .12em; }
+.eyebrow { color: var(--brand-accent-on-dark, #6fb4ff); font-size: .75rem; font-weight: 820; letter-spacing: normal; }
 
 .boundary {
   /* Grid de duas colunas, não flex: em flex o `<b>` do meio da frase virava um

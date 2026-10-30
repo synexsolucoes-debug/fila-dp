@@ -97,7 +97,7 @@
   gap: 16px;
 }
 
-.eyebrow { color: var(--p-text); font-size: 12px; font-weight: 800; letter-spacing: .1em; }
+.eyebrow { color: var(--p-text); font-size: 12px; font-weight: 800; letter-spacing: normal; }
 .pageHeader h2 { margin: 4px 0 0; color: var(--t); font-size: 22px; letter-spacing: -.03em; }
 .pageHeader p { max-width: 680px; margin: 6px 0 0; color: var(--soft); font-size: 13px; line-height: 1.5; }
 
@@ -186,7 +186,7 @@
 .maturityStrip button[data-tone="published"] { border-top-color: var(--ui-done); }
 .maturityStrip button[data-tone="archived"] { border-top-color: var(--muted); }
 .maturityStrip button:hover { background: var(--m); }
-.maturityStrip span { color: var(--soft); font-size: 11px; font-weight: 750; text-transform: uppercase; letter-spacing: .045em; }
+.maturityStrip span { color: var(--soft); font-size: 11px; font-weight: 750; text-transform: none; letter-spacing: .045em; }
 .maturityStrip strong { grid-row: 1 / 3; grid-column: 2; align-self: center; color: var(--t); font-size: 24px; line-height: 1; }
 .maturityStrip small { overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -311,9 +311,9 @@
   color: var(--soft);
   font-size: 12px;
   font-weight: 800;
-  letter-spacing: .06em;
+  letter-spacing: normal;
   text-align: left;
-  text-transform: uppercase;
+  text-transform: none;
   white-space: nowrap;
 }
 
@@ -509,7 +509,7 @@
   background: var(--s);
 }
 
-.propertiesHeader span { color: var(--p-text); font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .07em; }
+.propertiesHeader span { color: var(--p-text); font-size: 12px; font-weight: 800; text-transform: none; letter-spacing: normal; }
 .propertiesHeader strong { color: var(--t); font-size: 14px; }
 .propertiesHeader small { color: var(--muted); font-size: 11px; }
 
@@ -525,7 +525,7 @@
   background: var(--s);
 }
 
-.propertySections legend { color: var(--p-text); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+.propertySections legend { color: var(--p-text); font-size: 11px; font-weight: 800; text-transform: none; letter-spacing: normal; }
 .propertySections label, .formGrid label { display: grid; gap: 4px; color: var(--soft); font-size: 12px; font-weight: 650; }
 .checkLabel { display: flex; align-items: center; gap: 7px; }
 .checkLabel input { width: 16px; min-height: 16px; }
@@ -627,7 +627,7 @@
   background: var(--m);
 }
 
-.companyPicker > strong { grid-column: 1 / -1; color: var(--soft); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+.companyPicker > strong { grid-column: 1 / -1; color: var(--soft); font-size: 11px; text-transform: none; letter-spacing: normal; }
 
 .processForm footer { position: sticky; bottom: -16px; margin: 0 -16px -16px; padding: 12px 16px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--b); background: var(--elevated); }
 
@@ -647,7 +647,7 @@
 .detailStatus { margin-top: 9px; display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
 .detailStatus > span:not(:first-child) { color: var(--soft); font-size: 11px; }
 .detailPurpose { padding: 18px 20px; border-bottom: 1px solid var(--b); }
-.detailPurpose > span { color: var(--p-text); font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.detailPurpose > span { color: var(--p-text); font-size: 12px; font-weight: 800; letter-spacing: normal; text-transform: none; }
 .detailPurpose p { max-width: 760px; margin: 6px 0 0; color: var(--t); font-size: 14px; font-weight: 650; line-height: 1.55; }
 .detailPurpose small { display: block; max-width: 760px; margin-top: 6px; color: var(--soft); font-size: 12px; line-height: 1.5; }
 .detailGrid { padding: 16px 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -744,7 +744,7 @@
    painel pela primeira vez. */
 .fieldsetHint { margin: 0 0 2px; color: var(--soft); font-size: 11px; line-height: 1.45; }
 
-.conditionGroupLabel { color: var(--p-text); font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
+.conditionGroupLabel { color: var(--p-text); font-size: 12px; font-weight: 800; text-transform: none; letter-spacing: normal; }
 
 .conditionRows { display: grid; gap: 6px; }
 .conditionEmpty { margin: 0; color: var(--muted); font-size: 11px; font-style: italic; }
@@ -913,7 +913,7 @@
   border-bottom: 1px solid var(--b);
 }
 .detailMeta > div { display: grid; gap: 3px; min-width: 0; }
-.detailMeta dt { color: var(--soft); font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.detailMeta dt { color: var(--soft); font-size: 12px; font-weight: 700; letter-spacing: normal; text-transform: none; }
 .detailMeta dd { margin: 0; color: var(--t); font-size: 12px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 
 /* --- Propriedades (coluna da direita) ------------------------------------ */

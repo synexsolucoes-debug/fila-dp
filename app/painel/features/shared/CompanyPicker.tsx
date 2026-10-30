@@ -83,6 +83,7 @@ export function CompanyPicker({ companies, value, allLabel, onChange }: CompanyP
     <div className="company-picker" ref={rootRef}>
       <button type="button" className="company-picker-trigger" aria-haspopup="listbox" aria-expanded={open}
         aria-controls={open ? listId : undefined} onClick={() => setOpen((state) => !state)}
+        aria-label={`Selecionar empresa: ${current ? shortName(current) : allLabel}`}
         title={current ? current.legalName : allLabel}>
         <Building2 aria-hidden="true" />
         <span>{current ? shortName(current) : allLabel}</span>
@@ -96,13 +97,13 @@ export function CompanyPicker({ companies, value, allLabel, onChange }: CompanyP
         </label>}
         <ul id={listId} role="listbox" aria-label="Empresa">
           {!query && <li role="option" aria-selected={value === "all"}>
-            <button type="button" onClick={() => choose("all")}>
+            <button type="button" data-company="all" onClick={() => choose("all")}>
               <span><strong>{allLabel}</strong><small>{active.length} empresas</small></span>
               {value === "all" && <Check aria-hidden="true" />}
             </button>
           </li>}
           {filtered.map((company) => <li key={company.id} role="option" aria-selected={value === company.id}>
-            <button type="button" onClick={() => choose(company.id)}>
+            <button type="button" data-company={company.id} onClick={() => choose(company.id)}>
               <span>
                 <strong>{shortName(company)}{company.isPrincipal && <em>Matriz</em>}</strong>
                 <small>{company.tradeName && company.legalName !== company.tradeName ? `${company.legalName} · ` : ""}{formatCnpj(company.taxId)}</small>

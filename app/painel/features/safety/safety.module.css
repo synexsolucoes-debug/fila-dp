@@ -30,7 +30,7 @@
    desenhada dentro de 16 por 16 pixels, invisível na tela e correta no DOM. Os
    gráficos reconquistam o tamanho pelo mesmo peso. */
 .workspace svg { width: 16px; height: 16px; stroke-width: 1.9; }
-.eyebrow { color: var(--sft-accent-text); font-size: .75rem; font-weight: 820; letter-spacing: .11em; line-height: 1.2; }
+.eyebrow { color: var(--sft-accent-text); font-size: .75rem; font-weight: 820; letter-spacing: normal; line-height: 1.2; }
 
 .srOnly {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
@@ -61,14 +61,14 @@
 }
 
 .selectField { display: grid; gap: 5px; }
-.selectField > span { color: var(--sft-soft); font-size: .75rem; font-weight: 820; letter-spacing: .11em; }
+.selectField > span { color: var(--sft-soft); font-size: .75rem; font-weight: 820; letter-spacing: normal; }
 .selectField select {
   min-height: 38px; min-width: 220px; padding: 0 10px; border: 1px solid var(--sft-border);
   border-radius: 7px; background: var(--sft-surface); color: inherit; font-size: .78rem;
 }
 
 .chipGroup { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.chipLabel { color: var(--sft-soft); font-size: .75rem; font-weight: 820; letter-spacing: .11em; margin-right: 2px; }
+.chipLabel { color: var(--sft-soft); font-size: .75rem; font-weight: 820; letter-spacing: normal; margin-right: 2px; }
 .chipEmpty { color: var(--sft-soft); font-size: .78rem; }
 
 /* O botão do período é o controle mais clicado da tela: alto o bastante para o
@@ -110,7 +110,7 @@
   border: 1px solid var(--sft-border); border-radius: 12px; background: var(--sft-surface);
 }
 .summaryCard > div { display: grid; gap: 2px; min-width: 0; }
-.summaryCard small { color: var(--sft-soft); font-size: .75rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+.summaryCard small { color: var(--sft-soft); font-size: .75rem; font-weight: 800; letter-spacing: normal; text-transform: none; }
 .summaryCard strong { font-size: 1.3rem; line-height: 1.15; }
 .summaryCard p { margin: 0; color: var(--sft-soft); font-size: .75rem; }
 
@@ -172,13 +172,13 @@
 .seriesLine { fill: none; stroke: var(--sft-accent); stroke-width: 2; stroke-linejoin: round; }
 .seriesDot { fill: var(--sft-surface); stroke: var(--sft-accent); stroke-width: 2; }
 .seriesValue { fill: var(--sft-text); font-size: 11px; font-weight: 700; }
-.seriesLabel { fill: var(--sft-soft); font-size: 12px; font-weight: 700; letter-spacing: .06em; }
+.seriesLabel { fill: var(--sft-soft); font-size: 12px; font-weight: 700; letter-spacing: normal; }
 
 .bars { display: grid; gap: 9px; margin: 0; padding: 0; list-style: none; }
 .bars li { display: grid; grid-template-columns: minmax(80px, 34%) 1fr auto; align-items: center; gap: 9px; }
 .barLabel {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  color: var(--sft-soft); font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--sft-soft); font-size: .75rem; font-weight: 700; text-transform: none; letter-spacing: .04em;
 }
 .barTrack { display: block; height: 10px; border-radius: 99px; background: var(--sft-muted); overflow: hidden; }
 .barTrack i { display: block; height: 100%; width: var(--bar-width, 0%); border-radius: inherit; background: var(--sft-accent); }
@@ -285,7 +285,7 @@
 .table th, .table td { padding: 9px 11px; text-align: left; white-space: nowrap; }
 .table thead th {
   position: sticky; top: 0; background: var(--sft-muted); color: var(--sft-soft);
-  font-size: .75rem; font-weight: 820; letter-spacing: .08em; text-transform: uppercase;
+  font-size: .75rem; font-weight: 820; letter-spacing: normal; text-transform: none;
 }
 .table tbody tr + tr td { border-top: 1px solid var(--sft-border); }
 .numeric { text-align: right; font-variant-numeric: tabular-nums; }

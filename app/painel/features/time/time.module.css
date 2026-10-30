@@ -24,7 +24,7 @@
   outline-offset: 2px;
 }
 
-.eyebrow { color: var(--time-accent-text); font-size: .75rem; font-weight: 820; letter-spacing: .11em; line-height: 1.2; }
+.eyebrow { color: var(--time-accent-text); font-size: .75rem; font-weight: 820; letter-spacing: normal; line-height: 1.2; }
 
 .primaryButton, .secondaryButton {
   display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 38px; padding: 0 14px;
@@ -83,9 +83,9 @@
 
 .tableScroll { overflow-x: auto; border: 1px solid var(--time-border); border-radius: 12px; background: var(--time-surface); }
 .table { width: 100%; border-collapse: collapse; font-size: .76rem; }
-.tableCaption { padding: 11px 14px; text-align: left; font-size: .75rem; font-weight: 800; letter-spacing: .08em; color: var(--time-soft); text-transform: uppercase; }
+.tableCaption { padding: 11px 14px; text-align: left; font-size: .75rem; font-weight: 800; letter-spacing: normal; color: var(--time-soft); text-transform: none; }
 .table th, .table td { padding: 9px 12px; border-top: 1px solid var(--time-border); text-align: right; white-space: nowrap; vertical-align: top; }
-.table thead th { position: sticky; top: 0; background: var(--time-muted); font-size: .75rem; letter-spacing: .05em; text-transform: uppercase; color: var(--time-soft); }
+.table thead th { position: sticky; top: 0; background: var(--time-muted); font-size: .75rem; letter-spacing: normal; text-transform: none; color: var(--time-soft); }
 .table tbody th[scope="row"] { text-align: left; font-weight: 720; }
 .table thead th:first-child, .table tbody th { text-align: left; }
 .table small { display: block; margin-top: 2px; color: var(--time-soft); font-size: .75rem; font-weight: 600; }

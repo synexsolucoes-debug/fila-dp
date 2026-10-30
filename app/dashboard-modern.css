@@ -574,7 +574,7 @@
 .dashboard-eyebrow {
   color: var(--ui-primary);
   font-size: 12px;
-  letter-spacing: .11em;
+  letter-spacing: normal;
 }
 
 /* 38px era manchete. O Modelo 2 abre com saudação discreta e devolve a dobra
@@ -1125,7 +1125,7 @@
 .access-recovery-link { margin-top: 14px; padding: 14px; border: 1px solid color-mix(in srgb, var(--ui-primary) 35%, var(--ui-border)); border-radius: var(--ui-radius-lg); background: var(--ui-primary-soft); }
 .access-recovery-link > header { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
 .access-recovery-link span, .access-recovery-link strong, .access-recovery-link small { display: block; }
-.access-recovery-link span { color: var(--ui-primary); font-size: 11px; font-weight: 800; letter-spacing: .06em; }
+.access-recovery-link span { color: var(--ui-primary); font-size: 11px; font-weight: 800; letter-spacing: normal; }
 .access-recovery-link strong { margin-top: 4px; color: var(--ui-text); font-size: 11px; }
 .access-recovery-link small { margin-top: 4px; color: var(--ui-text-soft); font-size: 12px; line-height: 1.4; }
 .access-recovery-link button { min-height: 31px; padding: 0 9px; border: 1px solid var(--ui-border-strong); border-radius: var(--ui-radius-md); background: var(--ui-surface); color: var(--ui-primary); cursor: pointer; font: 700 12px var(--font-geist-sans), sans-serif; white-space: nowrap; }
@@ -1424,7 +1424,7 @@
     color: var(--ui-text-soft);
     font-size: 12px;
     font-weight: 850;
-    letter-spacing: .08em;
+    letter-spacing: normal;
   }
 
   .sidebar-mobile-more-panel > section > div {
@@ -3241,7 +3241,7 @@
    fixas deixariam um buraco para quem alcança dois. */
 .workspace-processes { display: grid; gap: 13px; }
 .workspace-processes > header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; }
-.workspace-processes > header span { display: block; color: var(--ui-primary); font-size: 12px; font-weight: 850; letter-spacing: .11em; }
+.workspace-processes > header span { display: block; color: var(--ui-primary); font-size: 12px; font-weight: 850; letter-spacing: normal; }
 .workspace-processes > header h2 { margin: 4px 0 0; color: var(--ui-text); font-size: 17px; letter-spacing: -.03em; }
 .workspace-processes > header p { margin: 0; color: var(--ui-text-soft); font-size: 12px; }
 .workspace-process-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 13px; }
@@ -3326,8 +3326,8 @@
    que em versalete vira um bloco que ninguém lê. */
 .overview-table thead th {
   padding: 8px 12px; border-bottom: 1px solid var(--ui-border);
-  color: var(--ui-text-soft); font-size: 12px; font-weight: 800; letter-spacing: .07em;
-  text-align: left; text-transform: uppercase; white-space: nowrap;
+  color: var(--ui-text-soft); font-size: 12px; font-weight: 800; letter-spacing: normal;
+  text-align: left; text-transform: none; white-space: nowrap;
 }
 .overview-table td, .overview-table tbody th { padding: 10px 12px; border-bottom: 1px solid var(--ui-border); color: var(--ui-text-soft); vertical-align: middle; }
 .overview-table tbody tr:last-child td, .overview-table tbody tr:last-child th { border-bottom: 0; }
@@ -3458,7 +3458,7 @@
 .mini-demand-card { width: 100%; min-height: 93px; margin-bottom: 7px; padding: 10px; display: flex; flex-direction: column; align-items: flex-start; border: 1px solid var(--ui-border); border-left: 3px solid var(--ui-mint); border-radius: var(--ui-radius-lg); background: var(--ui-surface); color: var(--ui-text); text-align: left; cursor: pointer; }
 .mini-demand-card.sla-warning { border-left-color: #F4A261; }
 .mini-demand-card.sla-overdue { border-left-color: #d8544c; }
-.mini-demand-card > span { color: var(--ui-primary); font-size: 11px; font-weight: 900; letter-spacing: .07em; }
+.mini-demand-card > span { color: var(--ui-primary); font-size: 11px; font-weight: 900; letter-spacing: normal; }
 .mini-demand-card strong { width: 100%; margin-top: 5px; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .mini-demand-card small { width: 100%; margin-top: 4px; overflow: hidden; color: var(--ui-text-soft); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .mini-demand-card em { margin-top: auto; color: var(--ui-text-soft); font-size: 11px; font-style: normal; }
@@ -3554,7 +3554,7 @@
 .demand-detail-summary { margin: 0 0 17px; display: grid; grid-template-columns: minmax(190px, .9fr) minmax(190px, .9fr) minmax(280px, 1.2fr); gap: 10px; }
 .demand-detail-summary > div { min-height: 82px; padding: 13px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface-muted); }
 .demand-detail-summary span, .demand-detail-summary strong, .demand-detail-summary small { display: block; }
-.demand-detail-summary span { color: var(--ui-text-soft); font-size: 11px; font-weight: 850; letter-spacing: .08em; }
+.demand-detail-summary span { color: var(--ui-text-soft); font-size: 11px; font-weight: 850; letter-spacing: normal; }
 .demand-detail-summary strong { margin-top: 6px; color: var(--ui-text); font-size: 11px; }
 .demand-detail-summary small { margin-top: 5px; color: var(--ui-text-soft); font-size: 12px; line-height: 1.35; }
 .demand-sla-state.warning { border-color: color-mix(in srgb, #F4A261 68%, var(--ui-border)) !important; background: #fff7ef !important; }
@@ -3581,7 +3581,7 @@
 
 .company-profile-card { margin: 18px 0; overflow: hidden; border: 1px solid color-mix(in srgb, var(--ui-mint) 46%, var(--ui-border)); border-radius: var(--ui-radius-lg); background: var(--ui-surface); }
 .company-profile-card > header { min-height: 100px; padding: 20px; display: flex; align-items: start; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--ui-border); background: color-mix(in srgb, var(--ui-mint) 8%, var(--ui-surface)); }
-.company-profile-card header span { color: var(--ui-primary); font-size: 12px; font-weight: 850; letter-spacing: .09em; }
+.company-profile-card header span { color: var(--ui-primary); font-size: 12px; font-weight: 850; letter-spacing: normal; }
 .company-profile-card header h2 { margin: 6px 0 0; color: var(--ui-text); font-size: 20px; letter-spacing: -.04em; }
 .company-profile-card header p { margin: 4px 0 0; color: var(--ui-text-soft); font-size: 12px; }
 .company-profile-card header em { min-height: 26px; padding: 0 9px; display: inline-grid; place-items: center; border-radius: 99px; background: #e0f6ed; color: #176c55; font-size: 12px; font-style: normal; font-weight: 850; }
@@ -3589,7 +3589,7 @@
 .company-profile-data { padding: 15px 20px; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; border-bottom: 1px solid var(--ui-border); }
 .company-profile-data div { min-width: 0; }
 .company-profile-data span, .company-profile-data strong { display: block; }
-.company-profile-data span { color: var(--ui-text-soft); font-size: 11px; font-weight: 800; letter-spacing: .06em; }
+.company-profile-data span { color: var(--ui-text-soft); font-size: 11px; font-weight: 800; letter-spacing: normal; }
 .company-profile-data strong { margin-top: 5px; overflow: hidden; color: var(--ui-text); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .company-profile-demands { padding: 15px 20px 18px; }
 .company-profile-demands > strong { display: block; margin-bottom: 9px; color: var(--ui-text); font-size: 11px; }
@@ -3633,7 +3633,7 @@
   text-align: center;
 }
 
-.panel-error-boundary span { color: var(--brand-strong); font-size: 12px; font-weight: 850; letter-spacing: .13em; }
+.panel-error-boundary span { color: var(--brand-strong); font-size: 12px; font-weight: 850; letter-spacing: normal; }
 .panel-error-boundary h1 { margin: 12px 0 0; font-size: 27px; letter-spacing: -.05em; }
 .panel-error-boundary p { margin: 10px 0 22px; color: #66716d; font-size: 13px; line-height: 1.55; }
 .panel-error-boundary button { min-height: 42px; padding: 0 14px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 0; border-radius: var(--ui-radius-lg); background: var(--brand-strong); color: #fff; font: 750 12px inherit; cursor: pointer; }
@@ -3644,7 +3644,7 @@
 .dashboard-sidebar { display: flex; flex-direction: column; gap: 0; }
 .dashboard-brand { min-height: 42px; }
 .sidebar-group-context { margin: 16px 8px 4px; padding: 12px; border: 1px solid var(--ui-rail-border); border-radius: var(--ui-radius-lg); background: var(--ui-rail-context); }
-.sidebar-group-context > span, .sidebar-nav-section { display: block; color: var(--ui-rail-section); font-size: 11px; font-weight: 850; letter-spacing: .12em; }
+.sidebar-group-context > span, .sidebar-nav-section { display: block; color: var(--ui-rail-section); font-size: 11px; font-weight: 850; letter-spacing: normal; }
 .sidebar-group-context strong { display: block; margin-top: 5px; overflow: hidden; color: var(--ui-text); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .sidebar-group-context small { display: block; margin-top: 4px; overflow: hidden; color: var(--ui-text-soft); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 /* O menu passa a ter contextos (§17): antes era um rótulo só, "OPERAÇÃO",
@@ -3658,7 +3658,7 @@
 .sidebar-structure-summary { width: 100%; min-height: 48px; padding: 0 8px; display: flex; align-items: center; gap: 10px; border: 1px solid var(--ui-rail-border); border-radius: var(--ui-radius-lg); background: var(--ui-rail-context); color: var(--ui-text); }
 .sidebar-structure-summary > i { width: 28px; height: 28px; display: grid; place-items: center; flex: 0 0 auto; border-radius: var(--ui-radius-md); background: var(--ui-primary); color: #fff; font-style: normal; font-size: 12px; font-weight: 800; }
 .sidebar-structure-summary > span { display: grid; min-width: 0; }.sidebar-structure-summary strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }.sidebar-structure-summary small { color: var(--ui-text-soft); font-size: 12px; }
-.sidebar-workspace > span { margin-left: 8px; color: var(--ui-rail-section); font-size: 11px; font-weight: 850; letter-spacing: .1em; }
+.sidebar-workspace > span { margin-left: 8px; color: var(--ui-rail-section); font-size: 11px; font-weight: 850; letter-spacing: normal; }
 .sidebar-workspace button { min-height: 58px; align-items: center; }
 .sidebar-workspace button > span { min-width: 0; display: grid; gap: 3px; text-align: left; }
 .sidebar-workspace button > span strong, .sidebar-workspace button > span small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -3878,7 +3878,7 @@
   color: var(--ui-accent-text);
   font-size: 12px;
   font-weight: 820;
-  letter-spacing: .11em;
+  letter-spacing: normal;
 }
 .workspace-shortcuts > header h2 { margin: 3px 0 0; font-size: 17px; letter-spacing: -.02em; }
 
@@ -3924,7 +3924,7 @@
 
 .workspace-shortcut > span svg { width: 16px; height: 16px; }
 .workspace-shortcut strong { font-size: 13px; font-weight: 700; letter-spacing: -.01em; }
-.workspace-shortcut small { color: var(--ui-text-muted); font-size: 12px; font-weight: 700; letter-spacing: .06em; }
+.workspace-shortcut small { color: var(--ui-text-muted); font-size: 12px; font-weight: 700; letter-spacing: normal; }
 .workspace-shortcut[data-fixed="true"] > span { background: var(--ui-accent-soft); }
 
 @media (prefers-reduced-motion: reduce) {
@@ -4007,7 +4007,7 @@
   background: linear-gradient(118deg, color-mix(in srgb, var(--ui-primary) 9%, var(--ui-surface)), var(--ui-surface) 58%);
 }
 
-.workspace-settings-modal > header span { color: var(--ui-primary); font-size: 12px; font-weight: 850; letter-spacing: .12em; }
+.workspace-settings-modal > header span { color: var(--ui-primary); font-size: 12px; font-weight: 850; letter-spacing: normal; }
 .workspace-settings-modal > header h2 { margin: 7px 0 0; color: var(--ui-text); font-size: 24px; letter-spacing: -.05em; }
 .workspace-settings-modal > header p { margin: 7px 0 0; color: var(--ui-text-soft); font-size: 12px; }
 .workspace-settings-modal > header > button { width: 36px; height: 36px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface); color: var(--ui-text-soft); font-size: 21px; cursor: pointer; }
@@ -4015,7 +4015,7 @@
 
 .workspace-settings-layout { min-height: 0; grid-template-columns: 254px minmax(0, 1fr); background: var(--ui-surface); }
 .settings-nav { min-height: 0; padding: 17px 11px; overflow-y: auto; border-right: 1px solid var(--ui-border); background: var(--ui-surface-muted); }
-.settings-nav-label { margin: 12px 9px 7px; display: block; color: var(--ui-text-soft); font-size: 11px; font-weight: 850; letter-spacing: .1em; }
+.settings-nav-label { margin: 12px 9px 7px; display: block; color: var(--ui-text-soft); font-size: 11px; font-weight: 850; letter-spacing: normal; }
 .settings-nav-label:first-child { margin-top: 1px; }
 .settings-nav button { min-height: 54px; padding: 8px 10px; display: grid; grid-template-columns: 22px minmax(0, 1fr); align-items: center; gap: 9px; border-radius: var(--ui-radius-lg); color: var(--ui-text-soft); font-size: 12px; text-align: left; }
 .settings-nav button svg { width: 17px; height: 17px; color: var(--ui-primary); opacity: .72; }
@@ -4032,9 +4032,9 @@
 
 .workspace-settings-content { padding: 23px 25px; overflow: auto; background: var(--ui-surface); }
 .workspace-name-form { padding: 15px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface-muted); }
-.workspace-name-form label::before { content: "IDENTIDADE DO GRUPO"; color: var(--ui-primary); font-size: 11px; font-weight: 850; letter-spacing: .09em; }
+.workspace-name-form label::before { content: "IDENTIDADE DO GRUPO"; color: var(--ui-primary); font-size: 11px; font-weight: 850; letter-spacing: normal; }
 .workspace-account-summary { position: relative; min-height: 94px; padding: 27px 16px 15px; border-color: color-mix(in srgb, var(--ui-mint) 48%, var(--ui-border)); border-radius: var(--ui-radius-lg); background: color-mix(in srgb, var(--ui-mint) 9%, var(--ui-surface)); }
-.workspace-account-summary::before { content: "ADMINISTRADOR ATUAL"; position: absolute; top: 11px; left: 16px; color: var(--ui-primary); font-size: 11px; font-weight: 850; letter-spacing: .09em; }
+.workspace-account-summary::before { content: "ADMINISTRADOR ATUAL"; position: absolute; top: 11px; left: 16px; color: var(--ui-primary); font-size: 11px; font-weight: 850; letter-spacing: normal; }
 .board-manager, .workspace-switcher { border-color: var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface); }
 
 .access-admin-hero { padding: 17px 18px; display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: 12px; border: 1px solid color-mix(in srgb, var(--ui-mint) 56%, var(--ui-border)); border-radius: var(--ui-radius-lg); background: color-mix(in srgb, var(--ui-mint) 10%, var(--ui-surface)); }
@@ -4075,7 +4075,7 @@
 .invite-company-scope label { min-height: 24px; padding: 0 7px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface); }
 .invite-company-scope { grid-column: 1 / -1; }
 .invite-module-scope { grid-column: 1 / -1; margin: 0; padding: 12px; border: 1px solid color-mix(in srgb, var(--ui-primary) 30%, var(--ui-border)); border-radius: var(--ui-radius-lg); background: var(--ui-surface-muted); }
-.invite-module-scope legend { padding: 0 5px; color: var(--ui-primary); font-size: 12px; font-weight: 800; letter-spacing: .045em; text-transform: uppercase; }
+.invite-module-scope legend { padding: 0 5px; color: var(--ui-primary); font-size: 12px; font-weight: 800; letter-spacing: .045em; text-transform: none; }
 .invite-module-scope > p { margin: 2px 0; color: var(--ui-text-soft); font-size: 12px; }
 .invite-module-scope > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .workspace-invite-form .invite-module-scope label { min-height: 52px; padding: 8px; display: flex; grid-template-columns: none; align-items: flex-start; gap: 8px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface); color: var(--ui-text); cursor: pointer; font-size: 12px; letter-spacing: 0; text-transform: none; transition: border-color .18s ease, background-color .18s ease; }
@@ -4129,7 +4129,7 @@
 .process-management-intro { padding: 21px; display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; align-items: center; gap: 15px; border: 1px solid color-mix(in srgb, var(--ui-mint) 50%, var(--ui-border)); border-radius: var(--ui-radius-lg); background: linear-gradient(112deg, color-mix(in srgb, var(--ui-mint) 13%, var(--ui-surface)), var(--ui-surface) 60%); }
 .process-management-icon { width: 46px; height: 46px; display: grid; place-items: center; border-radius: var(--ui-radius-lg); background: var(--ui-primary); color: var(--ui-mint); }
 .process-management-icon svg { width: 22px; height: 22px; }
-.process-management-intro > div > span, .process-board-catalog header > div > span, .process-create-panel header > div > span { color: var(--ui-primary); font-size: 12px; font-weight: 850; letter-spacing: .1em; }
+.process-management-intro > div > span, .process-board-catalog header > div > span, .process-create-panel header > div > span { color: var(--ui-primary); font-size: 12px; font-weight: 850; letter-spacing: normal; }
 .process-management-intro h2, .process-board-catalog h2, .process-create-panel h2 { margin: 5px 0 0; color: var(--ui-text); font-size: 18px; letter-spacing: -.035em; }
 .process-management-intro p, .process-board-catalog header p, .process-create-panel header p { margin: 6px 0 0; color: var(--ui-text-soft); font-size: 12px; line-height: 1.5; }
 .process-management-intro > b { padding: 8px 10px; border-radius: 999px; background: var(--ui-surface); color: var(--ui-primary); font-size: 12px; white-space: nowrap; }
@@ -4139,7 +4139,7 @@
 .process-board-grid article { min-height: 270px; padding: 16px; display: flex; flex-direction: column; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface-muted); }
 .process-board-grid article.active { border-color: var(--ui-mint); box-shadow: inset 3px 0 0 var(--ui-mint); }
 .process-board-grid article > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
-.process-board-grid header span { color: var(--ui-primary); font-size: 11px; font-weight: 850; letter-spacing: .09em; }
+.process-board-grid header span { color: var(--ui-primary); font-size: 11px; font-weight: 850; letter-spacing: normal; }
 .process-board-grid h3 { margin: 5px 0 0; color: var(--ui-text); font-size: 15px; letter-spacing: -.025em; }
 .process-board-grid header b { padding: 5px 7px; border-radius: var(--ui-radius-md); background: var(--ui-surface); color: var(--ui-text-soft); font-size: 11px; white-space: nowrap; }
 .process-board-grid > article > p { min-height: 30px; margin: 9px 0 12px; color: var(--ui-text-soft); font-size: 12px; line-height: 1.45; }
@@ -4197,7 +4197,7 @@
   border-bottom: 1px solid var(--ui-border);
   background: var(--ui-surface);
 }
-.notification-drawer > header span { color: var(--ui-primary); font-family: var(--font-geist-mono), monospace; font-size: 12px; font-weight: 850; letter-spacing: .11em; }
+.notification-drawer > header span { color: var(--ui-primary); font-family: var(--font-geist-mono), monospace; font-size: 12px; font-weight: 850; letter-spacing: normal; }
 .notification-drawer > header h2 { margin: 7px 0 0; color: var(--ui-text); font-size: 23px; letter-spacing: -.045em; }
 .notification-drawer > header button {
   width: 36px;
@@ -4324,7 +4324,7 @@
 .company-settings-list .danger-link { justify-self: end; font-size: 11px; }
 
 .payroll-toolbar { padding: 19px 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border: 1px solid color-mix(in srgb, var(--ui-mint) 44%, var(--ui-border)); border-radius: var(--ui-radius-lg); background: linear-gradient(112deg, color-mix(in srgb, var(--ui-mint) 12%, var(--ui-surface)), var(--ui-surface) 62%); }
-.payroll-toolbar > div > span, .payroll-entry-panel header span { color: var(--ui-primary); font-size: 12px; font-weight: 850; letter-spacing: .1em; }
+.payroll-toolbar > div > span, .payroll-entry-panel header span { color: var(--ui-primary); font-size: 12px; font-weight: 850; letter-spacing: normal; }
 .payroll-toolbar h2, .payroll-entry-panel h2 { margin: 5px 0 0; color: var(--ui-text); font-size: 19px; letter-spacing: -.04em; }
 .payroll-toolbar p, .payroll-entry-panel header p { margin: 5px 0 0; color: var(--ui-text-soft); font-size: 12px; line-height: 1.45; }
 .payroll-toolbar > label, .payroll-toolbar-actions > label { min-width: 128px; display: grid; gap: 5px; color: var(--ui-text-soft); font-size: 11px; font-weight: 850; }
@@ -4366,7 +4366,7 @@
 .payroll-import-overlay { position: fixed; z-index: 140; inset: 0; display: flex; align-items: center; justify-content: center; padding: 18px; background: rgba(3, 14, 29, .62); animation: modal-backdrop-in .16s ease both; }
 .payroll-import-dialog { display: flex; flex-direction: column; width: min(900px, 100%); max-height: min(780px, 100%); overflow: hidden; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface); box-shadow: var(--ui-shadow-modal); animation: modal-content-in .2s ease both; }
 .payroll-import-dialog > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 20px 22px; border-bottom: 1px solid var(--ui-border); }
-.payroll-import-dialog > header span { color: var(--ui-accent-text); font-size: 11px; font-weight: 850; letter-spacing: .12em; }
+.payroll-import-dialog > header span { color: var(--ui-accent-text); font-size: 11px; font-weight: 850; letter-spacing: normal; }
 .payroll-import-dialog > header h2 { margin: 5px 0; color: var(--ui-text); font-size: 19px; letter-spacing: -.035em; }
 .payroll-import-dialog > header p { margin: 0; color: var(--ui-text-soft); font-size: 12px; line-height: 1.45; }
 .payroll-import-dialog > header button { display: grid; place-items: center; flex: 0 0 auto; width: 34px; height: 34px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface); color: var(--ui-text); cursor: pointer; }
@@ -5180,7 +5180,7 @@
   pointer-events: none;
 }
 .module-launcher-section { display: grid; gap: 10px; }
-.module-launcher-section h2 { margin: 0; color: var(--ui-text-muted); font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.module-launcher-section h2 { margin: 0; color: var(--ui-text-muted); font-size: 12px; font-weight: 700; letter-spacing: normal; text-transform: none; }
 .module-launcher-grid { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 232px), 1fr)); gap: 12px; }
 .module-launcher-grid li { min-width: 0; }
 .module-launcher-grid button {
@@ -5270,7 +5270,7 @@
 .competence-flow { padding: 20px 24px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface); box-shadow: var(--ui-shadow-card); }
 .competence-flow > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
 .competence-flow > header > div:first-child { min-width: 0; }
-.competence-flow > header span { display: block; font-size: 12px; font-weight: 850; letter-spacing: .11em; color: var(--ui-text-soft); }
+.competence-flow > header span { display: block; font-size: 12px; font-weight: 850; letter-spacing: normal; color: var(--ui-text-soft); }
 .competence-flow > header strong { display: block; margin-top: 6px; font-size: clamp(20px, 2vw, 26px); font-weight: 800; letter-spacing: -.03em; }
 .competence-flow > header p { margin: 6px 0 0; color: var(--ui-text-soft); font-size: 12.5px; line-height: 1.5; }
 .competence-flow-actions { display: flex; gap: 9px; align-items: center; flex: 0 0 auto; }
@@ -5315,7 +5315,7 @@
    para conectado, tracejado para sem credencial, pontilhado para erro. */
 .connection-map { padding: 20px 24px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface); box-shadow: var(--ui-shadow-card); }
 .connection-map > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
-.connection-map > header span { display: block; font-size: 12px; font-weight: 850; letter-spacing: .11em; color: var(--ui-text-soft); }
+.connection-map > header span { display: block; font-size: 12px; font-weight: 850; letter-spacing: normal; color: var(--ui-text-soft); }
 .connection-map > header strong { display: block; margin-top: 5px; font-size: 19px; font-weight: 800; letter-spacing: -.025em; }
 .connection-map > header p { margin: 4px 0 0; color: var(--ui-text-soft); font-size: 12px; }
 
@@ -5518,7 +5518,7 @@
   color: var(--ui-text-soft);
   font-size: 12px;
   font-weight: 700;
-  letter-spacing: .05em;
+  letter-spacing: normal;
 }
 
 /* Histórico completo da operação.
@@ -5534,9 +5534,9 @@
   color: var(--ui-text-soft);
   font-size: 12px;
   font-weight: 700;
-  letter-spacing: .06em;
+  letter-spacing: normal;
   text-align: left;
-  text-transform: uppercase;
+  text-transform: none;
 }
 .history-table td { padding: 10px 12px; border-bottom: 1px solid var(--ui-border-soft, var(--ui-border)); vertical-align: top; }
 .history-table tr:last-child td { border-bottom: 0; }
@@ -5852,7 +5852,7 @@
 /* Progresso da demanda */
 .demand-progress { padding: 14px 20px 0; }
 .demand-progress > header { min-height: 0; padding: 0; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; border: 0; background: transparent; }
-.demand-progress > header span { color: var(--ui-text-soft); font-size: 12px; font-weight: 800; letter-spacing: .09em; }
+.demand-progress > header span { color: var(--ui-text-soft); font-size: 12px; font-weight: 800; letter-spacing: normal; }
 .demand-progress > header strong { color: var(--ui-text); font-size: 11px; font-variant-numeric: tabular-nums; }
 .demand-progress-bar { height: 6px; margin-top: 8px; overflow: hidden; border-radius: 99px; background: color-mix(in srgb, var(--ui-mint) 20%, var(--ui-surface)); }
 .demand-progress-bar i { height: 100%; display: block; border-radius: inherit; background: var(--ui-mint); }
@@ -5865,7 +5865,7 @@
 }
 .demand-fields > div { min-width: 0; }
 .demand-field-wide { grid-column: 1 / -1; }
-.demand-fields dt { color: var(--ui-text-soft); font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.demand-fields dt { color: var(--ui-text-soft); font-size: 12px; font-weight: 800; letter-spacing: normal; text-transform: none; }
 .demand-fields dd { margin: 4px 0 0; color: var(--ui-text); font-size: 11px; overflow-wrap: anywhere; }
 .demand-field-link {
   padding: 0; display: inline-flex; align-items: center; gap: 7px;
@@ -5884,7 +5884,7 @@
 .checklist-pendente {
   flex: 0 0 auto; padding: 2px 7px; border-radius: 99px;
   background: color-mix(in srgb, var(--ui-warning) 16%, var(--ui-surface)); color: var(--ui-warning);
-  font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em;
+  font-size: 11px; font-weight: 800; text-transform: none; letter-spacing: normal;
 }
 
 /* O rodape de acoes, parado no pe da gaveta */
@@ -5921,12 +5921,12 @@
 .admin-breadcrumb { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
 .admin-breadcrumb button {
   padding: 0; border: 0; background: transparent; cursor: pointer;
-  color: var(--ui-accent-text, var(--ui-primary)); font: inherit; font-size: 12px; font-weight: 800; letter-spacing: .06em;
+  color: var(--ui-accent-text, var(--ui-primary)); font: inherit; font-size: 12px; font-weight: 800; letter-spacing: normal;
 }
 .admin-breadcrumb button:hover { text-decoration: underline; }
 .admin-breadcrumb button:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 2px; border-radius: var(--ui-radius-sm); }
 .admin-breadcrumb svg { width: 12px; height: 12px; color: var(--ui-text-soft); }
-.admin-breadcrumb span { color: var(--ui-text-soft); font-size: 12px; font-weight: 800; letter-spacing: .06em; }
+.admin-breadcrumb span { color: var(--ui-text-soft); font-size: 12px; font-weight: 800; letter-spacing: normal; }
 .admin-page-description { margin: 6px 0 0; color: var(--ui-text-soft); font-size: 11px; }
 
 /* Fora da modal, o corpo das configurações deixa de ser uma caixa com altura
@@ -5998,7 +5998,7 @@
 .demand-next-step > header span {
   font-size: 12px;
   font-weight: 800;
-  letter-spacing: .1em;
+  letter-spacing: normal;
   color: var(--ui-accent-text, var(--ui-primary));
 }
 .demand-next-step textarea {
@@ -6028,7 +6028,7 @@
   background: var(--ui-surface-muted);
 }
 .demand-sla-reading span { display: grid; gap: 2px; min-width: 0; }
-.demand-sla-reading small { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ui-text-muted); }
+.demand-sla-reading small { font-size: 12px; font-weight: 700; letter-spacing: normal; text-transform: none; color: var(--ui-text-muted); }
 .demand-sla-reading strong { font-size: 12.5px; font-weight: 700; color: var(--ui-text); }
 .demand-sla-reading[data-sla="overdue"] { border-color: var(--ui-danger); background: var(--ui-state-danger-bg); }
 .demand-sla-reading[data-sla="overdue"] strong { color: var(--ui-state-danger-text); }
@@ -6058,8 +6058,8 @@
 .dashboard-heading-meta .board-context span {
   font-size: 12px;
   font-weight: 800;
-  letter-spacing: .08em;
-  text-transform: uppercase;
+  letter-spacing: normal;
+  text-transform: none;
   color: var(--ui-accent-text, var(--ui-primary));
 }
 .dashboard-heading-meta .board-context small { font-size: 12px; color: var(--ui-text-muted); }

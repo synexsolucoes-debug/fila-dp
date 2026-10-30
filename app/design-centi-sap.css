@@ -122,7 +122,7 @@
     font-size: 10.5px;
     font-weight: 600;
     letter-spacing: .04em;
-    text-transform: uppercase;
+    text-transform: none;
   }
 
   .dashboard-statusbar strong {

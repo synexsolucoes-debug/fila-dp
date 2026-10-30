@@ -43,7 +43,7 @@
 .requirementEditor { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--rec-border); border-radius: 12px; background: var(--rec-muted); }
 .requirementEditor > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .requirementEditor > header > div { display: grid; gap: 2px; }
-.requirementEditor > header span { color: var(--rec-soft); font-size: .75rem; font-weight: 800; letter-spacing: .09em; }
+.requirementEditor > header span { color: var(--rec-soft); font-size: .75rem; font-weight: 800; letter-spacing: normal; }
 .requirementEditor > header h3 { margin: 0; font-size: .86rem; }
 .requirementEditor > footer { display: flex; align-items: center; gap: 9px; }
 .requirementEditor > footer > span { flex: 1; }
@@ -59,7 +59,7 @@
 .historyDate input { min-height: 38px; border: 1px solid var(--rec-border); border-radius: 8px; background: var(--rec-surface); color: var(--rec-text); padding: 0 10px; font: inherit; }
 .historySnapshot { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
 .historySnapshot article { display: grid; gap: 4px; align-content: start; min-width: 0; padding: 12px; border: 1px solid var(--rec-border); border-radius: 10px; background: var(--rec-surface); }
-.historySnapshot small { color: var(--rec-soft); font-size: .75rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.historySnapshot small { color: var(--rec-soft); font-size: .75rem; font-weight: 800; letter-spacing: .04em; text-transform: none; }
 .historySnapshot strong { font-size: .8rem; line-height: 1.4; overflow-wrap: anywhere; }
 .historySnapshot span { color: var(--rec-soft); font-size: .78rem; }
 
@@ -92,7 +92,7 @@
 
 .netSummary { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 0; overflow: hidden; border: 1px solid var(--rec-border); border-radius: 12px; background: var(--rec-surface); }
 .netHero { display: grid; gap: 4px; align-content: center; padding: 18px; background: var(--rec-accent-soft); }
-.netHero small { color: var(--rec-accent-text); font-size: .78rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+.netHero small { color: var(--rec-accent-text); font-size: .78rem; font-weight: 800; letter-spacing: normal; text-transform: none; }
 .netHero strong { color: var(--rec-text); font-size: clamp(1.6rem, 3.2vw, 2.1rem); line-height: 1.1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .netHero span { color: var(--rec-soft); font-size: .78rem; }
 .netBreakdown { display: grid; align-content: center; gap: 0; margin: 0; padding: 6px 18px; }

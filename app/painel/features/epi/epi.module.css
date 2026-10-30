@@ -32,7 +32,7 @@
   outline-offset: 2px;
 }
 
-.eyebrow { color: var(--epi-accent-text); font-size: .75rem; font-weight: 820; letter-spacing: .11em; line-height: 1.2; }
+.eyebrow { color: var(--epi-accent-text); font-size: .75rem; font-weight: 820; letter-spacing: normal; line-height: 1.2; }
 
 .primaryButton, .secondaryButton, .ghostButton {
   display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 38px; padding: 0 14px;
@@ -57,7 +57,7 @@
 .commandBar { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
 .commandSelectors { display: flex; align-items: flex-end; gap: 10px; min-width: 0; flex-wrap: wrap; }
 .commandSelectors > label { display: grid; gap: 5px; }
-.commandSelectors > label > span { color: var(--epi-soft); font-size: .75rem; font-weight: 800; letter-spacing: .09em; }
+.commandSelectors > label > span { color: var(--epi-soft); font-size: .75rem; font-weight: 800; letter-spacing: normal; }
 .commandSelectors select, .commandSelectors input {
   min-height: 38px; min-width: 190px; padding: 0 10px; border: 1px solid var(--epi-border);
   border-radius: 7px; background: var(--epi-surface); color: inherit;
@@ -90,7 +90,7 @@ button.summaryCard:hover { border-color: var(--epi-accent); transform: translate
 
 .filterBar { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 10px; }
 .filterBar label { display: grid; gap: 4px; }
-.filterBar label > span { color: var(--epi-soft); font-size: .75rem; font-weight: 800; letter-spacing: .08em; }
+.filterBar label > span { color: var(--epi-soft); font-size: .75rem; font-weight: 800; letter-spacing: normal; }
 .filterBar input, .filterBar select {
   min-height: 34px; min-width: 150px; padding: 0 9px; border: 1px solid var(--epi-border);
   border-radius: 7px; background: var(--epi-surface); color: inherit; font-size: .78rem;
@@ -105,13 +105,13 @@ button.summaryCard:hover { border-color: var(--epi-accent); transform: translate
 .stockOperationTabs button[data-active="true"] { border-color: var(--epi-accent); background: var(--epi-accent-soft); color: var(--epi-accent-text); }
 .stockOperationForm { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 8px; align-items: end; }
 .stockOperationForm label { display: grid; gap: 4px; }
-.stockOperationForm label span { color: var(--epi-soft); font-size: .75rem; font-weight: 800; letter-spacing: .06em; }
+.stockOperationForm label span { color: var(--epi-soft); font-size: .75rem; font-weight: 800; letter-spacing: normal; }
 .stockOperationForm input, .stockOperationForm select { min-height: 36px; width: 100%; padding: 7px 9px; border: 1px solid var(--epi-border); border-radius: 7px; background: var(--epi-surface); color: inherit; }
 .operationMessage { margin: 0; color: var(--epi-accent-text); font-size: .78rem; }
 .dataTable { width: 100%; border-collapse: collapse; font-size: .75rem; }
 .dataTable th {
   padding: 10px 12px; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--epi-border);
-  background: var(--epi-muted); color: var(--epi-soft); font-size: .75rem; font-weight: 800; letter-spacing: .07em;
+  background: var(--epi-muted); color: var(--epi-soft); font-size: .75rem; font-weight: 800; letter-spacing: normal;
 }
 .dataTable td { padding: 10px 12px; border-bottom: 1px solid var(--epi-border); vertical-align: middle; }
 .dataTable tbody tr:last-child td { border-bottom: 0; }
@@ -144,7 +144,7 @@ button.summaryCard:hover { border-color: var(--epi-accent); transform: translate
   border: 1px solid color-mix(in srgb, var(--epi-accent) 35%, transparent);
   background: color-mix(in srgb, var(--epi-accent) 7%, transparent); font-size: .78rem;
 }
-.consequence > strong { font-size: .78rem; letter-spacing: .04em; text-transform: uppercase; color: var(--epi-accent-text); }
+.consequence > strong { font-size: .78rem; letter-spacing: .04em; text-transform: none; color: var(--epi-accent-text); }
 .consequence ul { margin: 0; padding-left: 16px; display: grid; gap: 3px; }
 .consequence li[data-alert="true"] { color: var(--epi-warning); font-weight: 700; }
 
@@ -181,7 +181,7 @@ button.summaryCard:hover { border-color: var(--epi-accent); transform: translate
 
 .formGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 11px; }
 .formGrid label, .formField { display: grid; gap: 5px; min-width: 0; }
-.formGrid label > span, .formField > span { color: var(--epi-soft); font-size: .75rem; font-weight: 800; letter-spacing: .07em; }
+.formGrid label > span, .formField > span { color: var(--epi-soft); font-size: .75rem; font-weight: 800; letter-spacing: normal; }
 .formGrid input, .formGrid select, .formGrid textarea, .formField input, .formField select, .formField textarea {
   min-height: 38px; padding: 8px 10px; border: 1px solid var(--epi-border); border-radius: 7px;
   background: var(--epi-surface); color: inherit; width: 100%;
@@ -253,7 +253,7 @@ button.summaryCard:hover { border-color: var(--epi-accent); transform: translate
 .dashboardStack, .requirementsStack { display: grid; gap: 14px; }
 .monthActions { display: flex; align-items: flex-end; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .monthActions label { display: grid; gap: 4px; }
-.monthActions label span { color: var(--epi-soft); font-size: .75rem; font-weight: 800; letter-spacing: .08em; }
+.monthActions label span { color: var(--epi-soft); font-size: .75rem; font-weight: 800; letter-spacing: normal; }
 .monthActions input { min-height: 38px; padding: 0 10px; border: 1px solid var(--epi-border); border-radius: 7px; background: var(--epi-surface); color: inherit; }
 
 .coveragePanel, .chartPanel, .requirementEditor {
@@ -264,7 +264,7 @@ button.summaryCard:hover { border-color: var(--epi-accent); transform: translate
 }
 .coverageHeader > div, .chartPanel > header > div, .requirementEditor > header > div { display: grid; gap: 2px; }
 .coverageHeader span, .chartPanel > header span, .requirementEditor > header span {
-  color: var(--epi-soft); font-size: .75rem; font-weight: 800; letter-spacing: .09em;
+  color: var(--epi-soft); font-size: .75rem; font-weight: 800; letter-spacing: normal;
 }
 .coverageHeader strong { font-size: .9rem; }
 .chartPanel h3, .requirementEditor h3 { margin: 0; font-size: .86rem; }

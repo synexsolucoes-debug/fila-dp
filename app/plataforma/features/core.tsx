@@ -31,8 +31,8 @@ export function usePlatformResource<T>(url: string) {
   return { data, loading, error, refresh: () => setVersion((current) => current + 1) };
 }
 
-export function FeatureHeader({ eyebrow, title, description, loading, onRefresh, actions }: { eyebrow: string; title: string; description: string; loading?: boolean; onRefresh?: () => void; actions?: ReactNode }) {
-  return <><header className={styles.featureHeader}><div><span>{eyebrow}</span><h1>{title}</h1><p>{description}</p></div><div>{actions}{onRefresh && <button type="button" onClick={onRefresh} disabled={loading}><RefreshCw className={loading ? styles.spin : ""} aria-hidden="true" />Atualizar</button>}</div></header><div className={styles.scopeStrip}><AlertTriangle aria-hidden="true" /><span><strong>Dados de múltiplos clientes</strong> · ações são autorizadas e auditadas no servidor.</span></div></>;
+export function FeatureHeader({ title, description, loading, onRefresh, actions }: { eyebrow?: string; title: string; description: string; loading?: boolean; onRefresh?: () => void; actions?: ReactNode }) {
+  return <><header className={styles.featureHeader}><div><h1>{title}</h1><p>{description}</p></div><div>{actions}{onRefresh && <button type="button" onClick={onRefresh} disabled={loading}><RefreshCw className={loading ? styles.spin : ""} aria-hidden="true" />Atualizar</button>}</div></header><div className={styles.scopeStrip}><AlertTriangle aria-hidden="true" /><span><strong>Dados de múltiplos clientes</strong> · ações são autorizadas e auditadas no servidor.</span></div></>;
 }
 
 export function Loading({ label = "Carregando dados globais…" }: { label?: string }) { return <div className={styles.featureState}><LoaderCircle className={styles.spin} aria-hidden="true" /><p>{label}</p></div>; }

@@ -102,15 +102,38 @@ page.on("response", (resposta) => {
  * atalho pularia justamente a navegação que o produto oferece.
  */
 async function abrirModulo(processo, modulo) {
-  const nav = "nav[aria-label='Navegação do painel']";
-  await page.waitForSelector(`${nav} button`, { timeout: 25000 }).catch(() => undefined);
-  await page.locator(`${nav} .sidebar-process > button`).filter({ hasText: processo }).first()
-    .click().catch(() => undefined);
+  // A navegação é a janela de módulos (botão "Módulos" da faixa) e, dentro do
+  // módulo, as abas do cabeçalho do processo.
+  await page.waitForSelector(".shell-modules", { timeout: 25000 }).catch(() => undefined);
+  await page.locator(".shell-modules").first().click().catch(() => undefined);
+  await page.waitForSelector(".module-launcher", { timeout: 10000 }).catch(() => undefined);
+  await page.locator(".module-launcher-grid button").filter({ hasText: processo }).first().click().catch(() => undefined);
   await page.waitForTimeout(800);
-  const submenu = page.locator(`${nav} .sidebar-process-view`).filter({ hasText: modulo });
-  // Um processo recortado a um módulo só não tem segundo nível: entrar nele já
-  // abriu o módulo, e não há submenu para clicar.
-  if (await submenu.count() > 0) await submenu.first().click().catch(() => undefined);
+  const aba = page.locator('.process-context [role="tab"]').filter({ hasText: modulo });
+  // Um módulo de uma tela só não tem abas: abrir o tile já abriu a tela.
+  if (await aba.count() > 0) await aba.first().click().catch(() => undefined);
+}
+
+/** Rótulos dos tiles da janela de módulos — o "menu" do painel. */
+async function rotulosDaJanela() {
+  await page.locator(".shell-modules").first().click().catch(() => undefined);
+  await page.waitForSelector(".module-launcher", { timeout: 10000 }).catch(() => undefined);
+  const rotulos = await page.locator(".module-launcher-grid button").allInnerTexts();
+  await page.keyboard.press("Escape").catch(() => undefined);
+  return rotulos;
+}
+
+/** O seletor de empresa da faixa: lista e escolha pelo id, como o `<select>` fazia. */
+async function valoresEmpresa() {
+  await page.locator(".company-picker-trigger").first().click().catch(() => undefined);
+  const valores = await page.locator(".company-picker-panel [data-company]")
+    .evaluateAll((buttons) => buttons.map((button) => button.getAttribute("data-company") ?? ""));
+  await page.keyboard.press("Escape").catch(() => undefined);
+  return valores;
+}
+async function escolherEmpresa(valor) {
+  await page.locator(".company-picker-trigger").first().click().catch(() => undefined);
+  await page.locator(`.company-picker-panel [data-company="${valor}"]`).first().click().catch(() => undefined);
 }
 
 // 1. Site público
@@ -348,7 +371,7 @@ if (password && await emailField.count()) {
   await page.goto(`${base}/painel`, { waitUntil: "networkidle" });
   await page.waitForTimeout(1000);
   record("configurações têm porta na navegação, e não só atrás do avatar",
-    await page.locator("aside button[aria-label='Abrir configurações']").count() > 0);
+    (await rotulosDaJanela()).some((rotulo) => /Administração/u.test(rotulo)));
 
   // Endereço desconhecido não pune quem clicou num link antigo.
   await page.goto(`${base}/painel/secao-que-nao-existe`, { waitUntil: "networkidle" });
@@ -460,7 +483,7 @@ if (password && await emailField.count()) {
 if (password) {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${base}/painel`, { waitUntil: "domcontentloaded" });
-  await page.waitForSelector("nav[aria-label='Navegação do painel'] button", { timeout: 25000 }).catch(() => undefined);
+  await page.waitForSelector(".shell-modules", { timeout: 25000 }).catch(() => undefined);
   record("o painel operacional não administra identidades globais",
     await page.getByRole("button", { name: /Usuários e permissões/u }).count() === 0);
 
@@ -489,7 +512,7 @@ if (password) {
   for (const [width, height] of [[1366, 768], [1280, 720]]) {
     await page.setViewportSize({ width, height });
     await page.goto(`${base}/painel`, { waitUntil: "domcontentloaded" });
-    await page.waitForSelector("nav[aria-label='Navegação do painel'] button", { timeout: 25000 }).catch(() => undefined);
+    await page.waitForSelector(".shell-modules", { timeout: 25000 }).catch(() => undefined);
     await page.waitForTimeout(1200);
     const medir = async () => page.evaluate(() => {
       const main = document.querySelector("section.dashboard-main");
@@ -510,8 +533,8 @@ if (password) {
 if (password) {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${base}/painel`, { waitUntil: "domcontentloaded" });
-  await page.waitForSelector("nav[aria-label='Navegação do painel'] button", { timeout: 25000 }).catch(() => undefined);
-  const menu = await page.locator("nav[aria-label='Navegação do painel'] button").allInnerTexts();
+  await page.waitForSelector(".shell-modules", { timeout: 25000 }).catch(() => undefined);
+  const menu = await rotulosDaJanela();
   const menuText = menu.join(" | ");
   const snapshot = await page.evaluate(async () => {
     const response = await fetch("/api/workspace", { cache: "no-store" });
@@ -551,14 +574,13 @@ if (password) {
   page.on("request", escuta);
 
   const abertasNoGrupo = Number((await page.locator('[data-metric="demands-open"] strong').innerText().catch(() => "0")).trim());
-  const seletor = page.getByLabel("Selecionar empresa");
-  const valores = await seletor.locator("option").evaluateAll((options) => options.map((option) => option.value));
+  const valores = await valoresEmpresa();
   const vazia = valores.find((value) => value.startsWith("co-ui-2"));
 
   if (!vazia) {
     record("a semente tem uma empresa sem demanda para provar o recorte", false, valores.join(", "));
   } else {
-    await seletor.selectOption(vazia);
+    await escolherEmpresa(vazia);
     await page.waitForTimeout(1800);
     const abertasNaFilial = Number((await page.locator('[data-metric="demands-open"] strong').innerText().catch(() => "-1")).trim());
     record("escolher empresa recorta os indicadores da visão geral",
@@ -574,7 +596,7 @@ if (password) {
       /Filial Vazia/iu.test(resumo ?? ""), resumo ?? "");
   }
   page.off("request", escuta);
-  await seletor.selectOption("all").catch(() => undefined);
+  await escolherEmpresa("all");
 
   /* A central de ação mudou de tela: saiu da Visão geral, que a maquete refez
      com quatro blocos, e passou para "Meu trabalho". A exigência continua
@@ -588,13 +610,13 @@ if (password) {
     page.on("request", escutaTrabalho);
     await page.goto(`${base}/painel/trabalho`, { waitUntil: "networkidle" });
     await page.waitForTimeout(1200);
-    await page.getByLabel("Selecionar empresa").selectOption(vazia).catch(() => undefined);
+    await escolherEmpresa(vazia);
     await page.waitForTimeout(2000);
     page.off("request", escutaTrabalho);
     const ultima = chamadasTrabalho[chamadasTrabalho.length - 1] ?? "";
     record("a central de ação consulta o servidor com a empresa escolhida",
       ultima.includes(`companyId=${vazia}`), ultima.slice(-70) || "nenhuma chamada");
-    await page.getByLabel("Selecionar empresa").selectOption("all").catch(() => undefined);
+    await escolherEmpresa("all");
   }
 }
 
@@ -623,8 +645,7 @@ if (password) {
   record("a exportação do grupo traz as demandas", Boolean(doGrupo && doGrupo.length > 1),
     doGrupo ? `${doGrupo.length - 1} linha(s) além do cabeçalho` : "download não aconteceu");
 
-  const seletor = page.getByLabel("Selecionar empresa");
-  await seletor.selectOption("co-ui-2").catch(() => undefined);
+  await escolherEmpresa("co-ui-2");
   await page.waitForTimeout(1800);
 
   const volume = await page.locator(".metrics-panel header span").first().innerText().catch(() => "");
@@ -636,7 +657,7 @@ if (password) {
     Boolean(daFilial && daFilial.length === 1),
     daFilial ? `${daFilial.length - 1} linha(s) além do cabeçalho` : "download não aconteceu");
 
-  await seletor.selectOption("all").catch(() => undefined);
+  await escolherEmpresa("all");
   await page.waitForTimeout(1200);
 
   // A exportação completa do grupo (§50) precisa de porta alcançável. A
@@ -728,7 +749,7 @@ if (password) {
   // decisão de produto e já mudou uma vez ("Sankhya Browser Connector" virou
   // "Agente Sankhya"). Amarrar a verificação ao rótulo faz a renomeação seguinte
   // quebrar o ensaio em vez de o produto.
-  const sankhya = () => page.locator("article").filter({ hasText: /SANKHYA_BROWSER/u });
+  const sankhya = () => page.locator("article").filter({ hasText: /Sankhya · navegador|sankhya_browser/iu });
 
   // Estado liberado: o workspace da semente tem a concessão. Filtrar por ele em
   // vez de contar com a ordenação — cada execução desta conferência cria um
@@ -905,16 +926,16 @@ for (const width of widths) {
 {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${base}/painel`, { waitUntil: "domcontentloaded" });
-  await page.waitForSelector("nav[aria-label='Navegação do painel'] button", { timeout: 25000 }).catch(() => undefined);
+  await page.waitForSelector(".shell-modules", { timeout: 25000 }).catch(() => undefined);
   /* O menu tem dois níveis desde que passou a agrupar por processo (§25): o
      primeiro é o processo, o segundo são os módulos dele. Clicar direto no
      módulo encontrava um botão de um processo já aberto e não levava a lugar
      nenhum — a tela continuava na home, e as três conferências abaixo
      reprovavam dizendo que o EPI não tinha ação de cadastro, quando o que
      faltava era ter chegado até ele. */
-  await page.getByRole("button", { name: /^Gestão de EPI$/u }).first().click().catch(() => undefined);
-  await page.waitForTimeout(1200);
-  await page.getByRole("button", { name: /^Controle de EPI$/u }).first().click().catch(() => undefined);
+  // Pela janela de módulos, como a pessoa: o tile "Gestão de EPI" abre o
+  // Controle de EPI direto (módulo de uma tela só).
+  await abrirModulo("Gestão de EPI", "Controle de EPI");
   await page.waitForTimeout(2000);
 
   const abriu = await page.getByRole("button", { name: /Cadastrar EPI/u }).count();
@@ -1289,11 +1310,12 @@ for (const width of widths) {
   await page.setViewportSize({ width: 1440, height: 900 });
 }
 
-// A marca precisa aparecer como arquivo oficial, e em branco sobre fundo escuro.
+// A marca precisa aparecer como arquivo oficial. O login passou a fundo claro,
+// então a variante é a colorida.
 await page.goto(`${base}/login`, { waitUntil: "networkidle" });
 const brandSources = await page.evaluate(() => [...document.querySelectorAll("img")].map((img) => img.getAttribute("src") ?? ""));
-record("o login usa o logotipo oficial na variante clara",
-  brandSources.some((src) => src.includes("vinculato-logo-light")),
+record("o login usa o logotipo oficial na variante colorida",
+  brandSources.some((src) => src.includes("vinculato-logo.png") || src.includes("vinculato-logo%2E") || /vinculato-logo\.png|%2Fvinculato-logo\.png/u.test(src)),
   brandSources.join(" ").slice(0, 120));
 await page.goto(`${base}/`, { waitUntil: "networkidle" });
 const siteSources = await page.evaluate(() => [...document.querySelectorAll("img")].map((img) => img.getAttribute("src") ?? ""));

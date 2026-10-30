@@ -206,10 +206,10 @@ test("a conferência WCAG faz parte do repositório, não de uma rodada avulsa",
   assert.ok(Number(script.match(/const MINIMO_DE_TELAS = (\d+);/u)?.[1]) >= 55,
     "o piso precisa acompanhar o alcance da varredura, senão vira folga acumulada");
 
-  // E a varredura precisa alcançar o menu mesmo com os itens agrupados: o
-  // seletor de filho direto era exatamente o que quebrou.
-  assert.match(script, /nav\[aria-label="Navegação do painel"\] /u);
-  assert.doesNotMatch(script, /Navegação do painel"\] > button/u);
+  // E a varredura precisa alcançar todos os módulos: sem barra lateral, quem
+  // lista os módulos é a janela de módulos, lida a cada passagem.
+  assert.match(script, /\.module-launcher-grid button strong/u);
+  assert.match(script, /nenhum módulo na janela de módulos; a varredura das visões não rodou/u);
   // Console sem áreas visíveis passou a ser falha, não aviso.
   assert.match(script, /nenhuma área visível; a varredura não rodou/u);
 
@@ -218,8 +218,10 @@ test("a conferência WCAG faz parte do repositório, não de uma rodada avulsa",
      os rótulos uma vez no começo mediria os processos e os módulos de um só
      deles — a mesma classe de ponto cego que já tirou 32 telas desta varredura
      imprimindo "0 violações". Os dois níveis são percorridos em sequência. */
-  assert.match(script, /\.sidebar-process > button/u);
-  assert.match(script, /\.sidebar-process-view/u);
+  // Hoje os dois níveis são o tile da janela de módulos e as abas do módulo,
+  // lidas depois de cada módulo aberto.
+  assert.match(script, /\.module-launcher-grid button"\)\.filter\(\{ hasText: rotulo \}\)/u);
+  assert.match(script, /const modulos = page\.locator\('\.process-context \[role="tab"\]'\);/u);
 
   /* O produto voltou a ter dois temas, e a trava volta a cobrar os dois.
 

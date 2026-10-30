@@ -65,7 +65,7 @@ div.counter:hover { transform: none; border-color: var(--work-border); }
   border-radius: 10px; background: var(--work-muted);
 }
 .filters label { display: grid; gap: 5px; min-width: 0; }
-.filters label > span { color: var(--work-soft); font-size: .75rem; font-weight: 780; letter-spacing: .1em; text-transform: uppercase; }
+.filters label > span { color: var(--work-soft); font-size: .75rem; font-weight: 780; letter-spacing: normal; text-transform: none; }
 .filters select, .filters input {
   min-width: 150px; min-height: 38px; padding: 0 10px; border: 1px solid var(--work-border);
   /* Token, e não 8px cravado: a conferência de interface mediu este controle
@@ -97,7 +97,7 @@ div.counter:hover { transform: none; border-color: var(--work-border); }
 
 .groupHeading {
   display: flex; align-items: baseline; gap: 8px; margin: 16px 0 8px;
-  color: var(--work-soft); font-size: .75rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase;
+  color: var(--work-soft); font-size: .75rem; font-weight: 800; letter-spacing: normal; text-transform: none;
 }
 .groupHeading em { font-style: normal; font-variant-numeric: tabular-nums; }
 
@@ -154,7 +154,7 @@ div.counter:hover { transform: none; border-color: var(--work-border); }
 .detail h3 { font-size: .95rem; font-weight: 760; }
 .fieldList { display: grid; gap: 7px; }
 .fieldList > div { display: grid; grid-template-columns: minmax(90px, 34%) 1fr; gap: 10px; align-items: baseline; }
-.fieldList dt { color: var(--work-soft); font-size: .75rem; font-weight: 720; text-transform: uppercase; letter-spacing: .05em; }
+.fieldList dt { color: var(--work-soft); font-size: .75rem; font-weight: 720; text-transform: none; letter-spacing: normal; }
 .fieldList dd { font-size: .78rem; word-break: break-word; }
 .linkedModules { margin-top: 12px; }
 .linkedModules .groupHeading { align-items: center; }
@@ -166,7 +166,7 @@ div.counter:hover { transform: none; border-color: var(--work-border); }
   border-radius: var(--ui-radius-sm); background: var(--work-muted);
 }
 .moduleLinks span { display: grid; min-width: 0; gap: 2px; }
-.moduleLinks small { color: var(--work-soft); font-size: .75rem; font-weight: 760; letter-spacing: .06em; text-transform: uppercase; }
+.moduleLinks small { color: var(--work-soft); font-size: .75rem; font-weight: 760; letter-spacing: normal; text-transform: none; }
 .moduleLinks strong { overflow: hidden; font-size: .75rem; text-overflow: ellipsis; white-space: nowrap; }
 .moduleLinks a {
   display: inline-flex; align-items: center; gap: 5px; min-height: 32px; padding: 0 9px;
@@ -199,13 +199,13 @@ div.counter:hover { transform: none; border-color: var(--work-border); }
 
 .runTable { width: 100%; border-collapse: collapse; font-size: .78rem; }
 .runTable th, .runTable td { padding: 8px 10px; border-bottom: 1px solid var(--work-border); text-align: left; }
-.runTable th { color: var(--work-soft); font-size: .75rem; font-weight: 780; letter-spacing: .06em; text-transform: uppercase; }
+.runTable th { color: var(--work-soft); font-size: .75rem; font-weight: 780; letter-spacing: normal; text-transform: none; }
 .runTable td { font-variant-numeric: tabular-nums; }
 .tableScroll { overflow-x: auto; }
 .logList { display: grid; gap: 4px; max-height: 320px; overflow-y: auto; padding: 10px; border-radius: 8px; background: var(--work-muted); font-size: .78rem; }
 .logList > div { display: grid; grid-template-columns: auto auto 1fr; gap: 8px; align-items: baseline; }
 .logList time { color: var(--work-soft); font-variant-numeric: tabular-nums; }
-.logList em { font-style: normal; color: var(--work-soft); font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; }
+.logList em { font-style: normal; color: var(--work-soft); font-size: .75rem; text-transform: none; letter-spacing: normal; }
 .logList[data-level="error"] { color: var(--work-danger); }
 
 .errorDetail { display: grid; gap: 4px; padding: 10px 12px; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--work-danger) 35%, transparent); background: color-mix(in srgb, var(--work-danger) 7%, transparent); }
@@ -272,7 +272,7 @@ div.counter:hover { transform: none; border-color: var(--work-border); }
 .workerHealth[data-tone="attention"] { border-left-color: var(--ui-warning); }
 .workerHealth[data-tone="problem"] { border-left-color: var(--ui-danger); }
 .workerHealth > header { display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline; justify-content: space-between; }
-.workerHealth > header span { font-size: .75rem; letter-spacing: .08em; color: var(--ui-text-muted); font-weight: 600; }
+.workerHealth > header span { font-size: .75rem; letter-spacing: normal; color: var(--ui-text-muted); font-weight: 600; }
 .workerHealth > header h3 { margin: 2px 0 0; font-size: 1rem; }
 .workerHealth > p { margin: 6px 0 10px; font-size: .86rem; color: var(--ui-text-soft); max-width: 72ch; }
 .workerHealth small { display: block; margin-top: 10px; font-size: .76rem; color: var(--ui-text-muted); max-width: 72ch; }
@@ -283,7 +283,7 @@ div.counter:hover { transform: none; border-color: var(--work-border); }
 }
 
 .workerHealth dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin: 0; }
-.workerHealth dl dt { font-size: .75rem; letter-spacing: .04em; text-transform: uppercase; color: var(--ui-text-muted); font-weight: 600; }
+.workerHealth dl dt { font-size: .75rem; letter-spacing: .04em; text-transform: none; color: var(--ui-text-muted); font-weight: 600; }
 .workerHealth dl dd { margin: 2px 0 0; font-size: .86rem; font-variant-numeric: tabular-nums; }
 
 .scheduleNote, .scheduleOverdue { margin: 10px 0 0; font-size: .82rem; color: var(--ui-text-soft); }

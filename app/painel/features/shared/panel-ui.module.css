@@ -31,7 +31,7 @@
   color: var(--ui-accent-text, var(--brand));
   font-size: .75rem;
   font-weight: 820;
-  letter-spacing: .11em;
+  letter-spacing: normal;
   line-height: 1.2;
 }
 
@@ -244,7 +244,7 @@
 }
 
 .confirmDialog > header { padding: 18px 20px 0; display: grid; gap: 4px; }
-.confirmDialog > header span { color: var(--ui-state-warn-text); font-size: .75rem; font-weight: 820; letter-spacing: .11em; }
+.confirmDialog > header span { color: var(--ui-state-warn-text); font-size: .75rem; font-weight: 820; letter-spacing: normal; }
 .confirmDialog h2 { margin: 0; color: var(--ui-text); font-size: 1.05rem; letter-spacing: -.02em; }
 
 /* O ícone fica ao lado do texto, não acima: a §53 mostra a consequência como

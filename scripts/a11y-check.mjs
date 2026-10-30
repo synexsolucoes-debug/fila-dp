@@ -323,8 +323,10 @@ async function audit(label, path, setup, viewports = VIEWPORTS) {
  * define a duplicata.
  */
 async function auditModuleTabs(prefix) {
-  const dentro = '.process-context [role="tab"], .dashboard-content [role="tab"], .dashboard-content [class*="tabs"] > button';
-  const menu = page.locator('nav[aria-label="Navegação do painel"] .sidebar-process-view');
+  const dentro = '.dashboard-content .view-pane:not([hidden]) [role="tab"], .dashboard-content .view-pane:not([hidden]) [class*="tabs"] > button';
+  // As abas do módulo (cabeçalho do processo) já são visitadas pela varredura
+  // do painel; aqui ficam só as abas internas de cada tela.
+  const menu = page.locator('.process-context [role="tab"]');
   const menuLabels = new Set((await menu.allInnerTexts()).map((text) => text.trim().split("\n")[0]));
   const tabs = page.locator(dentro);
   const labels = [...new Set((await tabs.allInnerTexts()).map((text) => text.trim().split("\n")[0]).filter(Boolean))]
@@ -424,32 +426,32 @@ async function signIn() {
  */
 async function auditPanelViews(theme = "") {
   const sufixo = theme ? ` [${theme}]` : "";
-  // Descendente, não filho direto. O menu agrupou os itens por contexto e o
-  // seletor `> button` deixou de casar — sem erro nenhum: a varredura passou a
-  // visitar zero telas do painel e a imprimir "0 violações".
-  const processos = page.locator('nav[aria-label="Navegação do painel"] .sidebar-process > button, nav[aria-label="Navegação do painel"] > .sidebar-nav-home');
-  const rotulos = (await processos.allInnerTexts()).map((text) => text.trim().split("\n")[0]).filter(Boolean);
+  /* A navegação é a janela de módulos: cada tile abre um módulo numa aba, e as
+     telas do módulo são as abas do cabeçalho do processo. Os rótulos são lidos
+     a cada módulo aberto — eles só existem com o módulo na tela. Lista vazia
+     é falha, não "0 violações": já houve varredura que visitava zero telas. */
+  const abrirJanela = async () => {
+    await page.locator(".shell-modules").first().click();
+    await page.waitForSelector(".module-launcher", { timeout: 10000 });
+  };
+  await abrirJanela();
+  const rotulos = (await page.locator(".module-launcher-grid button strong").allInnerTexts())
+    .map((text) => text.trim()).filter((rotulo) => rotulo && rotulo !== "ERP DP");
+  await page.keyboard.press("Escape").catch(() => undefined);
   if (rotulos.length === 0) {
-    console.log("\n### Painel — nenhum item de menu encontrado; a varredura das visões não rodou");
+    console.log("\n### Painel — nenhum módulo na janela de módulos; a varredura das visões não rodou");
     failures += 1;
     return;
   }
 
   for (const rotulo of rotulos) {
-    await processos.filter({ hasText: rotulo }).first().click().catch(() => undefined);
+    await abrirJanela();
+    await page.locator(".module-launcher-grid button").filter({ hasText: rotulo }).first().click();
     await page.waitForTimeout(900);
 
-    // Segundo nível: os módulos do processo recém-aberto. Eles nascem com a
-    // abertura, então precisam ser lidos agora, não antes.
-    const modulos = page.locator('nav[aria-label="Navegação do painel"] .sidebar-process-view');
+    const modulos = page.locator('.process-context [role="tab"]');
     const nomes = (await modulos.allInnerTexts()).map((text) => text.trim().split("\n")[0]).filter(Boolean);
 
-    /* Abrir o processo já leva ao primeiro módulo dele — e o relatório vinha
-       chamando essa tela pelo nome do *processo*, não pelo do módulo. O módulo
-       de entrada ficava então sem linha própria: procurar "Meu trabalho" no
-       relatório não achava nada, e a única leitura possível era a errada — que
-       a Central de Trabalho não tinha sido auditada. Cobertura que não dá para
-       conferir por nome não serve para dizer que algo foi coberto. */
     const entrada = `Painel › ${rotulo}${nomes[0] ? ` › ${nomes[0]}` : ""}${sufixo}`;
     await audit(entrada, null);
     await auditModuleTabs(entrada);
@@ -492,12 +494,16 @@ async function auditPanelViews(theme = "") {
  * ter trocado de tema e não trocou é pior que uma que não tenta.
  */
 async function setTheme(target) {
-  const toggle = page.locator(".theme-toggle");
-  if (await toggle.count() === 0) throw new Error("o alternador de tema sumiu da interface");
-  for (let tentativa = 0; tentativa < 4; tentativa += 1) {
+  // O tema é escolhido por nome no menu da conta (avatar da faixa superior).
+  const nomes = { light: "Claro", dark: "Escuro" };
+  const trigger = page.locator(".account-menu-trigger");
+  if (await trigger.count() === 0) throw new Error("o menu da conta sumiu da interface");
+  for (let tentativa = 0; tentativa < 3; tentativa += 1) {
     const atual = await page.evaluate(() => document.querySelector(".dashboard-shell")?.dataset.theme ?? "");
     if (atual === target) return;
-    await toggle.first().click();
+    await trigger.first().click();
+    await page.locator(".account-menu-segmented button").filter({ hasText: nomes[target] ?? target }).first().click();
+    await page.keyboard.press("Escape").catch(() => undefined);
     await page.waitForTimeout(400);
   }
   throw new Error(`não consegui levar a interface ao tema ${target}`);

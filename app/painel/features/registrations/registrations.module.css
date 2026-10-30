@@ -97,7 +97,7 @@
 .catalogHeader span,
 .editorPanel > header span,
 .compactEditor > header span,
-.catalogNav label > span { color: var(--reg-soft); font-size: .75rem; font-weight: 800; letter-spacing: .12em; }
+.catalogNav label > span { color: var(--reg-soft); font-size: .75rem; font-weight: 800; letter-spacing: normal; }
 .masterPane > header strong { font-size: .875rem; }
 .masterPane > header button { display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid var(--reg-border); border-radius: 7px; background: var(--reg-surface); cursor: pointer; }
 .companyList { padding: 8px; }
@@ -131,7 +131,7 @@
 .companyIdentity { display: flex; align-items: center; gap: 15px; min-width: 0; }
 .companyIdentity > span { display: grid; place-items: center; flex: 0 0 auto; width: 54px; height: 54px; border: 1px solid color-mix(in srgb, var(--reg-mint) 22%, var(--reg-border)); border-radius: 10px; background: var(--reg-mint-soft); color: var(--reg-mint); font-size: 1rem; font-weight: 820; }
 .companyIdentity > div { min-width: 0; }
-.companyIdentity small { color: var(--reg-mint-text); font-size: .75rem; font-weight: 800; letter-spacing: .12em; }
+.companyIdentity small { color: var(--reg-mint-text); font-size: .75rem; font-weight: 800; letter-spacing: normal; }
 .companyIdentity h2 { margin: 4px 0; font-size: clamp(1.2rem, 2vw, 1.55rem); letter-spacing: -.025em; }
 .companyIdentity p { margin: 0; color: var(--reg-soft); font-size: .875rem; }
 .detailBand { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; margin: 28px 0; overflow: hidden; border: 1px solid var(--reg-border); border-radius: 9px; background: var(--reg-border); }
@@ -161,7 +161,7 @@
 
 .tableWrap { overflow-x: auto; }
 .table { width: 100%; border-collapse: collapse; table-layout: auto; }
-.table th { height: 39px; padding: 0 14px; border-bottom: 1px solid var(--reg-border); background: color-mix(in srgb, var(--reg-muted) 62%, var(--reg-surface)); color: var(--reg-soft); font-size: .75rem; font-weight: 760; letter-spacing: .04em; text-align: left; text-transform: uppercase; }
+.table th { height: 39px; padding: 0 14px; border-bottom: 1px solid var(--reg-border); background: color-mix(in srgb, var(--reg-muted) 62%, var(--reg-surface)); color: var(--reg-soft); font-size: .75rem; font-weight: 760; letter-spacing: .04em; text-align: left; text-transform: none; }
 .table td { min-height: 58px; padding: 10px 14px; border-bottom: 1px solid color-mix(in srgb, var(--reg-border) 72%, transparent); font-size: .875rem; vertical-align: middle; }
 .table tbody tr { cursor: pointer; transition: background .14s ease; }
 .table tbody tr:hover { background: color-mix(in srgb, var(--reg-mint-soft) 46%, var(--reg-surface)); }
@@ -255,7 +255,7 @@
 .drawerHeader > div:last-child { display: flex; gap: 8px; }
 .employeeHero { display: flex; align-items: center; gap: 14px; min-width: 0; }
 .employeeHero > span { display: grid; place-items: center; flex: 0 0 auto; width: 52px; height: 52px; border-radius: 10px; background: var(--reg-navy); color: var(--on-brand-soft); font-size: .9rem; font-weight: 820; }
-.employeeHero small { color: var(--reg-mint); font-size: .75rem; font-weight: 800; letter-spacing: .1em; }
+.employeeHero small { color: var(--reg-mint); font-size: .75rem; font-weight: 800; letter-spacing: normal; }
 .employeeHero h2 { margin: 4px 0; overflow: hidden; font-size: 1.18rem; text-overflow: ellipsis; white-space: nowrap; }
 .employeeHero p { margin: 0; color: var(--reg-soft); font-size: .78rem; }
 .drawerTabs { display: flex; min-height: 48px; padding: 0 22px; border-bottom: 1px solid var(--reg-border); overflow-x: auto; }
@@ -281,7 +281,7 @@
 
 .importDialog { align-self: center; display: flex; flex-direction: column; width: min(960px, calc(100% - 32px)); max-height: min(800px, calc(100% - 32px)); margin: auto; overflow: hidden; border: 1px solid var(--reg-border); border-radius: 14px; background: var(--reg-surface); box-shadow: var(--ui-shadow-modal); animation: riseIn .2s ease both; }
 .importDialog > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 22px 24px; border-bottom: 1px solid var(--reg-border); }
-.importDialog > header span { color: var(--reg-mint); font-size: .75rem; font-weight: 820; letter-spacing: .12em; }
+.importDialog > header span { color: var(--reg-mint); font-size: .75rem; font-weight: 820; letter-spacing: normal; }
 .importDialog > header h2 { margin: 5px 0; font-size: 1.2rem; }
 .importDialog > header p { margin: 0; color: var(--reg-soft); font-size: .78rem; }
 .importDialog > header button { display: grid; place-items: center; flex: 0 0 auto; width: 36px; height: 36px; border: 1px solid var(--reg-border); border-radius: 8px; background: var(--reg-surface); cursor: pointer; }
@@ -312,7 +312,7 @@
 .importGuidance span { color: color-mix(in srgb, var(--reg-mint) 67%, var(--reg-soft)); font-size: .75rem; }
 .importTableWrap { max-height: 330px; overflow: auto; border: 1px solid var(--reg-border); border-radius: 9px; }
 .importTable { width: 100%; border-collapse: collapse; }
-.importTable th { position: sticky; z-index: 1; top: 0; padding: 10px 12px; border-bottom: 1px solid var(--reg-border); background: var(--reg-muted); color: var(--reg-soft); font-size: .75rem; text-align: left; text-transform: uppercase; }
+.importTable th { position: sticky; z-index: 1; top: 0; padding: 10px 12px; border-bottom: 1px solid var(--reg-border); background: var(--reg-muted); color: var(--reg-soft); font-size: .75rem; text-align: left; text-transform: none; }
 .importTable td { padding: 10px 12px; border-bottom: 1px solid color-mix(in srgb, var(--reg-border) 70%, transparent); font-size: .78rem; }
 .importTable td strong,
 .importTable td small { display: block; }
@@ -327,7 +327,7 @@
 .historyTrail > header::after { content: ""; position: absolute; right: -24px; width: 130px; height: 130px; border: 1px solid rgba(255,255,255,.12); border-radius: 50%; box-shadow: 0 0 0 24px rgba(255,255,255,.035), 0 0 0 48px rgba(255,255,255,.025); }
 .historyTrail > header > span { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid rgba(255,255,255,.22); border-radius: 9px; background: rgba(255,255,255,.09); color: var(--brand-accent-on-dark); }
 .historyTrail > header > div { position: relative; z-index: 1; }
-.historyTrail > header small { color: var(--brand-accent-on-dark); font-size: .75rem; font-weight: 820; letter-spacing: .12em; }
+.historyTrail > header small { color: var(--brand-accent-on-dark); font-size: .75rem; font-weight: 820; letter-spacing: normal; }
 .historyTrail > header h3 { margin: 3px 0; font-size: 1rem; }
 .historyTrail > header p { margin: 0; color: rgba(255,255,255,.68); font-size: .75rem; }
 .historyTrail ol { margin: 0; padding: 0; list-style: none; }
@@ -409,7 +409,7 @@
   .table tbody { display: grid; gap: 9px; padding: 10px; background: var(--reg-muted); }
   .table tbody tr { position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 13px; border: 1px solid var(--reg-border); border-radius: 9px; background: var(--reg-surface); }
   .table td { min-height: 0; padding: 0; border: 0; }
-  .table td::before { content: attr(data-label); display: block; margin-bottom: 4px; color: var(--reg-soft); font-size: .75rem; font-weight: 760; letter-spacing: .04em; text-transform: uppercase; }
+  .table td::before { content: attr(data-label); display: block; margin-bottom: 4px; color: var(--reg-soft); font-size: .75rem; font-weight: 760; letter-spacing: .04em; text-transform: none; }
   .table td:first-child { grid-column: 1 / -1; }
   .table td:last-child { position: absolute; top: 13px; right: 10px; width: 32px; }
   .personCell { min-width: 0; padding-right: 36px; }
@@ -466,7 +466,7 @@
 }
 .requirementEditor > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .requirementEditor > header > div { display: grid; gap: 2px; }
-.requirementEditor > header span { color: var(--reg-soft); font-size: .75rem; font-weight: 800; letter-spacing: .09em; }
+.requirementEditor > header span { color: var(--reg-soft); font-size: .75rem; font-weight: 800; letter-spacing: normal; }
 .requirementEditor > header h3 { margin: 0; font-size: .86rem; }
 .requirementEditor > footer { display: flex; align-items: center; gap: 9px; }
 .requirementEditor > footer > span { flex: 1; }

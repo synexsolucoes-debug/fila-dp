@@ -14,7 +14,7 @@
 .tableScroll { max-width: 100%; overflow-x: auto; }
 .memberTable { width: 100%; border-collapse: collapse; font-size: .78rem; }
 .memberTable th, .memberTable td { padding: 8px 10px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--ui-border); }
-.memberTable thead th { background: var(--ui-surface-muted); color: var(--ui-text-soft); font-size: .75rem; font-weight: 820; letter-spacing: .09em; text-transform: uppercase; white-space: nowrap; }
+.memberTable thead th { background: var(--ui-surface-muted); color: var(--ui-text-soft); font-size: .75rem; font-weight: 820; letter-spacing: normal; text-transform: none; white-space: nowrap; }
 .memberTable tbody th { font-weight: 650; }
 .memberTable tbody th small, .memberTable td small { display: block; margin-top: 2px; color: var(--ui-text-soft); font-size: .75rem; font-weight: 400; line-height: 1.45; }
 .memberTable tbody tr[data-denied="true"] { background: var(--ui-state-danger-bg, #fdeceb); }

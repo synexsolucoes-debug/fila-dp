@@ -7,7 +7,7 @@
 }
 .header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 14px; }
 .header > div:first-child { display: grid; gap: 4px; max-width: 62ch; }
-.eyebrow { color: var(--ui-text-soft); font-size: .75rem; font-weight: 800; letter-spacing: .09em; }
+.eyebrow { color: var(--ui-text-soft); font-size: .75rem; font-weight: 800; letter-spacing: normal; }
 .title { margin: 0; font-size: 1rem; }
 .lead { margin: 0; color: var(--ui-text-soft); font-size: .8rem; line-height: 1.45; }
 
@@ -18,7 +18,7 @@
   background: var(--ui-surface); color: var(--ui-text); font: inherit; font-size: .82rem;
 }
 .scope select { min-width: 220px; max-width: 100%; }
-.narrow input { width: 70px; text-transform: uppercase; font-variant-numeric: tabular-nums; }
+.narrow input { width: 70px; text-transform: none; font-variant-numeric: tabular-nums; }
 
 .catalogBar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: var(--ui-radius-md, 10px); background: var(--ui-surface-muted); font-size: .78rem; }
 .catalogBar > span { display: inline-flex; align-items: center; gap: 7px; }
@@ -45,7 +45,7 @@
 
 .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
 .summary article { display: grid; gap: 3px; min-width: 0; padding: 11px 12px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md, 10px); }
-.summary small { color: var(--ui-text-soft); font-size: .75rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.summary small { color: var(--ui-text-soft); font-size: .75rem; font-weight: 800; letter-spacing: .04em; text-transform: none; }
 .summary strong { font-size: .95rem; font-variant-numeric: tabular-nums; }
 .summary span { color: var(--ui-text-soft); font-size: .78rem; }
 

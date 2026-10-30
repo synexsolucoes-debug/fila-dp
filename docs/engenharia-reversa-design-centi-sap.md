@@ -286,7 +286,30 @@ Data · sincronização**
 - O líquido é a resposta da tela: número grande, sozinho, com proventos,
   descontos e FGTS ao lado. A tela rola até o resultado depois do cálculo.
 
-### 5.6 Travas
+### 5.6 Abas de módulos (ERP de mesa) e faixa única
+
+O pedido do cliente foi "sistematização de janelas": o modelo escolhido é o
+dos ERPs de mesa (Centi, SAP GUI), com uma aba por módulo aberto.
+
+- **Sem barra lateral.** Com a janela de módulos (§5.4) e as abas, ela
+  repetia a mesma navegação pela terceira vez. A faixa superior é única:
+  marca, **Módulos**, abas abertas e, à direita, empresa, busca, avisos,
+  ajuda e conta.
+- **Cada módulo aberto vira aba** e guarda a última tela; a tela continua
+  montada enquanto a aba existir, então trocar de aba não perde filtro,
+  rolagem nem o que estava preenchido (`keepAlive` em `WorkspaceApp.tsx`).
+  ERP DP e Administração também são abas. Até 8, por grupo, no navegador.
+- **Dentro do módulo**, as telas são as abas do cabeçalho do processo.
+- **Seletor de empresa** próprio (nome curto, razão social e CNPJ, busca) no
+  lugar do `<select>` nativo com "★" e "↳".
+- **Menu da conta** com opções nomeadas — tema, densidade, grupo,
+  Administração, perfil, trocar de conta, sair — no lugar dos cinco ícones
+  sem rótulo do pé da barra lateral.
+- Padrão visual comum em `app/vinculato-shell.css`: uma família tipográfica,
+  títulos de 20px, superfícies chapadas, raio 6–8px, caixa normal (sem
+  rótulos em caixa alta), texto mínimo de 11–12px e um acento só.
+
+### 5.7 Travas
 
 `tests/density-preference.test.mts`: vocabulário da densidade, ordem de carga
 da folha, ausência de cor crua na camada e os seis rótulos da barra de status.

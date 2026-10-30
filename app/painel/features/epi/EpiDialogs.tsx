@@ -378,7 +378,7 @@ function DamageForm({ products, employees, deliveries, delivery, decision, onDec
         </select>
       </label>
       {preview.deliverReplacement && <>
-        <label className={styles.formWide}><span>NOVO EPI ENTREGUE{decision === "exchange_without_discount" && <Required />}</span>
+        <label className={styles.formWide}><span>Novo EPI entregue{decision === "exchange_without_discount" && <Required />}</span>
           <select name="replacementProductId" defaultValue="">
             <option value="">Não entregar substituto agora</option>
             {replacements.map((item) => <option key={item.id} value={item.id}>
@@ -502,7 +502,7 @@ function DiscountForm({ discount, decision, onDecision }: {
         <em className={styles.fieldHint}>Cria uma movimentação em rascunho na Central; não desconta automaticamente.</em>
       </label>}
       <label className={styles.formWide}>
-        <span>PARECER{(decision === "no_discount" || decision === "request_more_info") && <Required />}</span>
+        <span>Parecer{(decision === "no_discount" || decision === "request_more_info") && <Required />}</span>
         <textarea name="comment" required={decision === "no_discount" || decision === "request_more_info"} maxLength={2000} />
       </label>
     </div>

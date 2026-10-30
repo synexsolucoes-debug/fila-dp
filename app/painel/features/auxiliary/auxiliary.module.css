@@ -30,7 +30,7 @@
 .workspace button, .workspace input, .workspace select, .workspace textarea { font: inherit; }
 .workspace button { color: inherit; }
 .workspace svg { width: 17px; height: 17px; stroke-width: 1.9; }
-.eyebrow { color: var(--aux-accent-text); font-size: .75rem; font-weight: 820; letter-spacing: .11em; line-height: 1.2; }
+.eyebrow { color: var(--aux-accent-text); font-size: .75rem; font-weight: 820; letter-spacing: normal; line-height: 1.2; }
 
 .primaryButton, .secondaryButton {
   display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 39px; padding: 0 14px;
@@ -47,7 +47,7 @@
 .commandBar { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
 .commandSelectors { display: flex; align-items: flex-end; gap: 9px; min-width: 0; }
 .commandSelectors > label { display: grid; gap: 5px; }
-.commandSelectors > label > span { color: var(--aux-soft); font-size: .75rem; font-weight: 790; letter-spacing: .1em; }
+.commandSelectors > label > span { color: var(--aux-soft); font-size: .75rem; font-weight: 790; letter-spacing: normal; }
 .commandSelectors > label > div { display: flex; align-items: center; min-height: 40px; padding-left: 10px; border: 1px solid var(--aux-border); border-radius: 7px; background: var(--aux-surface); }
 .commandSelectors > label > div svg { flex: 0 0 auto; color: var(--aux-accent-text); }
 .commandSelectors select { min-width: 210px; height: 38px; padding: 0 32px 0 8px; border: 0; outline: 0; background: transparent; color: var(--aux-text); font-size: .76rem; font-weight: 660; font-variant-numeric: tabular-nums; cursor: pointer; }
@@ -55,7 +55,7 @@
 .refreshButton { display: inline-flex; align-items: center; gap: 7px; min-height: 40px; padding: 0 11px; border: 1px solid var(--aux-border); border-radius: 7px; background: transparent; color: var(--aux-soft); font-size: .75rem; cursor: pointer; }
 .refreshButton:disabled { opacity: .55; }
 .competenceStamp { display: grid; min-width: 190px; gap: 2px; padding: 8px 0 8px 17px; border-left: 2px solid var(--aux-accent); text-align: right; }
-.competenceStamp span { color: var(--aux-accent-text); font-size: .75rem; font-weight: 820; letter-spacing: .1em; }
+.competenceStamp span { color: var(--aux-accent-text); font-size: .75rem; font-weight: 820; letter-spacing: normal; }
 .competenceStamp strong { font-size: .76rem; text-transform: capitalize; }
 .competenceStamp small { color: var(--aux-soft); font-size: .75rem; }
 
@@ -82,7 +82,7 @@
 .moduleLenses button > b { display: grid; gap: 1px; padding-left: 10px; border-left: 1px solid var(--aux-border); font-style: normal; text-align: right; }
 .activeLens > b { border-color: #3d5165; }
 .moduleLenses button > b strong { font-size: 1rem; font-variant-numeric: tabular-nums; }
-.moduleLenses button > b small { color: var(--aux-soft); font-size: .75rem; font-weight: 780; letter-spacing: .07em; }
+.moduleLenses button > b small { color: var(--aux-soft); font-size: .75rem; font-weight: 780; letter-spacing: normal; }
 .moduleLenses .activeLens > b small { color: var(--on-dark-soft); }
 .moduleLenses button > svg { color: var(--aux-soft); }
 .activeLens > svg { color: #fff; }
@@ -93,7 +93,7 @@
 .privacyBanner > div, .privacyNotice > div { display: grid; flex: 1; gap: 2px; }
 .privacyBanner strong, .privacyNotice strong { font-size: .75rem; }
 .privacyBanner span, .privacyNotice span { font-size: .75rem; line-height: 1.4; }
-.privacyBanner > b { padding: 5px 7px; border: 1px solid #cfc5e9; border-radius: 4px; font-size: .75rem; letter-spacing: .07em; white-space: nowrap; }
+.privacyBanner > b { padding: 5px 7px; border: 1px solid #cfc5e9; border-radius: 4px; font-size: .75rem; letter-spacing: normal; white-space: nowrap; }
 
 .stageLedger { margin-bottom: 12px; border: 1px solid var(--aux-border); border-radius: 9px; overflow: hidden; background: var(--aux-surface); box-shadow: var(--ui-shadow-card); }
 .stageLedger > header { display: flex; align-items: center; justify-content: space-between; min-height: 48px; padding: 8px 14px; border-bottom: 1px solid var(--aux-border); background: var(--aux-muted); }
@@ -117,7 +117,7 @@
 .exceptionMetric:last-child { border-right: 0; }
 .exceptionMetric > span { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--aux-border); border-radius: 6px; background: var(--aux-muted); color: var(--aux-soft); }
 .exceptionMetric > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; }
-.exceptionMetric small { color: var(--aux-soft); font-size: .75rem; font-weight: 680; text-transform: uppercase; }
+.exceptionMetric small { color: var(--aux-soft); font-size: .75rem; font-weight: 680; text-transform: none; }
 .exceptionMetric strong { grid-row: 1 / span 2; grid-column: 2; font-size: 1.08rem; font-variant-numeric: tabular-nums; text-align: right; }
 .exceptionMetric em { color: var(--aux-soft); font-size: .75rem; font-style: normal; }
 .exceptionMetric[data-tone="safe"] > span { background: color-mix(in srgb, var(--aux-success) 8%, var(--aux-surface)); color: var(--aux-success); }
@@ -139,7 +139,7 @@
 
 .tableWrap { overflow-x: auto; }
 .dataTable { width: 100%; border-collapse: collapse; }
-.dataTable th { height: 38px; padding: 0 12px; border-bottom: 1px solid var(--aux-border); background: var(--aux-muted); color: var(--aux-soft); font-size: .75rem; letter-spacing: .07em; text-align: left; text-transform: uppercase; }
+.dataTable th { height: 38px; padding: 0 12px; border-bottom: 1px solid var(--aux-border); background: var(--aux-muted); color: var(--aux-soft); font-size: .75rem; letter-spacing: normal; text-align: left; text-transform: none; }
 .dataTable td { min-height: 60px; padding: 10px 12px; border-bottom: 1px solid color-mix(in srgb, var(--aux-border) 72%, transparent); font-size: .75rem; vertical-align: middle; }
 .dataTable td > strong, .dataTable td > small { display: block; }
 .dataTable td > strong { font-size: .75rem; font-variant-numeric: tabular-nums; }
@@ -184,13 +184,13 @@
 .versionLedger article > header { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 61px; padding: 8px 12px; border-bottom: 1px solid var(--aux-border); }
 .versionLedger article > header > span { display: grid; place-items: center; width: 40px; height: 34px; border: 1px solid var(--aux-border); background: var(--aux-muted); font-size: .75rem; font-weight: 780; font-variant-numeric: tabular-nums; }
 .versionLedger article > header > div { display: grid; gap: 2px; }
-.versionLedger article > header small { color: var(--aux-accent-text); font-size: .75rem; font-weight: 800; letter-spacing: .07em; }
+.versionLedger article > header small { color: var(--aux-accent-text); font-size: .75rem; font-weight: 800; letter-spacing: normal; }
 .versionLedger article > header strong { font-size: .75rem; }
 .versionLedger article > header time { color: var(--aux-soft); font-size: .75rem; }
 .versionCompare { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .versionCompare > section { min-width: 0; padding: 11px 12px; border-right: 1px solid var(--aux-border); }
 .versionCompare > section:last-child { border-right: 0; }
-.versionCompare > section > span { color: var(--aux-accent-text); font-size: .75rem; font-weight: 800; letter-spacing: .08em; }
+.versionCompare > section > span { color: var(--aux-accent-text); font-size: .75rem; font-weight: 800; letter-spacing: normal; }
 .versionCompare dl { margin: 8px 0 0; }
 .versionCompare dl > div { display: grid; grid-template-columns: minmax(70px, .7fr) minmax(0, 1fr); gap: 7px; padding: 6px 0; border-top: 1px solid var(--aux-border); }
 .versionCompare dt { color: var(--aux-soft); font-size: .75rem; }
@@ -241,7 +241,7 @@
 .contextStrip { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 10px; margin-bottom: 12px; padding: 10px 12px; border-left: 3px solid var(--aux-accent); background: var(--aux-surface); }
 .contextStrip > svg { color: var(--aux-accent-text); }
 .contextStrip > span { display: grid; gap: 2px; }
-.contextStrip small { color: var(--aux-soft); font-size: .75rem; font-weight: 800; letter-spacing: .08em; }
+.contextStrip small { color: var(--aux-soft); font-size: .75rem; font-weight: 800; letter-spacing: normal; }
 .contextStrip strong { font-size: .75rem; }
 .contextStrip b { font-size: .78rem; font-variant-numeric: tabular-nums; }
 .confirmBlock { display: grid; justify-items: start; gap: 10px; padding: 10px 4px; }
@@ -281,7 +281,7 @@
   .dataTable tbody { padding: 10px; background: var(--aux-muted); }
   .dataTable tr { margin-bottom: 10px; padding: 9px 11px; border: 1px solid var(--aux-border); background: var(--aux-surface); }
   .dataTable td { display: grid; grid-template-columns: 105px minmax(0, 1fr); min-height: 0; padding: 7px 0; border-bottom: 1px solid var(--aux-border); }
-  .dataTable td::before { content: attr(data-label); color: var(--aux-soft); font-size: .75rem; font-weight: 760; letter-spacing: .05em; text-transform: uppercase; }
+  .dataTable td::before { content: attr(data-label); color: var(--aux-soft); font-size: .75rem; font-weight: 760; letter-spacing: normal; text-transform: none; }
   .dataTable td:last-child { min-width: 0; border-bottom: 0; }
   .rowActions { flex-wrap: wrap; justify-content: flex-start; }
   .approvalQueue article { grid-template-columns: 36px minmax(0, 1fr) auto; }

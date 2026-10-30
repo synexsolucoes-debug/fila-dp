@@ -266,7 +266,7 @@ function RecordSection({ companyId, target, canManage, canReadPayroll, canManage
       text="A ficha funcional mostra a pessoa numa data-base, o contrato com os prazos e a correção do registro vigente." />}
     {selected && <div className={styles.stack}>
       <div className={styles.recordHead}>
-        <div><small>MATRÍCULA {text(selected.registration_number)} · {text(selected.company_name)}</small>
+        <div><small>Matrícula {text(selected.registration_number)} · {text(selected.company_name)}</small>
           <h2>{text(selected.social_name) || text(selected.full_name)}</h2>
           <span>Admissão {dateLabel(selected.admission_date)} · {text(selected.position_name) || "Sem cargo"} · {text(selected.department_name) || "Sem departamento"}</span></div>
         <div className={styles.actionsRow}>

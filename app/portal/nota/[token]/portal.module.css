@@ -109,8 +109,8 @@
   color: var(--p-accent-strong);
   font-size: .78rem;
   font-weight: 750;
-  letter-spacing: .12em;
-  text-transform: uppercase;
+  letter-spacing: normal;
+  text-transform: none;
 }
 .header h1 {
   margin: 0;
@@ -142,7 +142,7 @@
   align-content: center;
 }
 .summary > div + div { border-left: 1px solid rgb(255 255 255 / 12%); }
-.summary span { color: var(--p-panel-soft); font-size: .78rem; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; }
+.summary span { color: var(--p-panel-soft); font-size: .78rem; font-weight: 650; letter-spacing: normal; text-transform: none; }
 .summary strong { font-size: 1.05rem; font-weight: 700; text-transform: capitalize; }
 .summary .amount { font-size: 1.3rem; text-transform: none; }
 .amount { font-family: var(--font-data), ui-monospace, monospace; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
@@ -159,7 +159,7 @@
   border-radius: 12px;
   background: var(--p-field);
 }
-.issuer dt { color: var(--p-soft); font-size: .75rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+.issuer dt { color: var(--p-soft); font-size: .75rem; font-weight: 700; letter-spacing: normal; text-transform: none; }
 .issuer dd { margin: 3px 0 0; font-size: .95rem; font-weight: 600; overflow-wrap: anywhere; }
 .issuerHead dd { font-size: 1.02rem; font-weight: 700; line-height: 1.35; }
 .issuerRow { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }

@@ -515,3 +515,39 @@
   .shell-actions .help-button { display: none; }
   .company-picker-trigger { max-width: 128px; }
 }
+
+/* ========================================================================== */
+/* 4. Entrada                                                                  */
+/* ========================================================================== */
+/* Fundo claro e cartão simples, como o resto do sistema. O fundo azul-noite
+   com brilho radial e o logotipo de 52px eram a cara de página de template. */
+.auth-page.auth-page-solo { background: #f3f4f6; color: #111827; }
+.auth-page-solo .auth-solo-card { max-width: 400px; gap: 20px; }
+.auth-page-solo .auth-solo-logo { justify-content: flex-start; }
+.auth-page-solo .auth-form-card {
+  padding: 28px;
+  border: 1px solid #dfe3e8;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #111827;
+}
+.auth-page-solo .auth-form-card h2 { margin: 0 0 4px; color: #111827; font-size: 20px; font-weight: 650; letter-spacing: -.01em; text-align: left; }
+.auth-page-solo .auth-form-card > p { margin: 0 0 20px; color: #4b5563; font-size: 13px; text-align: left; }
+.auth-page-solo .auth-login-form { gap: 14px; }
+.auth-page-solo .auth-login-form label { color: #374151; font-size: 13px; font-weight: 600; }
+.auth-page-solo .auth-login-form small { color: #4b5563; font-size: 12px; }
+.auth-page-solo .auth-login-form input {
+  height: 40px;
+  border: 1px solid #cfd5dc;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #111827;
+  font-size: 14px;
+}
+.auth-page-solo .auth-login-form input:focus { border-color: #365cf5; outline: 2px solid #dbe4fe; outline-offset: 0; }
+.auth-page-solo .auth-primary { justify-content: center; height: 40px; border-radius: 6px; font-size: 14px; }
+.auth-page-solo .auth-recovery-hint { margin: 12px 0 0; color: #4b5563; font-size: 13px; text-align: left; }
+.auth-page-solo .auth-recovery-hint a { color: #2546c8; }
+.auth-page-solo .auth-login-error { border-color: #f3c2c0; background: #fef2f2; color: #991b1b; }
+.auth-page-solo .auth-status { justify-content: flex-start; color: #166534; }
+.auth-page-solo .auth-secondary-link { color: #2546c8; }

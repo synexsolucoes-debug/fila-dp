@@ -29,7 +29,7 @@
 
 .header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .header h1 { margin: 4px 0 0; font-size: 1.3rem; }
-.eyebrow { color: var(--ui-text-soft, #55607A); font-size: .75rem; font-weight: 780; letter-spacing: .09em; }
+.eyebrow { color: var(--ui-text-soft, #55607A); font-size: .75rem; font-weight: 780; letter-spacing: normal; }
 .signOut { flex: 0 0 auto; color: var(--ui-text-soft, #55607A); font-size: .78rem; text-decoration: none; white-space: nowrap; }
 .signOut:hover { text-decoration: underline; }
 

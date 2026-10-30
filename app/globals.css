@@ -266,7 +266,7 @@ button, summary { font: inherit; }
 }
 .hero-glow { position: absolute; width: 560px; height: 560px; border-radius: 50%; right: -170px; top: -60px; background: color-mix(in srgb, var(--brand-accent) 16%, transparent); filter: blur(40px); }
 .hero-copy { position: relative; z-index: 2; max-width: 620px; }
-.eyebrow, .section-kicker { font-family: var(--font-geist-mono), monospace; text-transform: uppercase; letter-spacing: .11em; font-size: 11px; font-weight: 700; color: var(--brand); }
+.eyebrow, .section-kicker { font-family: var(--font-geist-mono), monospace; text-transform: none; letter-spacing: normal; font-size: 11px; font-weight: 700; color: var(--brand); }
 .eyebrow { display: inline-flex; align-items: center; gap: 9px; padding: 8px 12px; border: 1px solid var(--brand-soft-border); border-radius: 99px; background: var(--brand-soft); }
 .eyebrow-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--brand-accent); }
 .hero h1 { max-width: 600px; margin: 22px 0 0; font-size: clamp(46px, 4.6vw, 76px); line-height: .98; letter-spacing: -.055em; font-weight: 720; color: var(--brand-strong); text-wrap: balance; }
@@ -290,7 +290,7 @@ button, summary { font: inherit; }
 .product-panel-tag { margin-left: auto; padding: 5px 10px; border-radius: 99px; background: color-mix(in srgb, var(--brand-accent) 26%, transparent); color: var(--brand-contrast); font-size: 11px; font-weight: 700; }
 .product-panel-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--ui-border); border-bottom: 1px solid var(--ui-border); }
 .product-metric { padding: 20px; background: var(--ui-surface); }
-.product-metric > span { font-family: var(--font-geist-mono); text-transform: uppercase; letter-spacing: .09em; font-size: 10px; color: var(--ui-text-muted); }
+.product-metric > span { font-family: var(--font-geist-mono); text-transform: none; letter-spacing: normal; font-size: 10px; color: var(--ui-text-muted); }
 .product-metric strong { display: block; margin: 8px 0 8px; font-size: 19px; letter-spacing: -.03em; color: var(--brand-strong); }
 .product-metric p { margin: 0; font-size: 12.5px; line-height: 1.6; color: var(--ui-text-soft); }
 .product-checklist { margin: 0; padding: 18px 20px; list-style: none; display: grid; gap: 10px; }
@@ -320,7 +320,7 @@ button, summary { font: inherit; }
 .pain-grid p { margin: 0; color: var(--ui-text-soft); font-size: 14px; line-height: 1.65; }
 .pain-icon { font-family: var(--font-geist-mono); color: var(--ui-text-muted); font-size: 11px; }
 .pain-grid .solution-card { background: var(--brand-strong); color: var(--on-brand-text); }
-.solution-card .solution-label { color: var(--brand-accent-on-dark); font-family: var(--font-geist-mono); text-transform: uppercase; letter-spacing: .11em; font-size: 10px; }
+.solution-card .solution-label { color: var(--brand-accent-on-dark); font-family: var(--font-geist-mono); text-transform: none; letter-spacing: normal; font-size: 10px; }
 .pain-grid .solution-card h3 { color: var(--brand-contrast); }
 .pain-grid .solution-card p { color: var(--on-brand-soft); }
 .solution-card a { display: flex; justify-content: space-between; align-items: center; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--on-brand-line); color: var(--brand-accent-on-dark); font-size: 13px; font-weight: 700; }
@@ -357,7 +357,7 @@ button, summary { font: inherit; }
 .integration-card { padding: 22px; border: 1px solid var(--ui-border); border-radius: var(--radius-md); background: var(--ui-surface); }
 .integration-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .integration-card h3 { margin: 0; font-size: 16px; letter-spacing: -.02em; color: var(--brand-strong); }
-.integration-state { padding: 4px 9px; border-radius: 99px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
+.integration-state { padding: 4px 9px; border-radius: 99px; font-size: 10px; font-weight: 800; text-transform: none; letter-spacing: normal; white-space: nowrap; }
 .integration-state.state-available { background: color-mix(in srgb, var(--ui-success) 14%, transparent); color: var(--ui-success); }
 .integration-state.state-partial { background: color-mix(in srgb, var(--ui-warning) 16%, transparent); color: var(--ui-warning); }
 /* Implantação assistida: existe e funciona, com a ponta do fornecedor
@@ -365,7 +365,7 @@ button, summary { font: inherit; }
    o cinza de apenas preparado. */
 .integration-state.state-assisted { background: var(--brand-soft); color: var(--brand); }
 .integration-state.state-planned { background: var(--ui-surface-muted); color: var(--ui-text-soft); }
-.integration-category { margin: 10px 0 8px; font-family: var(--font-geist-mono); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--ui-text-muted); }
+.integration-category { margin: 10px 0 8px; font-family: var(--font-geist-mono); font-size: 10px; text-transform: none; letter-spacing: normal; color: var(--ui-text-muted); }
 .integration-card p { margin: 0; color: var(--ui-text-soft); font-size: 13px; line-height: 1.62; }
 
 .security-section { background: var(--brand-deep); color: var(--on-brand-text); }
@@ -382,7 +382,7 @@ button, summary { font: inherit; }
 .center-heading > p { margin: 18px auto 0; }
 .plans-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 56px; }
 .plan-card { display: flex; flex-direction: column; padding: 26px; border: 1px solid var(--ui-border); border-radius: var(--radius-lg); background: var(--ui-surface); }
-.plan-name { color: var(--brand); font-family: var(--font-geist-mono); text-transform: uppercase; letter-spacing: .08em; font-size: 11px; font-weight: 700; }
+.plan-name { color: var(--brand); font-family: var(--font-geist-mono); text-transform: none; letter-spacing: normal; font-size: 11px; font-weight: 700; }
 .plan-price { display: block; margin: 14px 0 0; font-size: 30px; letter-spacing: -.04em; color: var(--brand-strong); }
 .plan-price small { display: block; margin-top: 6px; font-size: 12px; font-weight: 500; letter-spacing: 0; color: var(--ui-text-muted); }
 .plan-description { margin: 14px 0 0; color: var(--ui-text-soft); font-size: 13px; line-height: 1.6; }
@@ -404,7 +404,7 @@ button, summary { font: inherit; }
 .plan-flag {
   align-self: flex-start; margin-top: 10px; padding: 4px 9px; border-radius: 99px;
   background: var(--vin-blue); color: var(--brand-contrast);
-  font-size: 10px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase;
+  font-size: 10px; font-weight: 800; letter-spacing: normal; text-transform: none;
 }
 
 /* Cancelamento, mudança de plano, saída com os dados e suporte: as quatro
@@ -438,7 +438,7 @@ button, summary { font: inherit; }
    O azul de marca continua na faixa, como realce; o que ele deixa de ser é
    fundo de texto. */
 .final-cta { padding: 92px 7vw; display: grid; grid-template-columns: 1.25fr .75fr; gap: 6vw; align-items: end; background: linear-gradient(135deg, var(--brand-deep) 0%, var(--brand-strong) 100%); color: var(--brand-contrast); --on-brand-soft: #CFE4FF; --brand-accent-on-dark: #B6DAFF; }
-.cta-kicker { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 18px; font-family: var(--font-geist-mono); text-transform: uppercase; letter-spacing: .1em; font-size: 10px; font-weight: 800; color: var(--brand-accent-on-dark); }
+.cta-kicker { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 18px; font-family: var(--font-geist-mono); text-transform: none; letter-spacing: normal; font-size: 10px; font-weight: 800; color: var(--brand-accent-on-dark); }
 .final-cta h2 { font-size: clamp(32px, 3.8vw, 56px); }
 .final-cta-actions { display: flex; flex-direction: column; align-items: stretch; }
 .button-light { width: 100%; background: var(--ui-surface); color: var(--brand-strong); border-color: var(--ui-surface); }
