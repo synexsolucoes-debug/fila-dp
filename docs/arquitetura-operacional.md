@@ -1890,7 +1890,7 @@ de uma pessoa casar, ninguém é avisado; quem não tem acesso à empresa da
 demanda também não. A tela recebe `mentionWarning` e diz por que ninguém foi
 avisado.
 
-**Importador** (Configurações → Quadros → Importar quadro do Trello;
+**Importador** (Configurações → Geral, abaixo da lista de quadros → Importar quadro do Trello;
 `lib/trello-import.ts`, `app/api/boards/import/trello/route.ts`):
 
 - O JSON é lido no navegador e só o recorte usado vai ao servidor, que lê o

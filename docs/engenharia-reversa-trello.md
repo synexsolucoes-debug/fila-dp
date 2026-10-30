@@ -747,7 +747,7 @@ Vinculato · **×** não copiar.
 | Webhooks assinados | Webhooks com outbox e anti-SSRF | = |
 | WebSocket em tempo real, *last write wins* | Consulta periódica + concorrência otimista | = / + |
 | Exportar JSON | Exportação do workspace | = |
-| **Importar do Trello** | Importador de JSON com prévia (Configurações → Quadros) | = (feito, §4.43 da arquitetura operacional) |
+| **Importar do Trello** | Importador de JSON com prévia (Configurações → Geral) | = (feito, §4.43 da arquitetura operacional) |
 
 ---
 
