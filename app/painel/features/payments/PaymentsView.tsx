@@ -120,6 +120,14 @@ export function PaymentsView({ role, module, section = "contractorPayments", foc
     [contractors?.cycles, module, psychology?.cycles],
   );
   const canManage = Boolean(permissions?.manage && cycle && cycle.status !== "closed");
+  /* Competência aberta não quer dizer pagamento aberto: o fechamento de cada
+     prestador trava sozinho. A tela mostrava só o selo da competência, e quem
+     lançava para um prestador já fechado só descobria pelo erro do servidor. */
+  const lockedProviderIds = useMemo(
+    () => (contractors?.closings ?? []).filter((row) => row.status === "closed" || row.status === "paid").map((row) => row.providerId),
+    [contractors?.closings],
+  );
+  const cycleStatusByCompetence = useMemo(() => new Map(cycles.map((item) => [item.competence, item.status])), [cycles]);
 
   const loadCompanies = useCallback(async () => {
     setLoading(true);
@@ -679,7 +687,7 @@ export function PaymentsView({ role, module, section = "contractorPayments", foc
           <label>
             <span className={styles.eyebrow}>COMPETÊNCIA</span>
             <select value={competence} onChange={(event) => setCompetence(event.target.value)}>
-              {competenceOptions.map((item) => <option key={item.competence} value={item.competence}>{competenceLabel(item.competence)}{item.open ? "" : " · não aberta"}</option>)}
+              {competenceOptions.map((item) => <option key={item.competence} value={item.competence}>{competenceLabel(item.competence)}{!item.open ? " · não aberta" : cycleStatusByCompetence.get(item.competence) === "closed" ? " · fechada" : ""}</option>)}
             </select>
           </label>
         </div>
@@ -735,6 +743,8 @@ export function PaymentsView({ role, module, section = "contractorPayments", foc
           <span className={styles.cycleBadge} data-locked={cycle.status === "closed" ? "true" : "false"}>
             {cycle.status === "closed" ? <LockKeyhole aria-hidden="true" /> : <CircleDot aria-hidden="true" />}
             Competência {statusLabels[cycle.status] ?? cycle.status}
+            {module === "contractors" && cycle.status !== "closed" && lockedProviderIds.length > 0
+              && ` · ${lockedProviderIds.length} pagamento(s) fechado(s)`}
           </span>
         )}
       </div>
@@ -957,6 +967,7 @@ export function PaymentsView({ role, module, section = "contractorPayments", foc
         <ContractorEntryDialog
           open={entryOpen}
           contractors={contractors?.contractors ?? []}
+          lockedProviderIds={lockedProviderIds}
           competence={competence}
           competenceLabel={competenceLabel(competence)}
           initialNature={entryNature}

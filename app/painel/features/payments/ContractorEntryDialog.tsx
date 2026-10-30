@@ -84,10 +84,14 @@ export type EntrySubmission = {
 };
 
 export function ContractorEntryDialog({
-  open, contractors, competence, competenceLabel, initialNature, busy, error, onClose, onSubmit,
+  open, contractors, lockedProviderIds = [], competence, competenceLabel, initialNature, busy, error, onClose, onSubmit,
 }: {
   open: boolean;
   contractors: readonly Contractor[];
+  /** Prestadores com o fechamento da competência concluído (fechado ou pago).
+   *  O servidor recusa lançamento mensal para eles; a janela avisa antes, em
+   *  vez de deixar a pessoa preencher e só então descobrir. */
+  lockedProviderIds?: readonly string[];
   competence: string;
   competenceLabel: string;
   /** A natureza que o botão de origem sugere — quem abre por "Novo recorrente"
@@ -134,16 +138,21 @@ export function ContractorEntryDialog({
   }
 
   const ativos = useMemo(() => contractors.filter((item) => item.status === "active"), [contractors]);
+  // Fixo e determinado vão para o contrato, não para o fechamento do mês: só o mensal trava.
+  const travados = useMemo(
+    () => new Set(nature === "mensal" ? lockedProviderIds : []),
+    [lockedProviderIds, nature],
+  );
 
   const preenchidos = useMemo(
-    () => Object.entries(amounts).filter(([, value]) => Number(value.replace(",", ".")) > 0).length,
-    [amounts],
+    () => Object.entries(amounts).filter(([id, value]) => Number(value.replace(",", ".")) > 0 && !travados.has(id)).length,
+    [amounts, travados],
   );
 
   const isDebit = debitTypes.has(componentType);
 
   const podeEnviar = mode === "prestador"
-    ? Boolean(providerId) && Number(singleAmount.replace(",", ".")) > 0
+    ? Boolean(providerId) && !travados.has(providerId) && Number(singleAmount.replace(",", ".")) > 0
     : preenchidos > 0;
 
   function submit(event: React.FormEvent) {
@@ -153,7 +162,7 @@ export function ContractorEntryDialog({
       ? [{ providerId, amount: Number(singleAmount.replace(",", ".")) }]
       : Object.entries(amounts)
         .map(([id, value]) => ({ providerId: id, amount: Number(value.replace(",", ".")) }))
-        .filter((entry) => entry.amount > 0);
+        .filter((entry) => entry.amount > 0 && !travados.has(entry.providerId));
     onSubmit({
       nature, componentType, description, effectiveTo, entries,
       // Provento não escolhe incidência: a nota nunca passa do limite.
@@ -248,7 +257,11 @@ export function ContractorEntryDialog({
             <label>Prestador
               <select value={providerId} onChange={(event) => setProviderId(event.target.value)} required>
                 <option value="" disabled>Selecione</option>
-                {ativos.map((item) => <option key={item.id} value={item.id}>{item.legalName}</option>)}
+                {ativos.map((item) => (
+                  <option key={item.id} value={item.id} disabled={travados.has(item.id)}>
+                    {item.legalName}{travados.has(item.id) ? " · fechamento concluído" : ""}
+                  </option>
+                ))}
               </select>
             </label>
             <label>Valor (R$)
@@ -266,13 +279,20 @@ export function ContractorEntryDialog({
               ? <p className={styles.noteLine}>Nenhum prestador ativo nesta empresa.</p>
               : ativos.map((item) => (
                 <label key={item.id} className={styles.batchRow}>
-                  <span>{item.legalName}<small>{item.code}</small></span>
-                  <input type="number" min="0" step="0.01" placeholder="0,00"
+                  <span>{item.legalName}<small>{travados.has(item.id) ? "Fechamento concluído — reabra para lançar" : item.code}</small></span>
+                  <input type="number" min="0" step="0.01" placeholder="0,00" disabled={travados.has(item.id)}
                     value={amounts[item.id] ?? ""}
                     onChange={(event) => setAmounts((current) => ({ ...current, [item.id]: event.target.value }))} />
                 </label>
               ))}
           </div>
+        )}
+
+        {travados.size > 0 && (
+          <p className={styles.noteLine}>
+            {travados.size} prestador(es) já têm o fechamento de {competenceLabel} concluído e não recebem lançamento mensal.
+            Para lançar, reabra o pagamento deles em Pagamentos, com justificativa.
+          </p>
         )}
 
         {error && <p className={styles.warningState} role="alert">{error}</p>}
