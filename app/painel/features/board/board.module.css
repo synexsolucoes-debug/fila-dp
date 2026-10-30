@@ -326,6 +326,10 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
   /* Largura fixa, e não `1fr`: colunas que se esticam mudam de tamanho quando
      alguém é atribuído, e o cartão que a pessoa ia clicar muda de lugar. */
   flex: 0 0 292px;
+  /* Sem isto a coluna herda `min-width: auto` de item flex, e o nome do
+     responsável em `nowrap` vira a largura mínima: um nome de 60 caracteres
+     esticava a coluna para mais de 1000px e cortava os cartões na borda. */
+  min-width: 0;
   max-height: 100%;
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-lg);
@@ -388,6 +392,9 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
 
 .columnCards {
   display: grid;
+  /* Trilho `minmax(0, 1fr)`, não `auto`: no automático a empresa em `nowrap`
+     vira a largura mínima do cartão, que passava de 1000px numa coluna de 290. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   align-content: start;
   padding: 0 8px 10px;
@@ -507,10 +514,10 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
 .cardTitle:hover { color: var(--ui-accent-text, var(--ui-primary)); }
 .cardTitle:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 2px; border-radius: var(--ui-radius-sm); }
 
-.cardWho { margin: -4px 0 0; display: flex; flex-wrap: wrap; gap: 4px; font-size: 14px; color: var(--ui-text-soft); }
+.cardWho { min-width: 0; margin: -4px 0 0; display: flex; flex-wrap: wrap; gap: 4px; font-size: 14px; color: var(--ui-text-soft); }
 .employee { font-weight: 700; color: var(--ui-text); }
 .employee::after { content: " ·"; color: var(--ui-text-muted); font-weight: 400; }
-.company { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.company { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .cardBottom { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; color: var(--ui-text-muted); }
 .due, .stage, .meta, .orphan {

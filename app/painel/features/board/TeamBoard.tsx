@@ -93,7 +93,7 @@ export function TeamBoard(props: TeamBoardProps) {
                 {semDono ? <Inbox /> : initialsOf(column.name)}
               </span>
               <span className={styles.columnWho}>
-                <strong>{column.name}</strong>
+                <strong title={column.name}>{column.name}</strong>
                 <small>{semDono ? "Fila comum" : column.role || "Sem departamento"}</small>
               </span>
               <b className={styles.columnCount}>{column.open}</b>

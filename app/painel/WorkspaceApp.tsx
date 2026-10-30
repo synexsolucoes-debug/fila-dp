@@ -81,6 +81,7 @@ import type { ActionTarget } from "@/lib/action-center";
 import { RULE_TRIGGERS, RULE_TRIGGER_LABELS } from "@/lib/automation-rules";
 import { hasSubNavigation, isContractorOnly, visibleContractorSections, visibleProcessGroups } from "@/lib/process-navigation";
 import { ModuleLauncher, type LauncherModule } from "./features/shared/ModuleLauncher";
+import { initialsOf } from "@/lib/initials";
 import { PRIORITY_LABELS } from "@/lib/work-items";
 import { demandNextAction } from "@/lib/demand-dashboard";
 import {
@@ -660,7 +661,7 @@ function normalizeWorkspaceSnapshot(snapshot: WorkspaceSnapshot): WorkspaceSnaps
 }
 
 function initials(value: string) {
-  return String(value ?? "").split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "DP";
+  return initialsOf(value, "DP");
 }
 
 function formatDate(value: string | null, long = false) {
@@ -1948,18 +1949,34 @@ export function WorkspaceApp({
      Pagamento PJ abre o Sistema PJ; os demais abrem o Vinculato na primeira
      tela do processo. */
   const launcherModules = useMemo<LauncherModule[]>(() => {
+    /* O número vivo de cada tile (§7.2 da engenharia reversa Centi/SAP) sai do
+       snapshot que o painel já carregou: nenhuma ida a mais ao banco só para
+       desenhar a janela. Módulo sem número honesto fica sem número. */
+    const plural = (count: number, one: string, other: string) => (count === 1 ? one : other);
+    const openDemands = (snapshot?.lists ?? [])
+      .filter((list) => list.slaBehavior !== "completed")
+      .reduce((total, list) => total + list.cards.length, 0);
+    const openCycles = (snapshot?.payrollCycles ?? []).filter((cycle) => cycle.status !== "closed").length;
+    const overdueObligations = (snapshot?.upcomingObligations ?? []).filter((item) => item.daysRemaining < 0).length;
+    const metrics: Partial<Record<string, LauncherModule["metric"]>> = {
+      "operacao-dp": { value: openDemands, label: plural(openDemands, "demanda aberta", "demandas abertas") },
+      pagamentos: { value: openCycles, label: plural(openCycles, "competência em andamento", "competências em andamento") },
+    };
     const modules: LauncherModule[] = navGroups.map((group) => ({
       id: group.id, label: group.label, description: group.description,
       icon: viewCatalog[group.views[0] as View].icon,
+      section: group.kind,
+      metric: metrics[group.id],
     }));
     if (canUseErp && !contractorOnly) {
       modules.push({
-        id: "erp-dp", label: "ERP DP", icon: Building2,
+        id: "erp-dp", label: "ERP DP", icon: Building2, section: "system",
         description: "Cadastro, movimentações, folha, férias e obrigações na gramática do ERP de departamento pessoal.",
+        metric: { value: overdueObligations, label: plural(overdueObligations, "obrigação vencida", "obrigações vencidas"), tone: "attention" },
       });
     }
     return modules;
-  }, [navGroups, canUseErp, contractorOnly]);
+  }, [navGroups, canUseErp, contractorOnly, snapshot]);
   const openLauncherModule = useCallback((id: string) => {
     setModuleLauncher(null);
     if (id === "erp-dp") {

@@ -144,28 +144,13 @@
 /* ========================================================================== */
 
 /*
- * Cada módulo é remontado com `key={view}` no WorkspaceApp, então a animação
- * roda de novo a cada troca — é isso que dá a sensação de "o módulo carregou"
- * em vez de "o conteúdo trocou no lugar".
+ * Troca de tela sem coreografia. Antes havia três animações empilhadas aqui
+ * (módulo subindo, cabeçalho deslizando, faixas escalonadas até 170ms) somadas
+ * ao `viewEnter` de dashboard-modern.css: perto de meio segundo de conteúdo
+ * invisível a cada clique no menu. Navegação é a ação mais repetida do
+ * sistema, e animação em ação de todo minuto vira espera — a troca agora é um
+ * corte curto de opacidade, só em `.view-transition`.
  */
-.dashboard-view {
-  animation: vin-rise var(--motion-slow) var(--motion-enter) both;
-}
-
-.dashboard-heading {
-  animation: vin-slide-left var(--motion-base) var(--motion-enter) both;
-}
-
-/* Escalonamento curto nas primeiras faixas do módulo: o olho acompanha a ordem
- * de leitura em vez de receber tudo de uma vez. O limite de seis existe para
- * que a última faixa nunca espere mais que ~180ms. */
-.dashboard-view > * { animation: vin-rise var(--motion-base) var(--motion-enter) both; }
-.dashboard-view > *:nth-child(1) { animation-delay: 20ms; }
-.dashboard-view > *:nth-child(2) { animation-delay: 50ms; }
-.dashboard-view > *:nth-child(3) { animation-delay: 80ms; }
-.dashboard-view > *:nth-child(4) { animation-delay: 110ms; }
-.dashboard-view > *:nth-child(5) { animation-delay: 140ms; }
-.dashboard-view > *:nth-child(n + 6) { animation-delay: 170ms; }
 
 /* Fundo escurece; a janela sobe e se assenta. */
 .workspace-modal-backdrop {
@@ -173,7 +158,8 @@
 }
 
 .workspace-modal {
-  animation: vin-pop var(--motion-slow) var(--motion-enter) both;
+  /* Janela abaixo de 300ms: mais que isso já se sente como espera. */
+  animation: vin-pop var(--motion-base) var(--motion-enter) both;
   box-shadow: var(--elevation-3);
 }
 
@@ -182,22 +168,14 @@
   animation: vin-slide-right var(--motion-slow) var(--motion-enter) both;
 }
 
-/* A paleta de busca desce do topo, que é de onde ela é invocada. */
-.search-palette {
-  animation: vin-pop var(--motion-base) var(--motion-enter) both;
-}
+/* A paleta de busca não anima: ela é aberta por ⌘K, e atalho de teclado
+   repetido o dia inteiro precisa responder no mesmo quadro. */
+.search-palette,
+.workspace-modal-backdrop.search-backdrop { animation: none; }
 
 .workspace-toast {
   animation: vin-pop var(--motion-base) var(--motion-enter) both;
   box-shadow: var(--elevation-3);
-}
-
-/* Listas operacionais: uma entrada curta o bastante para não atrasar leitura. */
-.dashboard-card-list > article,
-.overview-attention-list > article,
-.inbox-list > .inbox-item,
-.workspace-member-list > article {
-  animation: vin-fade var(--motion-base) var(--motion-standard) both;
 }
 
 /* ========================================================================== */
@@ -1566,17 +1544,9 @@ body:has(.dashboard-shell.operational-ui:not(.theme-dark)) { background: #F7F9FD
 /* 7.4 Entrada dos cartões                                                    */
 /* -------------------------------------------------------------------------- */
 
-/* Escalonamento curto, e só na montagem: as chaves do React são o id do
-   cartão, então filtrar não remonta quem ficou — só quem entra anima. É por
-   isso que digitar na busca não faz a coluna inteira piscar a cada tecla. */
-.operational-ui .dashboard-task { animation: vin-rise var(--motion-base) var(--motion-enter) both; }
-.operational-ui .dashboard-task:nth-child(1) { animation-delay: 10ms; }
-.operational-ui .dashboard-task:nth-child(2) { animation-delay: 35ms; }
-.operational-ui .dashboard-task:nth-child(3) { animation-delay: 60ms; }
-.operational-ui .dashboard-task:nth-child(4) { animation-delay: 85ms; }
-.operational-ui .dashboard-task:nth-child(n + 5) { animation-delay: 110ms; }
-/* Quem está sendo arrastado não re-anima a cada quadro do gesto. */
-.operational-ui .dashboard-task.dragging { animation: none; }
+/* Sem entrada escalonada: o quadro é a tela mais aberta do sistema, e cada
+   abertura remontava todos os cartões com atraso de até 110ms. O conteúdo
+   chega pronto. */
 
 /* O cartão sobe de leve ao receber o ponteiro. 1px: o suficiente para dizer
    "isto responde", pouco o bastante para não empurrar a coluna. */

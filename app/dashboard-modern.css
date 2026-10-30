@@ -5016,22 +5016,24 @@
    como valor animado deixa uma matriz identidade que faz deste elemento o
    bloco de contenção de todo descendente `position: fixed`. Ver a explicação
    longa em `features/shared/motion.module.css`. */
-.view-transition { animation: viewEnter var(--motion-slow) var(--motion-ease) backwards; }
+.view-transition { animation: viewEnter 120ms ease-out backwards; }
 
+/* Só opacidade e curta: troca de tela acontece dezenas de vezes por dia, e
+   deslocamento a cada troca vira espera (ver interface-refresh.css §3). */
 @keyframes viewEnter {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: none; }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 /* --- Navegação lateral ---------------------------------------------------- */
 .dashboard-sidebar nav button {
-  transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease,
-    transform var(--motion-fast) var(--motion-ease);
+  transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease;
 }
-.dashboard-sidebar nav button:hover:not(.active) { transform: translateX(2px); }
+/* Sem deslocamento no hover: o menu é varrido com o ponteiro o dia todo, e
+   item que se mexe sob o cursor atrapalha a mira. */
 .dashboard-sidebar nav button.active {
-  /* O item ativo ganha um traço que cresce a partir do centro, em vez de
-     aparecer pronto: liga visualmente o clique ao destino. */
+  /* O traço do item ativo aparece pronto: ele marca onde a pessoa está, e
+     crescer a partir de escala zero a cada clique era movimento sem função. */
   position: relative;
 }
 .dashboard-sidebar nav button.active::before {
@@ -5043,12 +5045,7 @@
   border-radius: 0 3px 3px 0;
   background: var(--ui-accent-on-ink, #E8AE5E);
   content: "";
-  animation: navMark var(--motion-base) var(--motion-ease) both;
-}
-
-@keyframes navMark {
-  from { opacity: 0; transform: translateY(-50%) scaleY(0); }
-  to { opacity: 1; transform: translateY(-50%) scaleY(1); }
+  transform: translateY(-50%);
 }
 
 /* --- Cartões e superfícies ------------------------------------------------ */
@@ -5058,9 +5055,11 @@
   transition: transform var(--motion-fast) var(--motion-ease),
     box-shadow var(--motion-fast) ease, border-color var(--motion-fast) ease;
 }
-.dashboard-task:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 24px rgba(11, 31, 51, .12);
+/* Realce sem levantar: no quadro o ponteiro passa por dezenas de cartões, e
+   cartão que pula sob o cursor vira ruído. Só com ponteiro de verdade — no
+   toque o hover gruda depois do toque. */
+@media (hover: hover) and (pointer: fine) {
+  .dashboard-task:hover { box-shadow: 0 10px 24px rgba(11, 31, 51, .12); }
 }
 
 /* --- Botões --------------------------------------------------------------- */
@@ -5101,38 +5100,98 @@
   50% { opacity: .62; }
 }
 
-/* Janela de módulos: entrada depois do login e troca de módulo pelo topo. */
+/* Janela de módulos: entrada depois do login e troca de módulo pelo topo.
+   Desenho de launchpad (Fiori): seções por tipo de trabalho e tiles do mesmo
+   tamanho, com o número vivo no canto — o olho compara módulos pelo número,
+   então ele tem lugar fixo e algarismos tabulares. */
 .module-launcher {
   position: fixed;
   inset: 0;
   z-index: 80;
   overflow-y: auto;
-  padding: 48px 16px;
+  padding: clamp(24px, 6vh, 56px) 16px 48px;
   display: grid;
   place-items: start center;
-  background: color-mix(in srgb, var(--ui-bg) 94%, transparent);
+  background: color-mix(in srgb, var(--ui-bg) 96%, transparent);
   backdrop-filter: blur(6px);
 }
-.module-launcher-panel { width: 100%; max-width: 980px; display: grid; gap: 28px; }
-.module-launcher-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.module-launcher-head img { max-width: 70vw; height: auto; }
-.module-launcher-close { width: 38px; height: 38px; display: grid; place-items: center; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface); color: var(--ui-text-soft); cursor: pointer; }
+/* A janela abre poucas vezes por sessão (entrada e troca de módulo), então
+   ganha uma entrada curta: fundo em opacidade e painel assentando 6px. */
+.module-launcher { animation: backdropIn 160ms ease-out both; }
+.module-launcher-panel { width: 100%; max-width: 1040px; display: grid; gap: 22px; animation: launcherIn 220ms cubic-bezier(.23, 1, .32, 1) both; }
+@keyframes launcherIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.module-launcher-head { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.module-launcher-head img { max-width: 50vw; height: auto; flex-shrink: 0; }
+.module-launcher-workspace {
+  min-width: 0;
+  overflow: hidden;
+  padding: 4px 10px;
+  border: 1px solid var(--ui-border);
+  border-radius: 999px;
+  color: var(--ui-text-soft);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.module-launcher-close { flex-shrink: 0; margin-left: auto; width: 38px; height: 38px; display: grid; place-items: center; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface); color: var(--ui-text-soft); cursor: pointer; }
 .module-launcher-close:hover, .module-launcher-close:focus-visible { border-color: var(--ui-primary); color: var(--ui-primary); outline: none; }
 .module-launcher-close svg { width: 18px; height: 18px; }
-.module-launcher-intro span { color: var(--ui-text-muted); font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
-.module-launcher-intro h1 { margin: 8px 0 6px; color: var(--ui-text); font-size: clamp(24px, 4vw, 34px); line-height: 1.1; letter-spacing: -.03em; }
+.module-launcher-intro h1 { margin: 0 0 6px; color: var(--ui-text); font-size: clamp(22px, 3.4vw, 30px); line-height: 1.15; letter-spacing: -.025em; text-wrap: balance; }
 .module-launcher-intro p, .module-launcher-empty { margin: 0; color: var(--ui-text-soft); font-size: 14px; }
-.module-launcher-grid { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
-.module-launcher-grid button {
+.module-launcher-search {
   position: relative;
+  display: flex;
+  align-items: center;
+  max-width: 420px;
+}
+/* Acima do campo: uma regra global põe `z-index: 3` em todo input. */
+.module-launcher-search > svg { position: absolute; z-index: 4; left: 12px; width: 16px; height: 16px; color: var(--ui-text-muted); pointer-events: none; }
+.module-launcher-search input {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 12px 0 36px;
+  border: 1px solid var(--ui-border-strong, var(--ui-border));
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font: inherit;
+  font-size: 14px;
+}
+.module-launcher-search input:focus-visible { border-color: var(--ui-primary); outline: 2px solid var(--ui-primary-soft); outline-offset: 0; }
+.module-launcher-search input::-webkit-search-cancel-button { display: none; }
+.module-launcher-search kbd {
+  position: absolute;
+  z-index: 4;
+  right: 8px;
+  max-width: 55%;
+  overflow: hidden;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--ui-surface-muted, var(--ui-primary-soft));
+  color: var(--ui-text-soft);
+  font: inherit;
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+.module-launcher-section { display: grid; gap: 10px; }
+.module-launcher-section h2 { margin: 0; color: var(--ui-text-muted); font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.module-launcher-grid { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 232px), 1fr)); gap: 12px; }
+.module-launcher-grid li { min-width: 0; }
+.module-launcher-grid button {
   width: 100%;
   height: 100%;
-  min-height: 150px;
-  padding: 20px;
+  min-height: 148px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
+  align-items: stretch;
+  gap: 6px;
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-lg);
   background: var(--ui-surface);
@@ -5141,20 +5200,46 @@
   text-align: left;
   font: inherit;
   cursor: pointer;
-  transition: border-color .16s ease, transform .16s ease, box-shadow .16s ease;
+  transition: border-color var(--motion-fast, 130ms) ease, box-shadow var(--motion-fast, 130ms) ease, transform 160ms cubic-bezier(.23, 1, .32, 1);
 }
-.module-launcher-grid button:hover, .module-launcher-grid button:focus-visible { border-color: var(--ui-primary); transform: translateY(-2px); outline: none; }
+/* Realce sem deslocamento: o tile é alvo de clique, e alvo que foge do
+   ponteiro atrapalha a mira. Só em quem tem ponteiro de verdade — no toque o
+   hover gruda depois do toque. */
+@media (hover: hover) and (pointer: fine) {
+  .module-launcher-grid button:hover { border-color: var(--ui-primary); box-shadow: var(--ui-shadow-card), 0 0 0 1px var(--ui-primary); }
+}
+.module-launcher-grid button:focus-visible { border-color: var(--ui-primary); outline: 2px solid var(--ui-primary); outline-offset: 2px; }
 .module-launcher-grid button:active { transform: scale(.98); }
-.module-launcher-icon { width: 40px; height: 40px; margin-bottom: 4px; display: grid; place-items: center; border-radius: var(--ui-radius-md); background: var(--ui-primary-soft); color: var(--ui-primary); }
-.module-launcher-icon svg { width: 20px; height: 20px; }
-.module-launcher-grid strong { font-size: 16px; }
-.module-launcher-grid small { padding-right: 22px; color: var(--ui-text-soft); font-size: 12px; line-height: 1.5; }
-.module-launcher-arrow { position: absolute; right: 18px; bottom: 18px; width: 18px; height: 18px; color: var(--ui-text-muted); }
-.module-launcher-grid button:hover .module-launcher-arrow { color: var(--ui-primary); }
+.module-launcher-icon { flex-shrink: 0; margin-bottom: 6px; width: 36px; height: 36px; display: grid; place-items: center; border-radius: var(--ui-radius-md); background: var(--ui-primary-soft); color: var(--ui-primary); }
+.module-launcher-icon svg { width: 18px; height: 18px; }
+/* KPI do tile: no rodapé, em linha, para os títulos de todos os tiles
+   ficarem na mesma altura com ou sem número. */
+.module-launcher-metric {
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--ui-border);
+  color: var(--ui-text-muted);
+  font-size: 12px;
+  line-height: 1.3;
+}
+.module-launcher-metric b { margin-right: 2px; color: var(--ui-text); font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.module-launcher-metric[data-tone="attention"] b { color: var(--ui-danger); }
+.module-launcher-grid strong { font-size: 15px; line-height: 1.3; overflow-wrap: anywhere; }
+.module-launcher-description {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  margin-bottom: 4px;
+  color: var(--ui-text-soft);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
 
 @media (prefers-reduced-motion: reduce) {
-  .module-launcher-grid button { transition: none; }
-  .module-launcher-grid button:hover, .module-launcher-grid button:active { transform: none; }
+  .module-launcher-grid button:active { transform: none; }
+  .module-launcher-panel { animation: none; }
   .view-transition,
   .dashboard-sidebar nav button.active::before,
   .workspace-modal-backdrop,

@@ -124,7 +124,7 @@ test("os estados de selo têm par de texto e fundo nos dois temas", async () => 
 
 test("as animações só mexem em transform e opacity", async () => {
   const css = await lerCss("app/dashboard-modern.css");
-  const nossos = ["viewEnter", "modalIn", "backdropIn", "navMark", "workingPulse"];
+  const nossos = ["viewEnter", "modalIn", "backdropIn", "workingPulse"];
   for (const nome of nossos) {
     const inicio = css.indexOf(`@keyframes ${nome}`);
     assert.ok(inicio > 0, `falta o @keyframes ${nome}`);

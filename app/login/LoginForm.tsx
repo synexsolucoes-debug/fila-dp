@@ -3,14 +3,12 @@
 import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { LoginIntroMotion } from "@/app/components/LoginIntroMotion";
 
 export function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [loginDestination, setLoginDestination] = useState<string | null>(null);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -25,26 +23,13 @@ export function LoginForm() {
       });
       const payload = await response.json() as { error?: string; redirectTo?: string };
       if (!response.ok) throw new Error(payload.error || "Não foi possível concluir o acesso.");
-      const destination = payload.redirectTo || "/painel?modulos=1";
-
-      const reducedMotion = window.matchMedia(
-        "(prefers-reduced-motion: reduce)",
-      ).matches;
-
-      if (reducedMotion) {
-        window.location.assign(destination);
-        return;
-      }
-
-      setLoginDestination(destination);
+      // Sem abertura animada: quem acabou de digitar a senha quer o sistema,
+      // não o logotipo. O botão continua em "Aguarde…" até a página trocar.
+      window.location.assign(payload.redirectTo || "/painel?modulos=1");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível concluir o acesso.");
       setBusy(false);
     }
-  }
-
-  if (loginDestination) {
-    return <LoginIntroMotion destination={loginDestination} />;
   }
 
   return (
