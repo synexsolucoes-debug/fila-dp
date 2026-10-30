@@ -54,7 +54,7 @@ export function PlatformApp() {
 
   return <main className={styles.console}>
     <header className={styles.topbar}>
-      <Link href="/painel" aria-label="Voltar ao painel operacional"><VinculatoMark size={26} title="" tone="light" /><strong>Vinculato</strong><small>CONTROLE GLOBAL</small></Link>
+      <Link href="/painel" aria-label="Voltar ao painel operacional"><VinculatoMark size={26} title="" tone="light" /><strong>Vinculato</strong><small>Controle global</small></Link>
       <div><ShieldCheck aria-hidden="true" /><span><strong>Contexto de plataforma</strong><small>Autorização global validada no servidor</small></span></div>
     </header>
     <div className={styles.consoleLayout}>

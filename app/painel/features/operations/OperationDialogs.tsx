@@ -70,7 +70,7 @@ export function OperationDialog(props: DialogProps) {
     <div className={styles.overlay} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}>
       <div className={`${styles.dialog} ${destructive ? styles.dialogCompact : ""}`} ref={panelRef} role="dialog" aria-modal="true" aria-labelledby="operation-dialog-title" tabIndex={-1}>
         <header>
-          <div><span className={styles.eyebrow}>AÇÃO OPERACIONAL</span><h2 id="operation-dialog-title">{titleFor(editor)}</h2></div>
+          <div><span className={styles.eyebrow}>Ação operacional</span><h2 id="operation-dialog-title">{titleFor(editor)}</h2></div>
           <button type="button" onClick={onClose} disabled={busy} aria-label="Fechar"><X aria-hidden="true" /></button>
         </header>
         <form onSubmit={submit}>

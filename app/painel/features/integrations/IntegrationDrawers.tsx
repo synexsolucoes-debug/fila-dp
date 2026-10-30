@@ -84,7 +84,7 @@ export function IntegrationDrawer({ editor, connectors, mappings, detail, detail
     <div className={styles.overlay} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}>
       <div className={`${styles.drawer} ${editor.kind === "mapping" || editor.kind === "detail" ? styles.drawerWide : ""}`} ref={panelRef} role="dialog" aria-modal="true" aria-labelledby="integration-drawer-title" aria-describedby="integration-drawer-description" tabIndex={-1}>
         <header className={styles.drawerHeader}>
-          <div><span className={styles.eyebrow}>CENTRAL · CONTROLE SEGURO</span><h2 id="integration-drawer-title">{titles[editor.kind]}</h2><p id="integration-drawer-description">{description}</p></div>
+          <div><span className={styles.eyebrow}>Central · controle seguro</span><h2 id="integration-drawer-title">{titles[editor.kind]}</h2><p id="integration-drawer-description">{description}</p></div>
           <button type="button" onClick={onClose} disabled={busy} aria-label="Fechar painel"><X aria-hidden="true" /></button>
         </header>
         {editor.kind === "detail" ? <RunDetailPanel detail={detail} loading={detailLoading} error={detailError} /> : (
@@ -253,7 +253,7 @@ function RunDetailPanel({ detail, loading, error }: { detail: RunDetail | null; 
   if (error) return <div className={styles.inlineEmpty}><AlertTriangle aria-hidden="true" /><strong>Não foi possível carregar</strong><span>{error}</span></div>;
   if (!detail) return null;
   return <div className={styles.detailBody}>
-    <div className={styles.detailSummary}><StatusMark status={detail.run.status} /><div><span>EXECUÇÃO · {detail.run.channel?.toUpperCase()}</span><strong>{detail.run.displayName}</strong><small>{detail.run.resourceType} · {detail.run.direction} · mapeamento v{detail.run.mappingVersion}</small></div><b>TENTATIVA {detail.run.attempt}</b></div>
+    <div className={styles.detailSummary}><StatusMark status={detail.run.status} /><div><span>Execução · {detail.run.channel}</span><strong>{detail.run.displayName}</strong><small>{detail.run.resourceType} · {detail.run.direction} · mapeamento v{detail.run.mappingVersion}</small></div><b>TENTATIVA {detail.run.attempt}</b></div>
     <section className={styles.detailSection}><header><strong>Jobs da fila</strong><span>{detail.jobs.length} registro(s)</span></header>{detail.jobs.length ? detail.jobs.map((job) => <article key={job.id}><CircleDot aria-hidden="true" /><div><strong>{job.jobType}</strong><span>{job.lastErrorCode ? `${job.lastErrorCode} · ${job.lastErrorMessage}` : `Disponível em ${formatDate(job.availableAt)}`}</span></div><StatusMark status={job.status} /><b>{job.attempt}/{job.maxAttempts}</b></article>) : <p>Nenhum job associado.</p>}</section>
     <section className={styles.detailSection}><header><strong>Itens processados</strong><span>{detail.items.length} registro(s), sem payload bruto</span></header>{detail.items.length ? detail.items.map((item, index) => <article key={item.id}><span className={styles.itemIndex}>{String(index + 1).padStart(2, "0")}</span><div><strong>{item.targetType || "Item externo"}</strong><span>{item.errorCode ? `${item.errorCode} · ${item.errorMessage}` : item.metadataFields.length ? `Metadados: ${item.metadataFields.join(", ")}` : "Sem metadados públicos"}</span></div><StatusMark status={item.status} /><time>{formatDate(item.processedAt || item.createdAt)}</time></article>) : <p>Nenhum item processado até agora.</p>}</section>
   </div>;

@@ -65,7 +65,7 @@ function WorkerHealthCard({ worker, schedule }: {
     <section className={styles.workerHealth} data-tone={tone} aria-labelledby="worker-health-title">
       <header>
         <div>
-          <span>WORKER NO COMPUTADOR DO DP</span>
+          <span>Worker no computador do DP</span>
           <h3 id="worker-health-title">
             {worker?.availability === "online" ? "Ativo"
               : worker?.availability === "needs_authentication" ? "Aguardando autenticação"
@@ -246,7 +246,7 @@ export function AgentsView({ initialRunId = "" }: { initialRunId?: string }) {
 
   return <section className={styles.workspace}>
     <PanelHeader
-      eyebrow="CENTRAL DE AGENTES"
+      eyebrow="Central de agentes"
       title="Automação sob controle"
       description="Cada agente lê um sistema de origem e propõe. Nenhum deles escreve no domínio sozinho: o que eles produzem passa pelo motor determinístico e, quando não há certeza, pela triagem."
       action={<button type="button" className={styles.secondaryButton} onClick={() => void load(true)}>

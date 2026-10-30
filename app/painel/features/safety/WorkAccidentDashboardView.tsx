@@ -224,7 +224,7 @@ export function WorkAccidentDashboardView() {
 
   return <section className={styles.workspace}>
     <PanelHeader
-      eyebrow="SEGURANÇA DO TRABALHO"
+      eyebrow="Segurança do trabalho"
       title="Dashboard de Acidente de Trabalho"
       description="Acidentes, dias afastados e despesas do período, alimentados pela própria equipe do SESMT."
       action={<div className={styles.headerActions}>

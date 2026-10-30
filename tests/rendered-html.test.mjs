@@ -48,8 +48,8 @@ test("keeps collaboration and authorization wired to durable workspace data", as
   assert.match(dashboard, /title: "Perfil e segurança"/);
   assert.match(dashboard, /\{ section: "security", icon: Smartphone, hint: "Dispositivos e sessões", adminOnly: false \}/);
   assert.doesNotMatch(dashboard, /AccessView|Plano e ativação/);
-  assert.match(dashboard, /COMENTÁRIOS/);
-  assert.match(dashboard, /HISTÓRICO/);
+  assert.match(dashboard, /COMENTÁRIOS/i);
+  assert.match(dashboard, /HISTÓRICO/i);
 });
 
 test("ships operational foundations for boards, attachments, planner, reports and SLA", async () => {

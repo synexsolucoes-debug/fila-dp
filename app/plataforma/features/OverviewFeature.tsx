@@ -11,8 +11,8 @@ export function OverviewFeature({ onNavigate }: { onNavigate: (area: PlatformAre
   const operations = usePlatformResource<Row>("/api/platform/operations");
   const loading = overview.loading || billing.loading || operations.loading;
   const refresh = () => { overview.refresh(); billing.refresh(); operations.refresh(); };
-  if (loading && !overview.data) return <><FeatureHeader eyebrow="CENTRAL DE COMANDO" title="Visão geral" description="Estado real da plataforma, receita e pontos que exigem ação." loading onRefresh={refresh} /><Loading /></>;
-  if (overview.error) return <><FeatureHeader eyebrow="CENTRAL DE COMANDO" title="Visão geral" description="Estado real da plataforma, receita e pontos que exigem ação." onRefresh={refresh} /><ErrorState message={overview.error} retry={refresh} /></>;
+  if (loading && !overview.data) return <><FeatureHeader eyebrow="Central de comando" title="Visão geral" description="Estado real da plataforma, receita e pontos que exigem ação." loading onRefresh={refresh} /><Loading /></>;
+  if (overview.error) return <><FeatureHeader eyebrow="Central de comando" title="Visão geral" description="Estado real da plataforma, receita e pontos que exigem ação." onRefresh={refresh} /><ErrorState message={overview.error} retry={refresh} /></>;
   const metrics = (overview.data?.metrics ?? {}) as Row; const billingMetrics = (billing.data?.metrics ?? {}) as Row; const op = (operations.data?.summary ?? {}) as Row;
   const attention = [
     { label: "Workspaces inadimplentes", value: number(metrics.pastDue ?? metrics.past_due), area: "billing" as const },
@@ -21,7 +21,7 @@ export function OverviewFeature({ onNavigate }: { onNavigate: (area: PlatformAre
     { label: "Webhooks falhos em 24h", value: number(op.failedWebhooks24h), area: "security" as const },
   ];
   const audits = Array.isArray(overview.data?.audits) ? overview.data.audits as Row[] : [];
-  return <><FeatureHeader eyebrow="CENTRAL DE COMANDO" title="Visão geral" description="Estado real da plataforma, receita e pontos que exigem ação." loading={loading} onRefresh={refresh} />
+  return <><FeatureHeader eyebrow="Central de comando" title="Visão geral" description="Estado real da plataforma, receita e pontos que exigem ação." loading={loading} onRefresh={refresh} />
     {(billing.error || operations.error) && <div className={styles.inlineWarning}><AlertTriangle aria-hidden="true" />Parte dos indicadores está indisponível: {billing.error || operations.error}</div>}
     <section className={styles.metricGrid} aria-label="Indicadores globais">
       <MetricCard label="Workspaces" value={number(metrics.workspaces).toLocaleString("pt-BR")} />

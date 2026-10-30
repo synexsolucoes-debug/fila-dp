@@ -336,7 +336,7 @@ test("o módulo entra no catálogo apontando para uma tela que existe", async ()
   const shell = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
   assert.match(shell, /epi: \{\s*\n\s*label: "Controle de EPI"/u);
   assert.match(shell, /module: "epi"/u);
-  assert.match(shell, /view === "epi" && <EpiControlView/u);
+  assert.match(shell, /keepAlive\("epi", <EpiControlView/u);
 });
 
 /* -------------------------------------------------------------------------- */

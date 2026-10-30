@@ -375,7 +375,7 @@ function ReturnToWorkAction({ companyId, onDone }: { companyId: string; onDone: 
 
   const people = onLeave.data?.employees ?? [];
   return <form className={styles.actionCard} onSubmit={(event) => void submit(event)}>
-    <header><span>MEDIDA</span><strong>Retorno de afastamento</strong></header>
+    <header><span>Medida</span><strong>Retorno de afastamento</strong></header>
     {error && <ErrorBanner title="O retorno não foi registrado" message={error} />}
     {people.length ? <div className={styles.toolbar}>
       <label className={styles.grow}><span>Colaborador afastado</span>

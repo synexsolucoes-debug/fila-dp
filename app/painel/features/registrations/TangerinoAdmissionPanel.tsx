@@ -221,7 +221,7 @@ export function TangerinoAdmissionPanel({ employeeId, canConsult }: { employeeId
     {success && current && <section className={styles.result}>
       <header>
         <div>
-          <span>SITUAÇÃO NO TANGERINO</span>
+          <span>Situação no Tangerino</span>
           <strong className={current.normalizedStatus === "UNKNOWN" ? styles.unknown : undefined}>{current.statusLabel}</strong>
         </div>
         <b>{current.externalAdmissionId || "sem código"}</b>

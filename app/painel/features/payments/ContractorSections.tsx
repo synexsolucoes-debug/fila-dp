@@ -132,7 +132,7 @@ function OverviewSection({ overview, money, statusLabels, competence, competence
         <section className={styles.fixedItemsPanel} aria-labelledby="pj-invoices-title">
           <header>
             <div>
-              <span className={styles.eyebrow}>NOTAS FISCAIS</span>
+              <span className={styles.eyebrow}>Notas fiscais</span>
               <h3 id="pj-invoices-title">
                 {invoiceSummary.approvedCount} de {invoiceSummary.requiredCount} notas aprovadas
               </h3>
@@ -153,7 +153,7 @@ function OverviewSection({ overview, money, statusLabels, competence, competence
       <section className={styles.fixedItemsPanel} aria-labelledby="pj-progress-title">
         <header>
           <div>
-            <span className={styles.eyebrow}>ANDAMENTO</span>
+            <span className={styles.eyebrow}>Andamento</span>
             <h3 id="pj-progress-title">Onde está cada prestador</h3>
             <p>
               {closings.length === 0
@@ -485,7 +485,7 @@ function ContractorApprovalPanel({ rows, permissions, busy, competence, competen
     <section className={styles.approvalPanel} aria-labelledby="contractor-approval-title">
       <header>
         <div>
-          <span className={styles.eyebrow}>CONFERÊNCIA E APROVAÇÃO</span>
+          <span className={styles.eyebrow}>Conferência e aprovação</span>
           <h3 id="contractor-approval-title">Recibos e aprovação da competência</h3>
           <p>Emita os recibos de pagamento para colocar os valores abertos em conferência. Depois aprove todos ou somente os selecionados.</p>
         </div>
@@ -619,7 +619,7 @@ function AdjustmentsSection(props: SectionProps) {
     <section className={styles.fixedItemsPanel} aria-labelledby="monthly-entries-title">
       <header>
         <div>
-          <span className={styles.eyebrow}>LANÇAMENTOS DA COMPETÊNCIA</span>
+          <span className={styles.eyebrow}>Lançamentos da competência</span>
           <h3 id="monthly-entries-title">Mensais de {competenceLabel(competence)}</h3>
           <p>Valem só nesta competência. Os que vêm de um lançamento fixo aparecem na lista de baixo, não aqui.</p>
         </div>
@@ -711,7 +711,7 @@ function AdjustmentsSection(props: SectionProps) {
     <section className={styles.fixedItemsPanel} aria-labelledby="fixed-items-title">
       <header>
         <div>
-          <span className={styles.eyebrow}>LANÇAMENTOS RECORRENTES</span>
+          <span className={styles.eyebrow}>Lançamentos recorrentes</span>
           <h3 id="fixed-items-title">Fixos e determinados</h3>
           <p>Entram automaticamente em cada competência dentro da vigência. Sem competência final, o lançamento é fixo; com ela, determinado.</p>
         </div>

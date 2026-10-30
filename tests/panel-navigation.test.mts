@@ -44,7 +44,7 @@ test("a estrutura por processo é decidida num módulo puro, não no componente"
   // Sem React nem ícone: um módulo puro é o que permite testar a estrutura sem
   // montar a árvore, e o que impede o menu de virar a quinta lista paralela.
   assert.doesNotMatch(nav, /from "react"|lucide-react/u);
-  assert.match(source, /import \{ hasSubNavigation, isContractorOnly, visibleContractorSections, visibleProcessGroups \} from "@\/lib\/process-navigation"/u);
+  assert.match(source, /import \{ hasSubNavigation, isContractorOnly, visibleProcessGroups \} from "@\/lib\/process-navigation"/u);
   // O componente não pode ter uma segunda cópia da estrutura.
   assert.doesNotMatch(source, /const navSections/u, "a lista por departamento não pode voltar");
   assert.doesNotMatch(catalog, /section: "/u, "a seção por departamento saiu do catálogo");
@@ -157,17 +157,13 @@ test("a ação primária da barra é declarada, nunca deduzida por exclusão", (
   assert.match(catalog, /primaryAction: \{ label: "Nova solicitação", kind: "inbox" \}/u);
 });
 
-test("o segundo nível só aparece para o processo aberto (§66)", () => {
-  // A barra não pode voltar a listar cada página do sistema ao mesmo tempo.
-  assert.match(source, /\{sub && open && <div className="sidebar-process-views"/u);
-  // E o processo aberto continua marcado mesmo quando o destino ativo é um
-  // submódulo: sem isso, entrar em "Pagamentos → Psicólogos" apagaria a marca
-  // do processo e a pessoa perderia de vista em que contexto está.
-  assert.match(source, /const open = activeGroup\?\.id === group\.id;/u);
-  assert.match(source, /\$\{open \? "open " : ""\}/u);
-  // Entrar num processo abre o primeiro módulo dele, não uma tela intermediária
-  // que só repetiria a lista que o menu já mostra.
-  assert.match(source, /const entrance = group\.views\[0\];/u);
+test("as telas do módulo aparecem só para o módulo aberto (§66)", () => {
+  // Sem barra lateral, o segundo nível é a faixa de abas do módulo aberto —
+  // nunca a lista de todas as telas do sistema ao mesmo tempo.
+  assert.match(source, /tabs=\{activeGroup\.views\.map\(\(id\) => \(\{/u);
+  assert.doesNotMatch(source, /className="sidebar-process-views"/u);
+  // Abrir um módulo pela aba volta à última tela dele; sem histórico, à primeira.
+  assert.match(source, /setView\(remembered && group\.views\.includes\(remembered\) \? remembered : group\.views\[0\] as View\)/u);
 });
 
 test("o cabeçalho do processo não pisca ao trocar de aba dentro dele (§69, §70)", () => {
@@ -176,7 +172,7 @@ test("o cabeçalho do processo não pisca ao trocar de aba dentro dele (§69, §
   // que a §69 quer comunicar, deixaria de se distinguir da troca de tela dentro
   // do contexto.
   const contexto = source.indexOf('<section className="process-context ');
-  const transicao = source.indexOf("<PageTransition transitionKey={view}");
+  const transicao = source.indexOf('{keepAlive("overview"');
   assert.ok(contexto > 0 && transicao > contexto,
     "o cabeçalho do processo precisa vir antes da transição, e fora dela");
   // Abas com indicador deslizante (§17), não troca instantânea de cor.
@@ -192,8 +188,8 @@ test("o cabeçalho do processo não pisca ao trocar de aba dentro dele (§69, §
   // Agora o cabeçalho é um só: mostra os módulos quando há mais de um, e
   // empresta o lugar ao módulo quando há um — o módulo é quem tem os
   // contadores das próprias abas.
-  // No Sistema PJ o menu lateral já é a subnavegação, e as abas saem.
-  assert.match(source, /\{activeGroup && !pjMode && \(/u);
+  // Sem barra lateral, o Sistema PJ também usa as abas do módulo.
+  assert.match(source, /\{activeGroup && \(\n\s+<section className="process-context process-context-compact"/u);
   assert.match(source, /hasSubNavigation\(activeGroup\) \? \(/u);
   assert.match(source, /<div className="process-context-slot" ref=\{tabsTarget\} \/>/u);
 });
@@ -207,25 +203,14 @@ test("a visibilidade é decidida num lugar só", () => {
   assert.doesNotMatch(jsx.slice(0, 1400), /role !== "guest"|role !== "observer"/u);
 });
 
-test("o menu mobile mantém todos os módulos alcançáveis", async () => {
-  // `display: contents` devolve os botões à grade da barra. Sem isso ela
-  // posicionaria os quatro grupos e mostraria quatro colunas com os itens
-  // empilhados dentro — regressão que nenhum teste de unidade veria. O
-  // invólucro do segundo nível precisa do mesmo tratamento, senão ele
-  // reintroduz a coluna que o `contents` do grupo acabou de dissolver.
-  const css = await readFile(new URL("../app/dashboard-modern.css", import.meta.url), "utf8");
-  assert.match(css, /\.sidebar-nav-group, \.sidebar-process \{ display: contents; \}/u);
-  assert.match(css, /\.sidebar-process-views \{ display: none; \}/u,
-    "o segundo nível não cabe na barra inferior de cinco alvos");
-  assert.match(css, /\.sidebar-nav-group \{ display: flex; flex-direction: column; gap: 4px; \}/u);
-  assert.match(source, /const mobilePrimaryViews = new Set<View>/u);
-  assert.match(source, /className="sidebar-mobile-more-panel"/u);
-  assert.match(source, /aria-label="Abrir todos os módulos"/u);
-  assert.match(source, /mobileNavigationRef\.current\?\.removeAttribute\("open"\)/u);
-  assert.match(css, /\.dashboard-sidebar nav \.mobile-secondary \{ display: none; \}/u);
-  assert.match(css, /\.sidebar-mobile-more:not\(\[open\]\) > \.sidebar-mobile-more-panel \{ display: none; \}/u,
-    "o menu completo fechado não pode deixar alvos invisíveis mensuráveis");
-  assert.match(css, /min-height: 48px;/u, "os destinos do menu completo precisam de alvo de toque suficiente");
+test("no celular os módulos continuam alcançáveis pela faixa", async () => {
+  // A barra inferior saiu com a barra lateral. No celular a faixa quebra em duas
+  // linhas: comandos em cima (com o botão Módulos) e as abas abertas embaixo,
+  // rolando na horizontal.
+  const css = await readFile(new URL("../app/vinculato-shell.css", import.meta.url), "utf8");
+  assert.match(css, /@media \(max-width: 760px\) \{\n\s+\.shell-bar \{ flex-wrap: wrap;/u);
+  assert.match(css, /\.shell-tabs \{ order: 3; flex-basis: 100%;/u);
+  assert.match(source, /className="shell-modules" onClick=\{\(\) => setModuleLauncher\("switch"\)\}/u);
 });
 
 test("o catálogo é a única fonte do título de tela", () => {
@@ -241,7 +226,7 @@ test("o botão de ajuda abre a ajuda que existe", async () => {
   // pergunta. O painel do assistente já estava construído para isso, e as
   // instruções dele mandam explicar o caminho e apontar a tela e o botão.
   assert.doesNotMatch(source, /Use a busca global ou abra uma demanda/u);
-  assert.match(source, /className="help-button" aria-label="Abrir o assistente"/u);
+  assert.match(source, /help-button" aria-label="Abrir o assistente"/u);
   assert.match(source, /openSignal=\{assistantSignal\}/u);
 
   const assistant = await readFile(new URL("../app/painel/features/assistant/AssistantPanel.tsx", import.meta.url), "utf8");
@@ -408,7 +393,7 @@ test("quem só opera o PJ abre direto no Sistema PJ", async () => {
   assert.match(shell, /const pjMode = hasContractorModule && \(contractorOnly \|\| appMode === "pj"\);/u);
   assert.match(shell, /if \(pjMode && !isContractorSection\(view\)\) setViewState\("contractorPayments"\);/u,
     "no Sistema PJ nenhuma tela de fora pode abrir");
-  assert.match(shell, /\{pjMode \? contractorNavSections\.map/u, "o menu do Sistema PJ mostra só as seções do módulo");
+  assert.match(shell, /changeAppMode\(id === "pagamento-pj" \? "pj" : "vinculato"\);/u, "a aba do PJ abre o Sistema PJ");
 });
 
 test("quem só tem o Pagamento PJ recebe a lista de empresas, sem o cadastro completo", async () => {

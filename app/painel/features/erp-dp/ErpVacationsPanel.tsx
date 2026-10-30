@@ -111,7 +111,7 @@ function CollectiveForm({ companyId, onDone }: { companyId: string; onDone: () =
 
   if (!open) return <div><button type="button" className={styles.secondaryButton} onClick={() => setOpen(true)}><Users aria-hidden="true" /> Férias coletivas</button></div>;
   return <form className={styles.requirementEditor} onSubmit={(event) => void submit(event)}>
-    <header><div><span>CLT ARTS. 139 A 141</span><h3>Férias coletivas da empresa</h3></div></header>
+    <header><div><span>CLT arts. 139 a 141</span><h3>Férias coletivas da empresa</h3></div></header>
     {error && <ErrorBanner title="Não programado" message={error} />}
     {result && <p className={styles.infoNote}><Check aria-hidden="true" /><span><strong>{result.planned} pessoa(s) programada(s)</strong>
       <small>{result.skipped.length ? `Fora: ${result.skipped.map((item) => `${item.name} (${item.reason})`).join("; ")}` : "Todos couberam nas regras."}</small></span></p>}
@@ -224,7 +224,7 @@ function EmployeeVacations({ item, canManage, onBack }: { item: Item; canManage:
         </tr>)}</tbody>
       </table></div>}
       {canManage && (open.length ? <form className={styles.requirementEditor} onSubmit={(event) => void submit(event)}>
-        <header><div><span>CLT ARTS. 134, 135 E 143</span><h3>Programar férias</h3></div></header>
+        <header><div><span>CLT arts. 134, 135 e 143</span><h3>Programar férias</h3></div></header>
         <div className={styles.formGrid}>
           <label><span>Período aquisitivo</span>
             <select value={chosen} onChange={(event) => setAcquisitiveStart(event.target.value)}>

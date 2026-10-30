@@ -205,17 +205,17 @@ test("as rotas do ERP DP só leem, e todas aplicam permissão e escopo de empres
   }
 });
 
-test("a troca Vinculato ⇄ ERP DP fica no canto superior direito, em todas as telas e no celular", () => {
-  // Última porta da faixa de ações do cabeçalho.
-  const header = app.slice(app.indexOf('<div className="dashboard-header-actions">'), app.indexOf("</header>", app.indexOf('<div className="dashboard-header-actions">')));
-  assert.ok(header.lastIndexOf("erp-mode-toggle") > header.lastIndexOf("new-demand"));
-  assert.match(header, /aria-pressed=\{erpMode\}/u);
-  assert.match(app, /erpMode \? <ErpDpView /u);
+test("o ERP DP abre pela janela de módulos e vira uma aba que não perde o estado", () => {
+  // A troca de modo saiu dos botões do topo: a porta é a janela de módulos, e
+  // o ERP aberto vira aba como qualquer outro módulo.
+  assert.match(app, /id: "erp-dp", label: "ERP DP", icon: Building2, section: "system"/u);
+  assert.match(app, /id === "erp-dp" \? "ERP DP"/u);
+  assert.doesNotMatch(app, /className="erp-mode-toggle"/u, "os botões de troca de modo voltaram ao topo");
+  // Aberto uma vez, o ERP continua montado enquanto a aba existir.
+  assert.match(app, /\{erpAlive && <div className="view-pane view-transition" hidden=\{!erpMode\}><ErpDpView /u);
   assert.match(app, /const canUseErp = snapshot \? hasCapability\(snapshot\.workspace\.role, "employees\.read"\)/u);
   // Preferência local protegida: armazenamento indisponível não quebra o painel.
   assert.match(app, /try \{ window\.localStorage\.setItem\(APP_MODE_KEY, next\); \} catch/u);
-  assert.match(accessCss, /\.dashboard-header-actions button\.erp-mode-toggle \{ display: inline-flex; \}/u);
-  assert.match(shellCss, /\.operational-ui\.erp-mode \.dashboard-sidebar nav \{\s*display: none !important;/u);
 });
 
 test("o ERP DP não promete o que o produto decidiu não fazer", () => {

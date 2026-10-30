@@ -129,10 +129,11 @@ test("o painel sincroniza o endereço nas duas direções", async () => {
 
 test("configurações têm porta na navegação, e não só atrás do avatar (§46)", async () => {
   const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
-  const sidebar = app.slice(app.indexOf("sidebar-account-actions"), app.indexOf("</aside>"));
-  assert.match(sidebar, /openWorkspaceSettings/u,
-    "quem procura configurar o grupo olha o menu, não a foto");
-  assert.match(sidebar, /aria-label="Abrir configurações"/u);
+  // Quem procura configurar o grupo procura entre os módulos: a Administração é
+  // um tile da janela de módulos, além do item com nome no menu da conta.
+  assert.match(app, /id: "admin", label: "Administração", icon: Settings, section: "support"/u);
+  assert.match(app, /if \(id === "admin"\) \{\n\s+setSettingsSection\("general"\);\n\s+openWorkspaceSettings\(\);/u);
+  assert.match(app, /onAdministration=\{\(\) => \{ setSettingsSection\("general"\); openWorkspaceSettings\(\); \}\}/u);
 });
 
 test("a lista de rotas prometidas cobre visões e configurações", () => {

@@ -166,7 +166,7 @@ export function ContractorEntryDialog({
       <form className={styles.modalForm} onSubmit={submit}>
         <header className={styles.dialogHeader}>
           <div>
-            <span className={styles.eyebrow}>PAGAMENTO PJ</span>
+            <span className={styles.eyebrow}>Pagamento PJ</span>
             <h2>Novo lançamento</h2>
             <p className={styles.dialogSummary}>Crédito ou desconto para a competência de {competenceLabel}.</p>
           </div>

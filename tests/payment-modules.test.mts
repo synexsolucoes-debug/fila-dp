@@ -600,7 +600,7 @@ test("a interface de pagamento é modular, acessível e sem controle decorativo"
   assert.match(workspace, /\{isContractorSection\(view\) && <PaymentsView role=\{snapshot\.workspace\.role\} module="contractors" section=\{view\}/);
   assert.match(workspace, /focus=\{contractorPaymentFocus\}/);
   assert.match(workspace, /Pagamento de Psicólogos/);
-  assert.match(workspace, /PAGAMENTO PJ/);
+  assert.match(workspace, /PAGAMENTO PJ/i);
   // O menu não recria admissão digital concorrendo com a Sólides.
   assert.doesNotMatch(workspace, /setView\("admissions"\)/);
 

@@ -332,7 +332,7 @@ function Home({ company, companies, onCompany, location, locations, onLocation, 
   return <div className={styles.screen}>
     <div className={styles.contextPickers}>
       <label>
-        <span>EMPRESA</span>
+        <span>Empresa</span>
         <select value={company?.id ?? ""} onChange={(event) => onCompany(event.target.value)}>
           {companies.map((item) => <option key={item.id} value={item.id}>
             {item.name}{item.status === "inactive" ? " (inativa)" : ""}
@@ -340,7 +340,7 @@ function Home({ company, companies, onCompany, location, locations, onLocation, 
         </select>
       </label>
       <label>
-        <span>LOCAL DE ESTOQUE</span>
+        <span>Local de estoque</span>
         <select value={location?.id ?? ""} onChange={(event) => onLocation(event.target.value)}>
           {locations.map((item) => <option key={item.id} value={item.id}>
             {item.name}{item.code ? ` · ${item.code}` : ""}
@@ -594,7 +594,7 @@ function DeliveryFlow({ companyId, locationId, onDone, onCancel }: {
       <h2>Assinatura do colaborador</h2>
       <SignaturePad onChange={setSignature} disabled={busy} />
       <label className={styles.field}>
-        <span>QUEM ASSINOU</span>
+        <span>Quem assinou</span>
         <input value={signatureName} onChange={(event) => setSignatureName(event.target.value)}
           placeholder="Nome de quem assinou" autoComplete="off" />
       </label>
@@ -604,7 +604,7 @@ function DeliveryFlow({ companyId, locationId, onDone, onCancel }: {
     </section>
 
     <label className={styles.field}>
-      <span>OBSERVAÇÃO</span>
+      <span>Observação</span>
       <textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={2} placeholder="Opcional" />
     </label>
 
@@ -734,7 +734,7 @@ function ReturnFlow({ companyId, locationId, onDone, onCancel }: {
     </div>
 
     <label className={styles.field}>
-      <span>OBSERVAÇÃO</span>
+      <span>Observação</span>
       <textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={2} placeholder="Opcional" />
     </label>
 
@@ -864,7 +864,7 @@ function DamageFlow({ companyId, locationId, onDone, onCancel }: {
     </section>
 
     <label className={styles.field}>
-      <span>O QUE ACONTECEU</span>
+      <span>O que aconteceu</span>
       <textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={3}
         placeholder="Quando, como e em que circunstância." />
     </label>

@@ -28,13 +28,13 @@ import styles from "./payments.module.css";
 const moduleConfig: Record<PaymentModule, { title: string; eyebrow: string; description: string; icon: typeof Stethoscope }> = {
   psychology: {
     title: "Pagamento de Psicólogos",
-    eyebrow: "CONTROLE FINANCEIRO",
+    eyebrow: "Controle financeiro",
     description: "Quantas consultas válidas cada psicólogo realizou na competência e quanto devemos pagar.",
     icon: Stethoscope,
   },
   contractors: {
     title: "Pagamentos PJ",
-    eyebrow: "CONTROLE DE PAGAMENTO",
+    eyebrow: "Controle de pagamento",
     description: "Quanto o prestador tem a receber, quanto deve emitir de nota e quanto vai para o meio complementar.",
     icon: WalletCards,
   },
@@ -662,7 +662,7 @@ export function PaymentsView({ role, module, section = "contractorPayments", foc
     ? contractorActionsFor(section)
     : { provider: false, limit: false, component: false, recalculate: true };
   const headline = destination
-    ? { eyebrow: "PAGAMENTO PJ", title: destination.label, description: destination.description }
+    ? { eyebrow: "Pagamento PJ", title: destination.label, description: destination.description }
     : config;
   const Icon = destination?.icon ?? config.icon;
 
@@ -671,13 +671,13 @@ export function PaymentsView({ role, module, section = "contractorPayments", foc
       <header className={styles.commandBar}>
         <div className={styles.commandSelectors}>
           <label>
-            <span className={styles.eyebrow}>EMPRESA</span>
+            <span className={styles.eyebrow}>Empresa</span>
             <select value={companyId} onChange={(event) => setCompanyId(event.target.value)} disabled={!companies.length}>
               {companies.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
           </label>
           <label>
-            <span className={styles.eyebrow}>COMPETÊNCIA</span>
+            <span className={styles.eyebrow}>Competência</span>
             <select value={competence} onChange={(event) => setCompetence(event.target.value)}>
               {competenceOptions.map((item) => <option key={item.competence} value={item.competence}>{competenceLabel(item.competence)}{item.open ? "" : " · não aberta"}</option>)}
             </select>
@@ -902,7 +902,7 @@ export function PaymentsView({ role, module, section = "contractorPayments", foc
           <div className={styles.modalForm}>
             <header className={styles.dialogHeader}>
               <div>
-                <span className={styles.eyebrow}>PAGAMENTO PJ</span>
+                <span className={styles.eyebrow}>Pagamento PJ</span>
                 <h2>Gerar avisos de NF</h2>
                 <p className={styles.dialogSummary}>
                   Sai um arquivo de texto com uma mensagem por prestador do grupo, com o valor que cada um tem

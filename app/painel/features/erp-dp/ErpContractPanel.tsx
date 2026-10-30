@@ -137,7 +137,7 @@ function ContractEditor({ employeeId, admissionDate, terms, onSaved }: { employe
   }
 
   return <form className={styles.requirementEditor} onSubmit={(event) => void submit(event)}>
-    <header><div><span>ELEMENTOS DO CONTRATO</span><h3>Tipo de contrato e aviso prévio</h3></div></header>
+    <header><div><span>Elementos do contrato</span><h3>Tipo de contrato e aviso prévio</h3></div></header>
     {error && <ErrorBanner title="O contrato não foi salvo" message={error} />}
     {saved && <p className={styles.infoNote}><Check aria-hidden="true" /><span><strong>Contrato salvo</strong><small>Os prazos aparecem em Prazos contratuais, no menu do ERP.</small></span></p>}
     <div className={styles.formGrid}>

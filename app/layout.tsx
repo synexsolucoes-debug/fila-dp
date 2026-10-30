@@ -11,6 +11,9 @@ import "./interface-refresh.css";
 // herdados do SAP Fiori e dos ERPs de gestão pública. Ver
 // docs/engenharia-reversa-design-centi-sap.md.
 import "./design-centi-sap.css";
+// Casca com abas de módulos e o padrão visual de todas as telas: por último,
+// porque é ela que decide. Ver o cabeçalho do arquivo.
+import "./vinculato-shell.css";
 
 /**
  * Tipografia do produto (§89).

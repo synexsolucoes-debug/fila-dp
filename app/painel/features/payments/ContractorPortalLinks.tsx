@@ -148,7 +148,7 @@ export function ContractorPortalLinks({ companyId, competence, competenceLabel, 
     <section className={styles.portalPanel} aria-labelledby="portal-links-title">
       <header className={styles.portalHeader}>
         <div>
-          <span className={styles.eyebrow}>PORTAL DO PRESTADOR</span>
+          <span className={styles.eyebrow}>Portal do prestador</span>
           <h3 id="portal-links-title">Pedir a nota por link</h3>
           <p>
             {loading

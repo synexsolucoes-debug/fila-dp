@@ -462,7 +462,7 @@ export function RegistrationSheetPanel({ cardId, canBuild, canRead, archived, pd
     <section className={styles.panel} data-expanded={expanded || undefined} aria-labelledby="registration-sheet-title">
       <header className={styles.header}>
         <div>
-          <span className={styles.eyebrow}>FICHA DE CONTRATAÇÃO</span>
+          <span className={styles.eyebrow}>Ficha de contratação</span>
           <h3 id="registration-sheet-title">Campos prontos para o ERP</h3>
           <p>
             {loading

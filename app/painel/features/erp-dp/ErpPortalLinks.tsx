@@ -60,7 +60,7 @@ export function ErpPortalLinks({ employeeId, canManage }: { employeeId: string; 
   }
 
   return <section className={styles.requirementEditor} aria-labelledby="portal-links-title">
-    <header><div><span>AUTOATENDIMENTO (ESS)</span><h3 id="portal-links-title">Portal do colaborador</h3></div></header>
+    <header><div><span>Autoatendimento (ess)</span><h3 id="portal-links-title">Portal do colaborador</h3></div></header>
     <p className={styles.fieldHint}>Um link sem senha para a pessoa baixar os holerites das folhas fechadas, ver o saldo de férias e pedir férias ao DP.</p>
     {error && <ErrorBanner title="Atenção" message={error} />}
     {created && <p className={styles.infoNote}><Link2 aria-hidden="true" /><span><strong>Link gerado — envie para a pessoa</strong>

@@ -50,7 +50,7 @@ export function AuxiliaryDialog({ editor, module, providers, approvers, busy, on
     <div className={styles.overlay} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}>
       <div className={`${styles.dialog} ${isWide ? styles.dialogWide : styles.dialogCompact}`} ref={panelRef} role="dialog" aria-modal="true" aria-labelledby="auxiliary-dialog-title" tabIndex={-1}>
         <header className={styles.dialogHeader}>
-          <div><span className={styles.eyebrow}>LEDGER · {moduleLabels[module].toUpperCase()}</span><h2 id="auxiliary-dialog-title">{dialogTitle(editor)}</h2></div>
+          <div><span className={styles.eyebrow}>{moduleLabels[module]}</span><h2 id="auxiliary-dialog-title">{dialogTitle(editor)}</h2></div>
           <button type="button" onClick={onClose} disabled={busy} aria-label="Fechar janela"><X aria-hidden="true" /></button>
         </header>
         <form onSubmit={submit}>
@@ -112,7 +112,7 @@ function ExecutionFields({ module, providers, execution }: { module: AuxiliaryMo
 
 function RevisionFields({ module, execution }: { module: AuxiliaryModule; execution: NonNullable<AuxiliaryEditor & { kind: "revision" }>["execution"] }) {
   return <>
-    <div className={styles.contextStrip}><FilePenLine aria-hidden="true" /><span><small>ENTREGA</small><strong>{execution.referenceCode} · {execution.title}</strong></span><b>v{execution.currentRevision + 1}</b></div>
+    <div className={styles.contextStrip}><FilePenLine aria-hidden="true" /><span><small>Entrega</small><strong>{execution.referenceCode} · {execution.title}</strong></span><b>v{execution.currentRevision + 1}</b></div>
     <ModuleFields module={module} input={execution.input} output={execution.output} />
   </>;
 }

@@ -78,7 +78,7 @@ export function TimeDialog({ dialog, busy, hourEvents, onClose, onSubmit }: Prop
       <div className={styles.dialog} ref={panelRef} role="dialog" aria-modal="true" aria-labelledby="time-dialog-title" tabIndex={-1}>
         <header className={styles.dialogHeader}>
           <div>
-            <span className={styles.eyebrow}>CONFERÊNCIA DE PONTO</span>
+            <span className={styles.eyebrow}>Conferência de ponto</span>
             <h2 id="time-dialog-title">{titles[dialog.kind]}</h2>
           </div>
           <button type="button" onClick={onClose} disabled={busy} aria-label="Fechar janela"><X aria-hidden="true" /></button>
@@ -98,7 +98,7 @@ export function TimeDialog({ dialog, busy, hourEvents, onClose, onSubmit }: Prop
                   <label>Jornada prevista (minutos)<input name="expectedMinutes" type="number" min={0} max={1440} step={1} defaultValue={480} /></label>
                 </div>
                 <fieldset className={styles.punchGrid}>
-                  <legend className={styles.eyebrow}>MARCAÇÕES</legend>
+                  <legend className={styles.eyebrow}>Marcações</legend>
                   {punches.map((punch, index) => (
                     <div className={styles.punchRow} key={`punch-${index}`}>
                       <label>Entrada

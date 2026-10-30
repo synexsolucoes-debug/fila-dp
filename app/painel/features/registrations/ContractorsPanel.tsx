@@ -225,7 +225,7 @@ export function ContractorsPanel({ canManage, createSignal, onOpenPayment }: {
     <div className={styles.masterDetail}>
       <aside className={styles.masterPane}>
         <header>
-          <div><span>PRESTADORES PJ</span><strong>{list.length} contrato(s)</strong></div>
+          <div><span>Prestadores PJ</span><strong>{list.length} contrato(s)</strong></div>
           <button type="button" onClick={() => void loadList()} disabled={busy} aria-label="Recarregar prestadores">
             <RefreshCw aria-hidden="true" />
           </button>
@@ -266,7 +266,7 @@ export function ContractorsPanel({ canManage, createSignal, onOpenPayment }: {
           <div className={styles.companyIdentity}>
             <span><Briefcase aria-hidden="true" /></span>
             <div>
-              <small>{contractor ? (contractor.contractType === "determinado" ? "PRAZO DETERMINADO" : "PRAZO INDETERMINADO") : "PRESTADOR PJ"}</small>
+              <small>{contractor ? (contractor.contractType === "determinado" ? "Prazo determinado" : "Prazo indeterminado") : "PRESTADOR PJ"}</small>
               <h2>{contractor?.tradeName || contractor?.legalName || "Selecione um prestador"}</h2>
               {/* Sem empresa sugerida a linha não fica começando por um separador
                   solto, que se lê como campo que não carregou. */}
@@ -538,7 +538,7 @@ function ContractorEditor({ mode, current, busy, onClose, onSubmit, dialogRef }:
     <div className={styles.drawerOverlay} role="dialog" aria-modal="true" aria-label={mode === "new" ? "Novo prestador PJ" : "Editar contrato"}>
       <div className={styles.employeeDrawer} ref={dialogRef}>
         <header className={styles.drawerHeader}>
-          <div><span>PRESTADOR PJ</span><h2>{mode === "new" ? "Novo prestador" : current?.legalName}</h2></div>
+          <div><span>Prestador PJ</span><h2>{mode === "new" ? "Novo prestador" : current?.legalName}</h2></div>
           <button type="button" className={styles.closeButton} onClick={onClose} aria-label="Fechar"><X aria-hidden="true" /></button>
         </header>
         <form
@@ -644,7 +644,7 @@ function FixedItemDrawer({ busy, onClose, onSubmit }: {
     <div className={styles.drawerOverlay} role="dialog" aria-modal="true" aria-label="Novo valor recorrente">
       <div className={styles.employeeDrawer}>
         <header className={styles.drawerHeader}>
-          <div><span>VALOR RECORRENTE</span><h2>Novo lançamento fixo</h2></div>
+          <div><span>Valor recorrente</span><h2>Novo lançamento fixo</h2></div>
           <button type="button" className={styles.closeButton} onClick={onClose} aria-label="Fechar"><X aria-hidden="true" /></button>
         </header>
         <form className={styles.drawerForm} onSubmit={(event) => { event.preventDefault(); onSubmit(new FormData(event.currentTarget)); }}>
@@ -709,7 +709,7 @@ function MovementDrawer({ busy, initialType, onClose, onSubmit }: {
     <div className={styles.drawerOverlay} role="dialog" aria-modal="true" aria-label={isTermination ? "Demitir ou encerrar PJ" : "Registrar movimentação"}>
       <div className={styles.employeeDrawer}>
         <header className={styles.drawerHeader}>
-          <div><span>MOVIMENTAÇÃO</span><h2>{isTermination ? "Demitir / Encerrar PJ" : "Registrar movimentação"}</h2></div>
+          <div><span>Movimentação</span><h2>{isTermination ? "Demitir / Encerrar PJ" : "Registrar movimentação"}</h2></div>
           <button type="button" className={styles.closeButton} onClick={onClose} aria-label="Fechar"><X aria-hidden="true" /></button>
         </header>
         <form className={styles.drawerForm} onSubmit={(event) => { event.preventDefault(); onSubmit(new FormData(event.currentTarget)); }}>

@@ -73,7 +73,7 @@ export function ContractorDocumentsDialog({ providerId, providerName, contractRe
       <div className={`${styles.dialog} ${styles.documentsDialog}`} ref={panelRef} role="dialog" aria-modal="true" aria-labelledby="contract-documents-title" tabIndex={-1}>
         <header className={styles.dialogHeader}>
           <div>
-            <span className={styles.eyebrow}>ARQUIVOS DO CONTRATO</span>
+            <span className={styles.eyebrow}>Arquivos do contrato</span>
             <h2 id="contract-documents-title">Documentos de {providerName}</h2>
             <p>{contractReference || "Contrato sem referência informada"}</p>
           </div>

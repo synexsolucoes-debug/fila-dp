@@ -135,9 +135,10 @@ test("a tela abre por um caminho só, e o botão do topo diz o que há atrás de
   // A seção passou a poder vir do endereço (§46, /painel/configuracoes/...),
   // e "security" continua sendo o padrão de quem chega sem seção nenhuma.
   assert.match(source, /useState<SettingsSection>\(\s*\(initialLocation\.settings \?\? "security"\)/u);
-  // O rótulo antigo dizia só "Perfil e segurança" enquanto escondia empresas,
-  // usuários, colunas e automações atrás do mesmo botão.
-  assert.match(source, /aria-label=\{isAdmin \? "Abrir configurações do workspace e do perfil" : "Abrir perfil e segurança"\}/u);
+  // O menu da conta separa as duas portas por nome: "Administração" para quem
+  // administra, "Perfil e segurança" para todos.
+  assert.match(source, /isAdmin=\{isAdmin\} onAdministration=/u);
+  assert.match(source, /onSecurity=\{openSecuritySettings\}/u);
 });
 
 test("a tela de empresas edita, e a edição chega ao PATCH da API", async () => {

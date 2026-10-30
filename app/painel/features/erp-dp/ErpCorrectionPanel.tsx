@@ -100,7 +100,7 @@ export function ErpCorrectionPanel({ employeeId, onSaved }: { employeeId: string
   }
 
   return <form className={`${styles.employeePanel} ${styles.requirementEditor}`} onSubmit={(event) => void submit(event)}>
-    <header><div><span>CORRIGIR REGISTRO</span><h3>Lotação e jornada vigentes</h3></div></header>
+    <header><div><span>Corrigir registro</span><h3>Lotação e jornada vigentes</h3></div></header>
     <p className={styles.infoNote}><PencilLine aria-hidden="true" /><span><strong>Correção, não mudança</strong>
       <small>Conserta o registro vigente do histórico e o cadastro, sem abrir período novo — para erro de digitação. Mudança com data (transferência, troca de jornada) é uma medida.</small></span></p>
     {error && <ErrorBanner title="A correção não foi gravada" message={error} />}

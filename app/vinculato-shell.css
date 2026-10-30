@@ -1,0 +1,397 @@
+/*
+ * Casca do Vinculato com abas de módulos, e o padrão visual de todas as telas.
+ *
+ * Carregada por último. As cinco folhas anteriores foram escritas em gerações
+ * diferentes e se sobrescrevem; esta não tenta consertá-las uma a uma — ela
+ * define a casca nova (faixa única com abas, sem barra lateral) e o acabamento
+ * comum a todas as telas do painel:
+ *
+ *   - uma família tipográfica só, títulos menores e sem espaçamento negativo;
+ *   - texto em caixa normal: o rótulo em caixa alta com espaçamento largo em
+ *     cima de cada título era a marca mais visível de "tela gerada";
+ *   - superfícies chapadas, borda em vez de sombra, raio de 6–8px;
+ *   - uma descrição a menos: o título da tela não carrega mais um parágrafo
+ *     explicando o óbvio.
+ *
+ * Só tokens `--ui-*`: o tema escuro continua funcionando pela redefinição que
+ * as folhas anteriores já fazem.
+ */
+
+/* ========================================================================== */
+/* 1. Tokens do painel                                                        */
+/* ========================================================================== */
+
+.dashboard-shell.operational-ui {
+  --font-title: var(--font-interface), "Inter", var(--font-geist-sans), sans-serif;
+  --ui-radius-sm: 4px;
+  --ui-radius-md: 6px;
+  --ui-radius-lg: 8px;
+  --ui-shadow-card: none;
+  --elevation-1: none;
+  --elevation-2: 0 1px 2px rgba(15, 23, 42, .06);
+  --shell-bar-height: 48px;
+}
+.dashboard-shell.operational-ui:not(.theme-dark) {
+  --ui-bg: #f3f4f6;
+  --ui-surface: #ffffff;
+  --ui-surface-elevated: #ffffff;
+  --ui-surface-muted: #f1f3f6;
+  --ui-border: #dfe3e8;
+}
+
+.dashboard-shell.operational-ui,
+.dashboard-shell.operational-ui :is(h1, h2, h3, h4) {
+  font-family: var(--font-interface), "Inter", var(--font-geist-sans), sans-serif;
+}
+
+/* ========================================================================== */
+/* 2. Casca: faixa única, sem barra lateral                                    */
+/* ========================================================================== */
+
+.dashboard-shell.operational-ui {
+  display: block;
+  background: var(--ui-bg);
+}
+.dashboard-shell.operational-ui .dashboard-main {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 100dvh;
+}
+@media (min-width: 761px) {
+  .dashboard-shell.operational-ui .dashboard-main { height: 100dvh; min-height: 0; }
+}
+
+.shell-bar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: var(--shell-bar-height);
+  padding: 0 12px;
+  border-bottom: 1px solid var(--ui-border);
+  background: var(--ui-surface);
+}
+.shell-brand {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: var(--ui-radius-md);
+  background: transparent;
+  cursor: pointer;
+}
+.shell-brand:hover { background: var(--ui-surface-muted); }
+.shell-brand img { width: 22px; height: auto; }
+.shell-modules {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.shell-modules:hover { border-color: var(--ui-border-strong); background: var(--ui-surface-muted); }
+.shell-modules svg { width: 16px; height: 16px; }
+
+/* Abas: rolam na horizontal quando não cabem; a ativa encosta na borda de
+   baixo da faixa, como aba de pasta, para ler como "a tela abaixo é esta". */
+.shell-tabs {
+  flex: 1 1 auto;
+  min-width: 0;
+  align-self: stretch;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.shell-tabs::-webkit-scrollbar { display: none; }
+.shell-tabs ul {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 100%;
+  margin: 0;
+  padding: 0 4px;
+  list-style: none;
+}
+.shell-tab {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  height: 36px;
+  max-width: 220px;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: var(--ui-radius-md) var(--ui-radius-md) 0 0;
+  color: var(--ui-text-soft);
+}
+.shell-tab > button:first-child {
+  min-width: 0;
+  height: 100%;
+  padding: 0 12px;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.shell-tab:hover { background: var(--ui-surface-muted); color: var(--ui-text); }
+.shell-tab[data-active] {
+  margin-bottom: -1px;
+  height: 37px;
+  border-color: var(--ui-border);
+  background: var(--ui-bg);
+  color: var(--ui-text);
+}
+.shell-tab[data-active] > button:first-child { font-weight: 600; }
+.shell-tab-close {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-right: 6px;
+  margin-left: -6px;
+  border: 0;
+  border-radius: var(--ui-radius-sm);
+  background: transparent;
+  color: var(--ui-text-muted);
+  cursor: pointer;
+  opacity: 0;
+}
+.shell-tab:hover .shell-tab-close,
+.shell-tab[data-active] .shell-tab-close,
+.shell-tab-close:focus-visible { opacity: 1; }
+.shell-tab-close:hover { background: var(--ui-border); color: var(--ui-text); }
+.shell-tab-close svg { width: 13px; height: 13px; }
+@media (hover: none) { .shell-tab-close { opacity: 1; } }
+
+.shell-actions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+/* Nada na faixa encolhe: um ícone espremido para 9px deixa de ser alvo (WCAG 2.5.8). */
+.shell-bar > *:not(.shell-tabs), .shell-actions > * { flex-shrink: 0; }
+.shell-actions .shell-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--ui-radius-md);
+  background: transparent;
+  color: var(--ui-text-soft);
+  cursor: pointer;
+}
+.shell-actions .shell-icon:hover { background: var(--ui-surface-muted); color: var(--ui-text); }
+.shell-actions .shell-icon svg { width: 18px; height: 18px; }
+.shell-actions .shell-icon > i { position: absolute; top: 7px; right: 7px; width: 7px; height: 7px; border-radius: 50%; background: var(--ui-danger); }
+.shell-actions .global-search-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: auto;
+  min-width: 0;
+  height: 32px;
+  padding: 0 8px 0 10px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-surface);
+  color: var(--ui-text-muted);
+  font-size: 13px;
+}
+.shell-actions .global-search-trigger svg { width: 15px; height: 15px; }
+.shell-actions .global-search-trigger kbd { padding: 1px 5px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); background: var(--ui-surface-muted); color: var(--ui-text-muted); font: inherit; font-size: 11px; }
+.shell-actions .header-period-select { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); }
+.shell-actions .header-period-select svg { width: 15px; height: 15px; color: var(--ui-text-muted); }
+.shell-actions .header-period-select select { height: 30px; border: 0; background: transparent; color: var(--ui-text); font: inherit; font-size: 13px; }
+.shell-actions .new-demand { height: 32px; padding: 0 12px; font-size: 13px; }
+
+/* --- Seletor de empresa ---------------------------------------------------- */
+.company-picker { position: relative; }
+.company-picker-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 240px;
+  height: 32px;
+  padding: 0 8px 0 10px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.company-picker-trigger:hover { border-color: var(--ui-border-strong); }
+.company-picker-trigger > span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.company-picker-trigger svg { flex-shrink: 0; width: 15px; height: 15px; color: var(--ui-text-muted); }
+.company-picker-panel,
+.account-menu-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 60;
+  overflow: hidden;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface-elevated, var(--ui-surface));
+  box-shadow: 0 12px 32px rgba(15, 23, 42, .14);
+  animation: shellMenuIn 140ms cubic-bezier(.23, 1, .32, 1);
+  transform-origin: top right;
+}
+@keyframes shellMenuIn {
+  from { opacity: 0; transform: translateY(-4px) scale(.98); }
+  to { opacity: 1; transform: none; }
+}
+.company-picker-panel { width: min(420px, calc(100vw - 24px)); }
+.company-picker-search { position: relative; display: block; padding: 8px; border-bottom: 1px solid var(--ui-border); }
+.company-picker-search svg { position: absolute; z-index: 4; top: 50%; left: 18px; width: 15px; height: 15px; color: var(--ui-text-muted); transform: translateY(-50%); }
+.company-picker-search input { width: 100%; height: 34px; padding: 0 10px 0 32px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface); color: var(--ui-text); font: inherit; font-size: 13px; }
+.company-picker-panel ul { max-height: min(420px, 60vh); margin: 0; padding: 4px; overflow-y: auto; list-style: none; }
+.company-picker-panel li > button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--ui-radius-md);
+  background: transparent;
+  color: var(--ui-text);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.company-picker-panel li > button:hover { background: var(--ui-surface-muted); }
+.company-picker-panel li[aria-selected="true"] > button { background: var(--ui-primary-soft); }
+.company-picker-panel li > button > span { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.company-picker-panel strong { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; font-size: 13px; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+.company-picker-panel em { flex-shrink: 0; padding: 1px 6px; border-radius: 999px; background: var(--ui-surface-muted); color: var(--ui-text-soft); font-size: 11px; font-style: normal; font-weight: 600; }
+.company-picker-panel small { overflow: hidden; color: var(--ui-text-muted); font-size: 12px; white-space: nowrap; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.company-picker-panel li > button > svg { flex-shrink: 0; width: 15px; height: 15px; color: var(--ui-primary); }
+.company-picker-empty { padding: 12px 10px; color: var(--ui-text-muted); font-size: 13px; }
+
+/* --- Menu da conta --------------------------------------------------------- */
+.account-menu { position: relative; }
+.account-menu-trigger { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; background: var(--ui-primary-soft); color: var(--ui-text); font-size: 12px; font-weight: 700; cursor: pointer; }
+.account-menu-trigger:hover, .account-menu-trigger[aria-expanded="true"] { outline: 2px solid var(--ui-border); }
+.account-menu-panel { width: 280px; padding: 6px; }
+.account-menu-identity { display: grid; gap: 2px; padding: 8px 10px 10px; border-bottom: 1px solid var(--ui-border); }
+.account-menu-identity strong { color: var(--ui-text); font-size: 14px; }
+.account-menu-identity small { overflow: hidden; color: var(--ui-text-muted); font-size: 12px; text-overflow: ellipsis; }
+.account-menu-section { display: grid; gap: 2px; padding: 6px 0; }
+.account-menu-section + .account-menu-section { border-top: 1px solid var(--ui-border); }
+.account-menu-section > span { padding: 4px 10px; color: var(--ui-text-muted); font-size: 12px; font-weight: 600; }
+.account-menu-section form { margin: 0; }
+.account-menu-section :is(button[role="menuitem"], button[role="menuitemradio"]) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--ui-radius-md);
+  background: transparent;
+  color: var(--ui-text);
+  text-align: left;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.account-menu-section :is(button[role="menuitem"], button[role="menuitemradio"]):hover:not(:disabled) { background: var(--ui-surface-muted); }
+.account-menu-section :is(button[role="menuitem"], button[role="menuitemradio"]):disabled { cursor: default; opacity: 1; }
+.account-menu-section button > span { flex: 1; min-width: 0; display: grid; }
+.account-menu-section button b { font-weight: 500; }
+.account-menu-section button small { color: var(--ui-text-muted); font-size: 12px; }
+.account-menu-section button svg { flex-shrink: 0; width: 16px; height: 16px; color: var(--ui-text-soft); }
+.account-menu-danger, .account-menu-danger svg { color: var(--ui-danger) !important; }
+.account-menu-segmented { display: flex; gap: 2px; margin: 2px 10px 6px; padding: 2px; border-radius: var(--ui-radius-md); background: var(--ui-surface-muted); }
+.account-menu-segmented button { flex: 1; height: 28px; border: 0; border-radius: var(--ui-radius-sm); background: transparent; color: var(--ui-text-soft); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.account-menu-segmented button[aria-pressed="true"] { background: var(--ui-surface); color: var(--ui-text); box-shadow: 0 1px 2px rgba(15, 23, 42, .1); }
+
+/* --- Área da tela ---------------------------------------------------------- */
+.dashboard-shell.operational-ui .dashboard-content {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 20px clamp(16px, 2vw, 32px) 32px;
+}
+.view-pane[hidden], .view-stack[hidden] { display: none !important; }
+
+/* Celular: a faixa quebra em duas linhas — comandos em cima, abas embaixo. */
+@media (max-width: 760px) {
+  .shell-bar { flex-wrap: wrap; height: auto; padding: 6px 8px 0; row-gap: 4px; }
+  .shell-tabs { order: 3; flex-basis: 100%; height: 38px; }
+  .shell-actions { margin-left: auto; }
+  .shell-actions .global-search-trigger > span, .shell-actions .global-search-trigger kbd, .shell-modules > span { display: none; }
+  .shell-modules { width: 32px; padding: 0; justify-content: center; }
+  .company-picker-trigger { max-width: 140px; }
+  .shell-actions .header-period-select { display: none; }
+  .dashboard-shell.operational-ui .dashboard-content { padding: 14px 12px 32px; }
+}
+
+/* ========================================================================== */
+/* 3. Padrão de todas as telas                                                */
+/* ========================================================================== */
+
+/* Caixa normal em todo o conteúdo. Rótulo pequeno em caixa alta com
+   espaçamento largo sobre cada título era o maneirismo que mais fazia o
+   produto parecer tela gerada; a hierarquia agora vem de tamanho e peso. */
+.dashboard-shell.operational-ui :is(.dashboard-content, .workspace-modal, .card-modal, .notification-drawer, .module-launcher, .dashboard-statusbar) :is(span, small, p, strong, b, em, label, div, th, dt, legend, h2, h3, h4, h5, button, a, header) {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* Título da tela: do tamanho de um título de ERP, não de página de marketing. */
+.dashboard-shell.operational-ui .dashboard-heading {
+  margin-bottom: 16px;
+  padding: 0;
+  border: 0;
+  align-items: center;
+}
+.dashboard-shell.operational-ui .dashboard-heading h1 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.3;
+  font-weight: 650;
+  letter-spacing: -.01em;
+}
+.dashboard-shell.operational-ui .dashboard-heading > div > p { display: none; }
+.dashboard-shell.operational-ui :is(.dashboard-content, .workspace-modal) :is(h2) { letter-spacing: -.005em; }
+
+/* Superfícies chapadas: borda define o bloco, sombra fica para o que flutua. */
+.dashboard-shell.operational-ui .dashboard-content :is(section, article, aside)[class] { box-shadow: none; }
+
+/* Botões: altura e raio únicos. */
+.dashboard-shell.operational-ui .dashboard-content :is(.primary-button, .secondary-button, .new-demand) { border-radius: var(--ui-radius-md); }
+
+/* Subnavegação do módulo: abas sublinhadas, sem pílula e sem ícone colorido. */
+.dashboard-shell.operational-ui .process-context { margin: -4px 0 16px; padding: 0; border: 0; border-bottom: 1px solid var(--ui-border); background: transparent; }
+
+/* Link de título na tabela da visão geral: título de uma letra ("X") virava
+   alvo de 8px. Largura mínima de alvo, sem mudar o desenho do texto. */
+.dashboard-shell.operational-ui .overview-table-link { min-width: 24px; min-height: 24px; text-align: left; }

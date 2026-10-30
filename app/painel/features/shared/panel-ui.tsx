@@ -126,7 +126,7 @@ export function PageSkeleton({ label, rows = 3, metrics = 4 }: {
  * interrupção que exige resposta, e o leitor de tela anuncia a descrição
  * sozinho ao receber o foco.
  */
-export function ConfirmDialog({ open, title, consequence, confirmLabel, busy, onCancel, onConfirm, eyebrow = "CONFIRMAÇÃO NECESSÁRIA" }: {
+export function ConfirmDialog({ open, title, consequence, confirmLabel, busy, onCancel, onConfirm, eyebrow = "Confirmação necessária" }: {
   open: boolean;
   title: string;
   consequence: string;

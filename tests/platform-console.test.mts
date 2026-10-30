@@ -108,10 +108,10 @@ test("o painel é operacional e recebe o conector Sankhya pronto da Plataforma G
      navegação — o que é outra coisa, e é exatamente o que o botão abaixo abre.
      O que continua proibido, e é o que importa, são as superfícies da
      plataforma dentro do painel do cliente: elas estão na linha acima. */
-  assert.match(panel, /title="Configurações"[\s\S]{0,80}Settings aria-hidden/u,
+  assert.match(panel, /id: "admin", label: "Administração", icon: Settings/u,
     "a porta de configurações do painel precisa abrir as configurações do grupo");
-  assert.match(panel, /onClick=\{openWorkspaceSettings\}/u);
-  assert.match(integrations, /INTEGRAÇÕES DO WORKSPACE/u);
+  assert.match(panel, /openWorkspaceSettings\(\);/u);
+  assert.match(integrations, /INTEGRAÇÕES DO WORKSPACE/ui);
   assert.match(integrations, /SankhyaConnectorPanel/u);
   assert.match(integrations, /IntegrationDrawer/u);
   assert.match(integrations, /Configurar[\s\S]+Credencial[\s\S]+Testar conexão/u);

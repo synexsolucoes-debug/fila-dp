@@ -191,13 +191,13 @@ export function TimeTrackingView({ role }: { role: WorkspaceRole }) {
       <header className={styles.commandBar}>
         <div className={styles.commandSelectors}>
           <label>
-            <span className={styles.eyebrow}>EMPRESA</span>
+            <span className={styles.eyebrow}>Empresa</span>
             <select value={companyId} onChange={(event) => setCompanyId(event.target.value)} disabled={!companies.length}>
               {companies.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
           </label>
           <label>
-            <span className={styles.eyebrow}>COMPETÊNCIA</span>
+            <span className={styles.eyebrow}>Competência</span>
             <select value={competence} onChange={(event) => setCompetence(event.target.value)}>
               {competenceOptions.map((item) => <option key={item} value={item}>{competenceLabel(item)}</option>)}
             </select>
@@ -224,7 +224,7 @@ export function TimeTrackingView({ role }: { role: WorkspaceRole }) {
       <div className={styles.moduleHeadline}>
         <span className={styles.moduleIcon} aria-hidden="true"><Timer /></span>
         <div>
-          <span className={styles.eyebrow}>CONFERÊNCIA OPERACIONAL</span>
+          <span className={styles.eyebrow}>Conferência operacional</span>
           <h2>Ponto</h2>
           <p>Importe as marcações, resolva as inconsistências, aprove e envie os eventos de hora para a folha.</p>
         </div>
@@ -360,7 +360,7 @@ export function TimeTrackingView({ role }: { role: WorkspaceRole }) {
           <div className={styles.panelGrid}>
             <section className={styles.panel} aria-labelledby="time-events-title">
               <header className={styles.panelHeader}>
-                <div><span className={styles.eyebrow}>EVENTOS DE HORA</span><h3 id="time-events-title">Apurado na competência</h3></div>
+                <div><span className={styles.eyebrow}>Eventos de hora</span><h3 id="time-events-title">Apurado na competência</h3></div>
               </header>
               <div className={styles.panelBody}>
                 {overview.events.length === 0 ? (
@@ -394,7 +394,7 @@ export function TimeTrackingView({ role }: { role: WorkspaceRole }) {
 
             <section className={styles.panel} aria-labelledby="time-issues-title">
               <header className={styles.panelHeader}>
-                <div><span className={styles.eyebrow}>CONFERÊNCIA</span><h3 id="time-issues-title">Inconsistências em aberto</h3></div>
+                <div><span className={styles.eyebrow}>Conferência</span><h3 id="time-issues-title">Inconsistências em aberto</h3></div>
               </header>
               <div className={styles.panelBody}>
                 {overview.inconsistencies.filter((item) => item.status === "open").length === 0 ? (
@@ -419,7 +419,7 @@ export function TimeTrackingView({ role }: { role: WorkspaceRole }) {
 
             <section className={styles.panel} aria-labelledby="time-exports-title">
               <header className={styles.panelHeader}>
-                <div><span className={styles.eyebrow}>ENVIO PARA A FOLHA</span><h3 id="time-exports-title">Exportações da competência</h3></div>
+                <div><span className={styles.eyebrow}>Envio para a folha</span><h3 id="time-exports-title">Exportações da competência</h3></div>
                 <CalendarClock aria-hidden="true" />
               </header>
               <div className={styles.panelBody}>

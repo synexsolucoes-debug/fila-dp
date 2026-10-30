@@ -391,7 +391,7 @@ export function ProcessManagementView({ role }: { role: WorkspaceRole }) {
 
     <header className={styles.pageHeader}>
       <div>
-        <span className={styles.eyebrow}>GESTÃO E MODELAGEM</span>
+        <span className={styles.eyebrow}>Gestão e modelagem</span>
         <h2>Processos</h2>
         <p>Processo → versão → BPMN → configuração das etapas → demandas, evidências, movimentações e auditoria.</p>
       </div>
