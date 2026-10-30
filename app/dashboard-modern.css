@@ -507,6 +507,25 @@
   }
 }
 
+/* Em notebook a faixa também não comporta os rótulos. Com "Módulos",
+   "Sistema PJ" e "ERP DP" escritos, a Visão geral — que soma empresa e
+   período — passava da coluna: 15px em 1366×768 e 82px em 1280×720, as duas
+   resoluções da §43, recortados em silêncio pelo `overflow: hidden` do shell.
+   Fica o ícone, do tamanho das outras portas; o nome continua no `title` e no
+   `aria-label` de cada botão. */
+@media (min-width: 641px) and (max-width: 1400px) {
+  .operational-ui .dashboard-header-actions button.erp-mode-toggle {
+    width: 38px;
+    min-width: 38px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .operational-ui .dashboard-header-actions button.erp-mode-toggle span {
+    display: none;
+  }
+}
+
 /* No modo ERP o menu do Vinculato sai — inclusive a barra inferior do
    celular, que é o mesmo `nav` com outra roupa e regras mais pesadas: quem
    navega é o menu do ERP DP. */
