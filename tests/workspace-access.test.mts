@@ -115,9 +115,10 @@ test("entrar em outra conta encerra a sessão sem reabrir logout por GET", async
 });
 
 test("o painel separa sair de entrar em outra conta", async () => {
-  const panel = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
-  assert.match(panel, /switch-account-button/u);
+  const panel = await readFile(new URL("../app/painel/features/shared/AccountMenu.tsx", import.meta.url), "utf8");
+  // Dois itens com nome no menu da conta: trocar de conta encerra e já abre a
+  // autenticação; sair encerra e volta ao site.
   assert.match(panel, /<form method="post" action="\/api\/auth\/logout">/u);
-  assert.match(panel, /aria-label="Entrar em outra conta"/u);
-  assert.match(panel, /aria-label="Sair do Vinculato"/u);
+  assert.match(panel, /<b>Entrar em outra conta<\/b>/u);
+  assert.match(panel, /onClick=\{run\(props\.onSignOut\)\}>[\s\S]{0,80}<b>Sair<\/b>/u);
 });

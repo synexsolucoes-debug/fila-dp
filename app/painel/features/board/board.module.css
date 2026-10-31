@@ -255,7 +255,7 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
      dá 2,3:1. O par suave lê nos dois temas sem precisar de uma exceção. */
   background: var(--ui-accent-soft, var(--ui-primary-soft));
   color: var(--ui-accent-text, var(--ui-primary));
-  font-size: 10px;
+  font-size: 12px;
   line-height: 16px;
   text-align: center;
 }
@@ -277,7 +277,7 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
   box-shadow: var(--ui-shadow-modal);
 }
 .filterFields label, .sort { display: grid; gap: 4px; }
-.filterFields span, .sort > span { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--ui-text-muted); }
+.filterFields span, .sort > span { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: none; color: var(--ui-text-muted); }
 /* 36px, a mesma altura da caixa de busca ao lado.
    A régua de consistência do produto julga altura por repetição: um valor usado
    por um único controle no produto inteiro é acidente, não decisão. Um campo
@@ -326,6 +326,10 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
   /* Largura fixa, e não `1fr`: colunas que se esticam mudam de tamanho quando
      alguém é atribuído, e o cartão que a pessoa ia clicar muda de lugar. */
   flex: 0 0 292px;
+  /* Sem isto a coluna herda `min-width: auto` de item flex, e o nome do
+     responsável em `nowrap` vira a largura mínima: um nome de 60 caracteres
+     esticava a coluna para mais de 1000px e cortava os cartões na borda. */
+  min-width: 0;
   max-height: 100%;
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-lg);
@@ -388,6 +392,9 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
 
 .columnCards {
   display: grid;
+  /* Trilho `minmax(0, 1fr)`, não `auto`: no automático a empresa em `nowrap`
+     vira a largura mínima do cartão, que passava de 1000px numa coluna de 290. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   align-content: start;
   padding: 0 8px 10px;
@@ -475,9 +482,9 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
   font-size: 11px;
   font-weight: 700;
   letter-spacing: .02em;
-  text-transform: uppercase;
+  text-transform: none;
 }
-.priority { padding: 1px 6px; border-radius: 999px; font-size: 11px; font-weight: 800; text-transform: uppercase; }
+.priority { padding: 1px 6px; border-radius: 999px; font-size: 11px; font-weight: 800; text-transform: none; }
 .priority[data-level="urgent"] { background: var(--ui-state-danger-bg); color: var(--ui-state-danger-text); }
 .priority[data-level="high"] { background: var(--ui-state-warn-bg); color: var(--ui-state-warn-text); }
 
@@ -507,10 +514,10 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
 .cardTitle:hover { color: var(--ui-accent-text, var(--ui-primary)); }
 .cardTitle:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 2px; border-radius: var(--ui-radius-sm); }
 
-.cardWho { margin: -4px 0 0; display: flex; flex-wrap: wrap; gap: 4px; font-size: 14px; color: var(--ui-text-soft); }
+.cardWho { min-width: 0; margin: -4px 0 0; display: flex; flex-wrap: wrap; gap: 4px; font-size: 14px; color: var(--ui-text-soft); }
 .employee { font-weight: 700; color: var(--ui-text); }
 .employee::after { content: " ·"; color: var(--ui-text-muted); font-weight: 400; }
-.company { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.company { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .cardBottom { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; color: var(--ui-text-muted); }
 .due, .stage, .meta, .orphan {
@@ -600,7 +607,7 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
 .queue { display: grid; grid-template-columns: repeat(auto-fit, minmax(268px, 1fr)); gap: 10px; align-items: start; }
 .queueSection { border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface); }
 .queueSection > header { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 10px 11px 8px; }
-.queueSection > header strong { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--ui-text-soft); }
+.queueSection > header strong { font-size: 11px; font-weight: 800; letter-spacing: normal; text-transform: none; color: var(--ui-text-soft); }
 .queueSection > header b {
   grid-row: 1;
   min-width: 22px;
@@ -613,7 +620,7 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
   line-height: 20px;
   text-align: center;
 }
-.queueSection > header small { grid-column: 1 / -1; font-size: 10.5px; color: var(--ui-text-muted); }
+.queueSection > header small { grid-column: 1 / -1; font-size: 12px; color: var(--ui-text-muted); }
 .queueSection[data-section="overdue"] > header strong { color: var(--ui-danger); }
 .queueSection[data-section="overdue"] > header b { background: var(--ui-state-danger-bg); color: var(--ui-state-danger-text); }
 .queueSection[data-section="today"] > header strong { color: var(--ui-warning); }
@@ -637,7 +644,7 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
 }
 .bulkBar > strong { font-size: 12.5px; color: var(--ui-text); }
 .bulkBar label { display: inline-flex; align-items: center; gap: 5px; }
-.bulkBar label > span { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--ui-text-muted); }
+.bulkBar label > span { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: none; color: var(--ui-text-muted); }
 .bulkBar select, .bulkBar input, .bulkBar label button {
   height: 36px;
   padding: 0 8px;

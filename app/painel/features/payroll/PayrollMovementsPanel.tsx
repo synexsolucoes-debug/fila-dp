@@ -208,7 +208,6 @@ export function PayrollMovementsPanel({ companies, canEdit }: { companies: Compa
   return <section className={styles.movements} aria-labelledby="payroll-movements-title">
     <header className={styles.header}>
       <div>
-        <span className={styles.eyebrow}>MOVIMENTOS PARA O SANKHYA</span>
         <h2 id="payroll-movements-title" className={styles.title}>Lançamentos variáveis da competência</h2>
         <p className={styles.lead}>Horas extras, comissões, descontos e outros eventos por colaborador. A planilha sai no layout do Importador de Movimentos, com TIPEVENTO e UNIDADE do catálogo.</p>
       </div>
@@ -282,7 +281,7 @@ export function PayrollMovementsPanel({ companies, canEdit }: { companies: Compa
 
       {data.movements.length ? <div className={styles.tableWrap}><table className={styles.table}>
         <caption className="sr-only">Lançamentos da competência</caption>
-        <thead><tr><th>CODFUNC</th><th>Colaborador</th><th>Evento</th><th>Tipo</th><th className={styles.num}>Índice</th><th className={styles.num}>Valor</th><th className={styles.num}>Seq.</th><th>Conferência</th>{canEdit && <th />}</tr></thead>
+        <thead><tr><th>Codfunc</th><th>Colaborador</th><th>Evento</th><th>Tipo</th><th className={styles.num}>Índice</th><th className={styles.num}>Valor</th><th className={styles.num}>Seq.</th><th>Conferência</th>{canEdit && <th />}</tr></thead>
         <tbody>{data.movements.map((movement) => <tr key={movement.id}>
           <td data-label="CODFUNC" className={styles.code}>{movement.employeeCode || "—"}</td>
           <td data-label="Colaborador">{movement.employeeName}</td>

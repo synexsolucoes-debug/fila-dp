@@ -20,15 +20,21 @@ import styles from "./panel-ui.module.css";
  * aprende três significados para o mesmo verde.
  */
 
-export function PanelHeader({ eyebrow, title, description, action }: {
-  eyebrow: string; title: string; description: string; action?: ReactNode;
+/**
+ * Cabeçalho de seção: título e ação, nada mais.
+ *
+ * Ele já teve sobretítulo em caixa alta e um parágrafo explicando a seção —
+ * repetido em cada uma das telas, era o que mais fazia o produto parecer
+ * gerado. `eyebrow` e `description` continuam aceitos para não obrigar a mexer
+ * em quarenta chamadas, mas não são desenhados.
+ */
+export function PanelHeader({ title, action }: {
+  eyebrow?: string; title: string; description?: string; action?: ReactNode;
 }) {
   // A ação vai dentro de um invólucro próprio porque em tela estreita o
-  // cabeçalho empilha e o botão precisa ocupar a largura. Cada módulo resolvia
-  // isso com um seletor para a *sua* classe de botão (`.panelHeader >
-  // .primaryButton`); daqui não dá para nomear a classe de quem chama.
+  // cabeçalho empilha e o botão precisa ocupar a largura.
   return <header className={styles.panelHeader}>
-    <div><span className={styles.eyebrow}>{eyebrow}</span><h2>{title}</h2><p>{description}</p></div>
+    <div><h2>{title}</h2></div>
     {action ? <div className={styles.headerAction}>{action}</div> : null}
   </header>;
 }
@@ -126,7 +132,7 @@ export function PageSkeleton({ label, rows = 3, metrics = 4 }: {
  * interrupção que exige resposta, e o leitor de tela anuncia a descrição
  * sozinho ao receber o foco.
  */
-export function ConfirmDialog({ open, title, consequence, confirmLabel, busy, onCancel, onConfirm, eyebrow = "CONFIRMAÇÃO NECESSÁRIA" }: {
+export function ConfirmDialog({ open, title, consequence, confirmLabel, busy, onCancel, onConfirm, eyebrow = "Confirmação necessária" }: {
   open: boolean;
   title: string;
   consequence: string;

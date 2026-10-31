@@ -1,9 +1,10 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { Calculator, FileDown, LoaderCircle, Printer, Search, UserRound } from "lucide-react";
 import { EmptyState, ErrorBanner } from "../shared";
 import { brl, terminationKindLabels, terminationKinds, type PayrollLine, type TerminationKind } from "@/lib/payroll-calc";
+import { initialsOf } from "@/lib/initials";
 import styles from "./erp-record.module.css";
 
 /**
@@ -14,11 +15,11 @@ import styles from "./erp-record.module.css";
  */
 
 type CalcType = "monthly" | "vacation" | "thirteenth" | "termination";
-const calcTypes: Array<{ id: CalcType; label: string }> = [
-  { id: "monthly", label: "Folha do mês" },
-  { id: "vacation", label: "Férias" },
-  { id: "thirteenth", label: "13º salário" },
-  { id: "termination", label: "Rescisão" },
+const calcTypes: Array<{ id: CalcType; label: string; net: string }> = [
+  { id: "monthly", label: "Folha do mês", net: "Líquido da folha" },
+  { id: "vacation", label: "Férias", net: "Líquido das férias" },
+  { id: "thirteenth", label: "13º salário", net: "Líquido do 13º" },
+  { id: "termination", label: "Rescisão", net: "Líquido da rescisão" },
 ];
 
 type Employee = { id: string; name: string; registration: string; company: string };
@@ -111,57 +112,83 @@ export function ErpCalculationsPanel({ companyId }: { companyId: string }) {
       {!found && <EmptyState icon={Calculator} size="compact" title="Escolha um colaborador"
         text="O cálculo usa o salário cadastrado na aba Remuneração da Ficha funcional, vigente na data do cálculo, e as tabelas de INSS e IRRF daquela data." />}
     </> : <>
-      <header className={styles.sectionTitle}><h3>{employee.registration} · {employee.name}</h3>
-        <button type="button" className={styles.secondaryButton} onClick={() => { setEmployee(null); setResult(null); }}>Outra pessoa</button></header>
-      <div className={styles.chips} role="group" aria-label="Tipo de cálculo">
-        {calcTypes.map((item) => <button key={item.id} type="button" className={styles.secondaryButton} aria-pressed={type === item.id}
+      {/* Cabeçalho de objeto (Fiori object page): quem está sendo calculado
+          fica sempre identificável, com nome inteiro e não só a matrícula. */}
+      <header className={styles.objectHeader}>
+        <span className={styles.objectAvatar} aria-hidden="true">{initialsOf(employee.name)}</span>
+        <div className={styles.objectTitle}>
+          <h3>{employee.name}</h3>
+          <p>Matrícula {employee.registration || "—"}{employee.company ? ` · ${employee.company}` : ""}</p>
+        </div>
+        <button type="button" className={styles.secondaryButton} onClick={() => { setEmployee(null); setResult(null); }}>Outra pessoa</button>
+      </header>
+      <div className={styles.segmented} role="group" aria-label="Tipo de cálculo">
+        {calcTypes.map((item) => <button key={item.id} type="button" aria-pressed={type === item.id}
           onClick={() => { setType(item.id); setResult(null); }}>{item.label}</button>)}
       </div>
-      <form className={styles.requirementEditor} onSubmit={(event) => void calculate(event)}>
-        <div className={styles.formGrid}>
-          {type === "monthly" && <>
-            <label><span>Competência *</span><input type="month" required value={field("competence")} onChange={(event) => set("competence", event.target.value)} /></label>
-            {number("absenceDays", "Faltas (dias)")}
-            {number("overtime50Hours", "Horas extras 50%")}
-            {number("overtime100Hours", "Horas extras 100%")}
-            {number("workingDays", "Dias úteis do mês", "para o DSR")}
-            {number("restDays", "Domingos e feriados do mês", "para o DSR")}
-            {money("otherEarnings", "Outros proventos (R$)")}
-            {money("otherDeductions", "Outros descontos (R$)")}
-            {money("alimony", "Pensão alimentícia (R$)")}
-          </>}
-          {type === "vacation" && <>
-            <label><span>Início do gozo *</span><input type="date" required value={field("start")} onChange={(event) => set("start", event.target.value)} /></label>
-            {number("absences", "Faltas injustificadas no período aquisitivo", "define os dias (art. 130)")}
-            {number("soldDays", "Dias vendidos (abono)", "até 1/3")}
-            {money("variableAverage", "Média de variáveis (R$) — vazio calcula das folhas fechadas")}
-          </>}
-          {type === "thirteenth" && <>
-            {number("year", "Ano *")}
-            {money("firstInstallmentPaid", "1ª parcela já paga (R$)")}
-            {money("variableAverage", "Média de variáveis (R$) — vazio calcula das folhas fechadas")}
-          </>}
-          {type === "termination" && <>
-            <label className={styles.spanTwo}><span>Tipo de desligamento *</span>
-              <select value={field("kind")} onChange={(event) => set("kind", event.target.value as TerminationKind)}>
-                {terminationKinds.map((kind) => <option key={kind} value={kind}>{terminationKindLabels[kind]}</option>)}
-              </select></label>
-            <label><span>Último dia trabalhado *</span><input type="date" required value={field("terminationDate")} onChange={(event) => set("terminationDate", event.target.value)} /></label>
-            {(field("kind") === "without_cause" || field("kind") === "agreement") && check("noticeWorked", "Aviso prévio trabalhado")}
-            {field("kind") === "resignation" && check("discountUnworkedNotice", "Descontar aviso não cumprido")}
-            {field("kind") === "fixed_term_early" && <label><span>Fim previsto do contrato</span>
-              <input type="date" value={field("contractEnd")} onChange={(event) => set("contractEnd", event.target.value)} /></label>}
-            {number("overdueVacationPeriods", "Períodos de férias vencidas")}
-            {money("fgtsBalance", "Saldo do FGTS (R$)")}
-            {money("thirteenthAdvance", "13º já adiantado no ano (R$)")}
-            {money("variableAverage", "Média de variáveis (R$) — vazio calcula das folhas fechadas")}
-          </>}
-        </div>
-        <footer><span /><button className={styles.primaryButton} disabled={busy}>{busy ? <LoaderCircle className={styles.spin} aria-hidden="true" /> : <Calculator aria-hidden="true" />} Calcular</button></footer>
+      <form className={styles.calcForm} onSubmit={(event) => void calculate(event)}>
+        {type === "termination" ? <>
+          <fieldset className={styles.calcFieldset}>
+            <legend>Desligamento</legend>
+            <div className={styles.formGrid}>
+              <label className={styles.spanTwo}><span>Tipo de desligamento *</span>
+                <select value={field("kind")} onChange={(event) => set("kind", event.target.value as TerminationKind)}>
+                  {terminationKinds.map((kind) => <option key={kind} value={kind}>{terminationKindLabels[kind]}</option>)}
+                </select></label>
+              <label><span>Último dia trabalhado *</span><input type="date" required value={field("terminationDate")} onChange={(event) => set("terminationDate", event.target.value)} /></label>
+              {(field("kind") === "without_cause" || field("kind") === "agreement") && check("noticeWorked", "Aviso prévio trabalhado")}
+              {field("kind") === "resignation" && check("discountUnworkedNotice", "Descontar aviso não cumprido")}
+              {field("kind") === "fixed_term_early" && <label><span>Fim previsto do contrato</span>
+                <input type="date" value={field("contractEnd")} onChange={(event) => set("contractEnd", event.target.value)} /></label>}
+            </div>
+          </fieldset>
+          <fieldset className={styles.calcFieldset}>
+            <legend>Saldos e médias <small>opcionais — vazio usa o que o ERP já sabe</small></legend>
+            <div className={styles.formGrid}>
+              {number("overdueVacationPeriods", "Períodos de férias vencidas")}
+              {money("fgtsBalance", "Saldo do FGTS (R$)")}
+              {money("thirteenthAdvance", "13º já adiantado no ano (R$)")}
+              {money("variableAverage", "Média de variáveis (R$)")}
+            </div>
+          </fieldset>
+        </> : <fieldset className={styles.calcFieldset}>
+          <legend>{calcTypes.find((item) => item.id === type)?.label}</legend>
+          <div className={styles.formGrid}>
+            {type === "monthly" && <>
+              <label><span>Competência *</span><input type="month" required value={field("competence")} onChange={(event) => set("competence", event.target.value)} /></label>
+              {number("absenceDays", "Faltas (dias)")}
+              {number("overtime50Hours", "Horas extras 50%")}
+              {number("overtime100Hours", "Horas extras 100%")}
+              {number("workingDays", "Dias úteis do mês", "para o DSR")}
+              {number("restDays", "Domingos e feriados do mês", "para o DSR")}
+              {money("otherEarnings", "Outros proventos (R$)")}
+              {money("otherDeductions", "Outros descontos (R$)")}
+              {money("alimony", "Pensão alimentícia (R$)")}
+            </>}
+            {type === "vacation" && <>
+              <label><span>Início do gozo *</span><input type="date" required value={field("start")} onChange={(event) => set("start", event.target.value)} /></label>
+              {number("absences", "Faltas injustificadas no período aquisitivo", "define os dias (art. 130)")}
+              {number("soldDays", "Dias vendidos (abono)", "até 1/3")}
+              {money("variableAverage", "Média de variáveis (R$) — vazio calcula das folhas fechadas")}
+            </>}
+            {type === "thirteenth" && <>
+              {number("year", "Ano *")}
+              {money("firstInstallmentPaid", "1ª parcela já paga (R$)")}
+              {money("variableAverage", "Média de variáveis (R$) — vazio calcula das folhas fechadas")}
+            </>}
+          </div>
+        </fieldset>}
+        {/* Rodapé de ações preso ao fim da área visível (footer toolbar do
+            Fiori, §7.1): em formulário longo, Calcular não some ao rolar. */}
+        <footer className={styles.actionBar}>
+          <span>Simulação: nada é gravado.</span>
+          <button className={styles.primaryButton} disabled={busy}>{busy ? <LoaderCircle className={styles.spin} aria-hidden="true" /> : <Calculator aria-hidden="true" />} Calcular</button>
+        </footer>
       </form>
       {error && <ErrorBanner title="Não foi possível calcular" message={error} />}
-      {result && <ResultView result={result} document={type === "vacation" || type === "termination"
-        ? () => downloadDocument({ ...fields, type, employeeId: employee.id }) : null} />}
+      {result && <ResultView result={result} netLabel={calcTypes.find((item) => item.id === type)?.net ?? "Líquido"}
+        document={type === "vacation" || type === "termination"
+          ? () => downloadDocument({ ...fields, type, employeeId: employee.id }) : null} />}
     </>}
   </div>;
 }
@@ -181,18 +208,35 @@ async function downloadDocument(body: Record<string, unknown>) {
   URL.revokeObjectURL(url);
 }
 
-function ResultView({ result, document: makeDocument }: { result: Result; document: (() => Promise<void>) | null }) {
+function ResultView({ result, netLabel, document: makeDocument }: { result: Result; netLabel: string; document: (() => Promise<void>) | null }) {
   const [documentError, setDocumentError] = useState("");
   const [documentBusy, setDocumentBusy] = useState(false);
+  const sectionRef = useRef<HTMLElement>(null);
   const { lines, earnings, deductions, net, fgts, notes, projectedEnd } = result.result;
   const payroll = lines.filter((line) => line.kind !== "info");
   const info = lines.filter((line) => line.kind === "info");
-  return <section className={styles.stackPrint} aria-label="Resultado do cálculo">
-    <div className={styles.historySnapshot}>
-      <article><small>Proventos</small><strong>{brl(earnings)}</strong><span>Salário-base {brl(result.salary)}</span></article>
-      <article><small>Descontos</small><strong>{brl(deductions)}</strong><span>INSS, IRRF e outros</span></article>
-      <article><small>Líquido</small><strong>{brl(net)}</strong><span>Data de referência {dateLabel(result.referenceDate)}</span></article>
-      <article><small>FGTS (empregador)</small><strong>{brl(fgts)}</strong><span>{projectedEnd ? `Contrato projetado até ${dateLabel(projectedEnd)}` : "8% da base"}</span></article>
+
+  /* O resultado nasce abaixo do formulário, quase sempre fora da tela. Sem
+     levar a pessoa até ele, o clique em Calcular parece não ter feito nada. */
+  useEffect(() => {
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    sectionRef.current?.scrollIntoView({ block: "start", behavior: reduce ? "auto" : "smooth" });
+  }, [result]);
+
+  return <section ref={sectionRef} className={styles.stackPrint} aria-label="Resultado do cálculo">
+    {/* O líquido é a resposta da tela: número grande, sozinho. Proventos,
+        descontos e FGTS explicam o número e ficam ao lado, menores. */}
+    <div className={styles.netSummary}>
+      <div className={styles.netHero}>
+        <small>{netLabel}</small>
+        <strong>{brl(net)}</strong>
+        <span>Data de referência {dateLabel(result.referenceDate)} · salário-base {brl(result.salary)}</span>
+      </div>
+      <dl className={styles.netBreakdown}>
+        <div><dt>Proventos</dt><dd>{brl(earnings)}</dd></div>
+        <div><dt>Descontos</dt><dd>− {brl(deductions)}</dd></div>
+        <div><dt>FGTS (empregador)</dt><dd>{brl(fgts)}</dd>{projectedEnd && <small>Contrato projetado até {dateLabel(projectedEnd)}</small>}</div>
+      </dl>
     </div>
     <div className={styles.tableWrap}><table className={styles.table}>
       <caption className="sr-only">Rubricas do cálculo</caption>

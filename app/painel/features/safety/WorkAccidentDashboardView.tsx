@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Activity, CalendarClock, CalendarDays, ClipboardList, Download, HardHat, LayoutDashboard, ListPlus,
-  Moon, Pencil, Plus, RefreshCw, Sun, SunMedium, Trash2, TriangleAlert, Users, Wallet,
+  CalendarDays, ClipboardList, Download, HardHat, LayoutDashboard, ListPlus,
+  Moon, Pencil, Plus, RefreshCw, Sun, SunMedium, Trash2, TriangleAlert,
 } from "lucide-react";
 import {
   accidentBodyPartLabels, accidentShiftLabels, accidentTypeLabels,
@@ -224,7 +224,7 @@ export function WorkAccidentDashboardView() {
 
   return <section className={styles.workspace}>
     <PanelHeader
-      eyebrow="SEGURANÇA DO TRABALHO"
+      eyebrow="Segurança do trabalho"
       title="Dashboard de Acidente de Trabalho"
       description="Acidentes, dias afastados e despesas do período, alimentados pela própria equipe do SESMT."
       action={<div className={styles.headerActions}>
@@ -293,22 +293,18 @@ export function WorkAccidentDashboardView() {
       : <>
         <div className={styles.summaryRow}>
           <article className={styles.summaryCard}>
-            <span className={styles.cardIcon}><HardHat aria-hidden="true" /></span>
             <div><small>Total de acidentes</small><strong>{dashboard.totals.accidents}</strong>
               <p>{dashboard.totals.withLeave} com afastamento · {dashboard.totals.catIssued} com CAT</p></div>
           </article>
           <article className={styles.summaryCard}>
-            <span className={styles.cardIcon}><CalendarClock aria-hidden="true" /></span>
             <div><small>Total dias afastados</small><strong>{dashboard.totals.leaveDays}</strong>
               <p>{periodLabel}</p></div>
           </article>
           <article className={styles.summaryCard}>
-            <span className={styles.cardIcon}><Wallet aria-hidden="true" /></span>
             <div><small>Total despesas</small><strong>{shortCurrency(dashboard.totals.expenses)}</strong>
               <p>{currency(dashboard.totals.expenses)}</p></div>
           </article>
           <article className={styles.summaryCard}>
-            <span className={styles.cardIcon}><Users aria-hidden="true" /></span>
             <div><small>Gênero</small>
               <strong className={styles.genderSplit}>
                 <span>{genderShare("female")}%<i>F</i></span>
@@ -317,7 +313,6 @@ export function WorkAccidentDashboardView() {
               <p>{genderShare("not_informed") > 0 ? `${genderShare("not_informed")}% sem gênero informado` : "Todos informados"}</p></div>
           </article>
           <article className={styles.summaryCard}>
-            <span className={styles.cardIcon}><Activity aria-hidden="true" /></span>
             <div><small>Turno</small>
               <strong className={styles.shiftSplit}>
                 {(["morning", "afternoon", "night"] as AccidentShift[]).map((shift) => {

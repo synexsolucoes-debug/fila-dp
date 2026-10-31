@@ -85,7 +85,7 @@ export function SankhyaConnectorPanel({ connector, runs, companies, permissions,
   return <section className={styles.sankhyaPanel} aria-labelledby="sankhya-title">
     <header className={styles.sankhyaHero}>
       <span className={styles.sankhyaMark}><Bot /></span>
-      <div><span className={styles.eyebrow}>RPA · BROWSER AUTOMATION</span><h3 id="sankhya-title">Sankhya Browser Connector</h3><p>Consulta isolada por workspace, executada por navegador seguro e sem uso da API Sankhya.</p></div>
+      <div><h3 id="sankhya-title">Sankhya Browser Connector</h3><p>Consulta isolada por workspace, executada por navegador seguro e sem uso da API Sankhya.</p></div>
       <StatusPill status={connector.status} tone={connector.status === "connected" ? "safe" : connector.status === "error" ? "danger" : "warning"} label={phaseLabel(connector.status)} />
     </header>
 
@@ -155,6 +155,6 @@ export function SankhyaConnectorPanel({ connector, runs, companies, permissions,
       </tbody></table></div>
     </section>
 
-    {logRunId && <div className={styles.overlay} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setLogRunId(""); }}><aside className={`${styles.drawer} ${styles.drawerWide}`} role="dialog" aria-modal="true" aria-labelledby="sankhya-logs-title"><header className={styles.drawerHeader}><div><span className={styles.eyebrow}>DIAGNÓSTICO SEGURO</span><h2 id="sankhya-logs-title">Logs da execução</h2><p>Mensagens técnicas sanitizadas; credenciais, cookies e dados pessoais não são registrados.</p></div><button aria-label="Fechar" onClick={() => setLogRunId("")}><X /></button></header><div className={styles.drawerBody}><div className={styles.logList}>{logs.length ? logs.map((entry) => <article key={entry.id}><time>{date(entry.created_at)}</time><StatusPill status={entry.level} label={entry.phase || entry.level} /><div><strong>{entry.code || phaseLabel(entry.phase)}</strong><p>{entry.message}</p></div></article>) : <p>Nenhum log técnico disponível para esta execução.</p>}</div></div></aside></div>}
+    {logRunId && <div className={styles.overlay} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setLogRunId(""); }}><aside className={`${styles.drawer} ${styles.drawerWide}`} role="dialog" aria-modal="true" aria-labelledby="sankhya-logs-title"><header className={styles.drawerHeader}><div><h2 id="sankhya-logs-title">Logs da execução</h2><p>Mensagens técnicas sanitizadas; credenciais, cookies e dados pessoais não são registrados.</p></div><button aria-label="Fechar" onClick={() => setLogRunId("")}><X /></button></header><div className={styles.drawerBody}><div className={styles.logList}>{logs.length ? logs.map((entry) => <article key={entry.id}><time>{date(entry.created_at)}</time><StatusPill status={entry.level} label={entry.phase || entry.level} /><div><strong>{entry.code || phaseLabel(entry.phase)}</strong><p>{entry.message}</p></div></article>) : <p>Nenhum log técnico disponível para esta execução.</p>}</div></div></aside></div>}
   </section>;
 }

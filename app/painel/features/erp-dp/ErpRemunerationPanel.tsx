@@ -142,7 +142,7 @@ function RemunerationEditor({ employeeId, admissionDate, current, first, onSaved
   }
 
   return <form className={styles.requirementEditor} onSubmit={(event) => void submit(event)}>
-    <header><div><span>INFOTIPO 0008</span><h3>{first ? "Salário de admissão" : "Nova vigência ou correção"}</h3></div></header>
+    <header><div><span>Infotipo 0008</span><h3>{first ? "Salário de admissão" : "Nova vigência ou correção"}</h3></div></header>
     {error && <ErrorBanner title="A remuneração não foi salva" message={error} />}
     {saved && <p className={styles.infoNote}><Check aria-hidden="true" /><span><strong>Remuneração salva</strong><small>{saved}</small></span></p>}
     <div className={styles.formGrid}>

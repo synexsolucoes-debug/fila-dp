@@ -151,7 +151,7 @@ function TrainingEditor({ employeeId, companyId, onCancel, onSaved }: {
   }
 
   return <form className={styles.requirementEditor} onSubmit={(event) => void submit(event)}>
-    <header><div><span>NOVO TREINAMENTO</span><h3>Registrar treinamento obrigatório</h3></div>
+    <header><div><span>Novo treinamento</span><h3>Registrar treinamento obrigatório</h3></div>
       <button type="button" className={styles.closeButton} onClick={onCancel} aria-label="Cancelar"><XCircle aria-hidden="true" /></button></header>
     {error && <ErrorBanner title="Não foi possível registrar o treinamento" message={error} />}
     <div className={styles.formGrid}>

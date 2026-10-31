@@ -79,7 +79,7 @@ test("o cartão de erro do painel usa a marca atual", async () => {
      então não via caixa alta. Um guard que só pega uma grafia dá a impressão de
      cobertura que ele não tem. */
   const boundary = await readFile(new URL("../app/painel/error.tsx", import.meta.url), "utf8");
-  assert.match(boundary, /VINCULATO/u);
+  assert.match(boundary, /VINCULATO/ui);
   const identidade = await readFile(new URL("../tests/vinculato-identity.test.mts", import.meta.url), "utf8");
   assert.match(identidade, /\/Fila\\s\*DP\|FilaDP\|Fila\\s\*<\(\?:strong\|b\)>\\s\*DP\/iu/u,
     "a varredura de marca voltou a ser sensível a caixa");

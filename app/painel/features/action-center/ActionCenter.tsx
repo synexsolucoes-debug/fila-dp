@@ -77,7 +77,6 @@ export function ActionCenter({ onNavigate, companyId = "" }: {
     <section className={styles.actionCenter} aria-labelledby="action-center-title" aria-busy={loading}>
       <header className={styles.header}>
         <div>
-          <span className={styles.eyebrow}>O QUE PRECISA SER FEITO AGORA</span>
           <h2 id="action-center-title">Central de ação</h2>
           <p aria-live="polite">
             {loading

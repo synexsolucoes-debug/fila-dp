@@ -249,7 +249,7 @@ export function PortfolioView({ canManage }: { canManage: boolean }) {
 
     <ConfirmDialog
       open={Boolean(pending)}
-      eyebrow="TROCA DE CARTEIRA"
+      eyebrow="Troca de carteira"
       title={pending ? `Carteira de ${pending.company.name}` : ""}
       consequence={pendingConsequence}
       confirmLabel="Confirmar troca"

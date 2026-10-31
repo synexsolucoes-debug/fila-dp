@@ -130,18 +130,16 @@ test("a casca só ganha theme-dark quando a escala resolvida é escura", async (
 /* O controle                                                                  */
 /* -------------------------------------------------------------------------- */
 
-test("o botão de tema diz em que estado está e para onde vai", async () => {
-  /* Um botão que cicla é mudo para quem não vê o ícone mudar: sem dizer o
-     estado atual e o próximo, "trocar tema" não informa nem o que está valendo
-     agora nem o que o clique vai fazer. */
+test("o tema é escolhido por nome, e a escolha atual aparece marcada", async () => {
+  /* O botão que ciclava entre três estados com um ícone só parecia não
+     funcionar: o clique mudava algo que ninguém via nomeado. No menu da conta
+     cada tema é um botão com o nome dele e `aria-pressed` na escolha atual. */
+  const menu = await ler("app/painel/features/shared/AccountMenu.tsx");
+  assert.match(menu, /const themes: readonly ThemePreference\[\] = \["light", "dark", "system"\];/u);
+  assert.match(menu, /aria-pressed=\{props\.theme === theme\}/u);
+  assert.match(menu, /\{themeLabels\[theme\]\}/u);
   const app = await ler("app/painel/WorkspaceApp.tsx");
-  const bloco = app.slice(app.indexOf('className="switch-account-button theme-toggle"'));
-  assert.ok(bloco, "o botão de tema sumiu do rodapé da barra");
-  const rotulo = bloco.slice(0, bloco.indexOf("</button>"));
-  assert.match(rotulo, /aria-label=\{`Tema: \$\{themeLabels\[themePreference\]/u,
-    "o rótulo tem de nomear o estado atual");
-  assert.match(rotulo, /Trocar para \$\{themeLabels\[nextThemePreference\(themePreference\)\]/u,
-    "o rótulo tem de nomear o próximo estado");
+  assert.match(app, /theme=\{themePreference\} onTheme=\{escolherTema\}/u);
 });
 
 /* -------------------------------------------------------------------------- */

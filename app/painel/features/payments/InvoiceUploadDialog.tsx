@@ -56,7 +56,6 @@ export function InvoiceUploadDialog({ open, row, competenceLabel, money, busy, e
       >
         <header className={styles.dialogHeader}>
           <div>
-            <span className={styles.eyebrow}>{replacing ? "SUBSTITUIR NOTA" : "ANEXAR NOTA FISCAL"}</span>
             <h2>{row.providerName}</h2>
             <p className={styles.dialogSummary}>
               {competenceLabel} · valor esperado de <strong>{money(row.expectedAmount)}</strong>

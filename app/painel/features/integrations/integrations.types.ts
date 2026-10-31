@@ -176,3 +176,22 @@ export type IntegrationEditor =
   | { kind: "reconciliation"; reconciliation: Reconciliation }
   | { kind: "detail"; run: IntegrationRun }
   | null;
+
+/**
+ * Nome do canal para quem lê a tela. O código (`sankhya_browser`) é do
+ * sistema; na interface ele aparecia em caixa alta, que só disfarçava o jargão.
+ */
+const CHANNEL_LABELS: Record<string, string> = {
+  sankhya_browser: "Sankhya · navegador",
+  tangerino_browser: "Tangerino · navegador",
+  tangerino: "Tangerino",
+  solides: "Sólides",
+  teams: "Microsoft Teams",
+  email: "E-mail",
+  erp: "ERP",
+  whatsapp: "WhatsApp",
+};
+export function channelLabel(channel: string | null | undefined) {
+  if (!channel) return "";
+  return CHANNEL_LABELS[channel] ?? channel.replace(/_/gu, " ");
+}

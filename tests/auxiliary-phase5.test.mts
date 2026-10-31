@@ -85,7 +85,7 @@ test("phase 5 UI is modular, assigned, privacy-aware and keyboard accessible", a
   assert.match(workspace, /return !\(role && entry\.hiddenFor\?\.includes\(role\)\);/u);
   assert.match(view, /role === "observer" \? \["benefits", "contractors"\]/);
   assert.match(view, /canDecide && item\.canDecide/);
-  assert.match(view, /SEM DADOS INDIVIDUAIS/);
+  assert.match(view, /SEM DADOS INDIVIDUAIS/i);
   assert.doesNotMatch(view + dialogs, /localStorage|sessionStorage|window\.location\.reload/);
   assert.match(dialogs, /event\.key !== "Tab"/);
   assert.match(dialogs, /previous\?\.focus/);

@@ -65,7 +65,7 @@
 .panel > header button svg { width: 15px; height: 15px; }
 
 /* Sobre o navy do cabeçalho os tokens de superfície clara não leem. */
-.eyebrow { color: var(--brand-accent-on-dark, #6fb4ff); font-size: .6rem; font-weight: 820; letter-spacing: .12em; }
+.eyebrow { color: var(--brand-accent-on-dark, #6fb4ff); font-size: .75rem; font-weight: 820; letter-spacing: normal; }
 
 .boundary {
   /* Grid de duas colunas, não flex: em flex o `<b>` do meio da frase virava um
@@ -79,7 +79,7 @@
   border-bottom: 1px solid var(--ui-border, #dce3ed);
   background: var(--ui-surface-muted, #eef2f8);
   color: var(--ui-text-soft, #55627a);
-  font-size: .69rem;
+  font-size: .75rem;
   line-height: 1.45;
 }
 .boundary svg { width: 15px; height: 15px; margin-top: 1px; color: var(--ui-primary, #0857b2); }
@@ -116,7 +116,7 @@
 }
 .theirs svg { width: 14px; height: 14px; vertical-align: -2px; }
 
-.notice, .error { margin: 0; padding: 9px 15px; font-size: .71rem; line-height: 1.45; }
+.notice, .error { margin: 0; padding: 9px 15px; font-size: .78rem; line-height: 1.45; }
 .notice { border-top: 1px solid var(--ui-border, #dce3ed); background: #f2f7fe; color: #08529f; }
 .error { border-top: 1px solid var(--ui-border, #dce3ed); background: #fff2f1; color: #962016; }
 

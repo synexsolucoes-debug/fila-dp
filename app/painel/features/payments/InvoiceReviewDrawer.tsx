@@ -129,7 +129,6 @@ function InvoiceReviewContent(
     <>
       <header className={styles.dialogHeader}>
         <div>
-          <span className={styles.eyebrow}>CONFERÊNCIA DE NOTA FISCAL</span>
           <h2>{closing.providerName}</h2>
           <p className={styles.detailMeta}>
             {closing.contractReference || "Contrato sem referência"} · {closing.competence}

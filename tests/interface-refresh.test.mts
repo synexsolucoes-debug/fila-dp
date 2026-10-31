@@ -61,8 +61,9 @@ test("a camada de refinamento é carregada por último", async () => {
 test("trocar de módulo remonta o bloco, senão a animação não roda", async () => {
   const workspace = await read("app/painel/WorkspaceApp.tsx");
   const motion = await read("app/painel/features/shared/motion.tsx");
-  // O shell atual centraliza a remontagem no componente de transição.
-  assert.match(workspace, /<PageTransition transitionKey=\{view\}/u);
+  // Com as abas, cada tela aberta fica montada; a entrada roda quando o
+  // painel dela deixa de estar escondido.
+  assert.match(workspace, /className="view-pane view-transition" hidden=\{target !== view\}/u);
   assert.match(motion, /<div key=\{transitionKey\}/u);
 
   const platform = await read("app/plataforma/PlatformApp.tsx");

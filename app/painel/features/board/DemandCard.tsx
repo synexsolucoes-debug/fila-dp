@@ -5,16 +5,11 @@ import type { DragEvent } from "react";
 import type { Card } from "@/lib/fila-dp-types";
 import { DEMAND_NEXT_ACTION_FALLBACK, demandNextAction } from "@/lib/demand-dashboard";
 import { attentionRank, demandReference, dueBadge, responsibleName, slaReading } from "./board.model";
+import { initialsOf } from "@/lib/initials";
 import styles from "./board.module.css";
 
-/** Iniciais para o avatar; duas no máximo, porque três viram uma sopa de letras. */
-export function initialsOf(value: string): string {
-  const partes = value.trim().split(/\s+/u).filter(Boolean);
-  if (partes.length === 0) return "?";
-  const primeira = partes[0][0] ?? "";
-  const ultima = partes.length > 1 ? partes[partes.length - 1][0] ?? "" : "";
-  return `${primeira}${ultima}`.toUpperCase();
-}
+/** Iniciais para o avatar; a regra mora em `lib/initials.ts`. */
+export { initialsOf };
 
 export type DemandCardProps = {
   card: Card;
@@ -99,7 +94,7 @@ export function DemandCard(props: DemandCardProps) {
 
       <p className={styles.cardWho}>
         {colaborador && <span className={styles.employee}>{colaborador}</span>}
-        <span className={styles.company}>{card.company || "Sem empresa informada"}</span>
+        <span className={styles.company} title={card.company || undefined}>{card.company || "Sem empresa informada"}</span>
       </p>
 
       <div className={styles.cardTop}>

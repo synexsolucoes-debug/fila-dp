@@ -169,7 +169,7 @@ export function WorkCenterView({ onOpenCompanyFilter, onNavigate, companyId }: {
 
   return <section className={styles.workspace} aria-busy={refreshing}>
     <PanelHeader
-      eyebrow="CENTRAL DE TRABALHO"
+      eyebrow="Central de trabalho"
       title="O que está comigo hoje"
       description="Demandas, aprovações, movimentações, entregas, pendências, triagem e falhas que exigem ação — em uma lista só. Cada item é resolvido na tela do módulo dono dele."
       action={<button type="button" className={styles.secondaryButton} onClick={() => void load(filters, true)} disabled={refreshing}>

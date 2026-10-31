@@ -36,10 +36,10 @@ export function EpiDashboardPanel({ dashboard, month, onMonth, onPeople, onRequi
   const statusCount = (status: EpiComplianceStatus) => dashboard.employees.filter((item) => item.status === status).length;
 
   return <div className={styles.dashboardStack}>
-    <PanelHeader eyebrow="CONFORMIDADE E UTILIZAÇÃO" title="Dashboard de EPI"
+    <PanelHeader eyebrow="Conformidade e utilização" title="Dashboard de EPI"
       description="Cobertura atual dos colaboradores e movimentação da competência selecionada."
       action={<div className={styles.monthActions}>
-        <label><span>COMPETÊNCIA</span><input type="month" value={month} onChange={(event) => onMonth(event.target.value)} /></label>
+        <label><span>Competência</span><input type="month" value={month} onChange={(event) => onMonth(event.target.value)} /></label>
         <button type="button" className={styles.secondaryButton} onClick={onReport}><ClipboardCheck aria-hidden="true" /> Relatório mensal</button>
       </div>} />
 
@@ -72,7 +72,7 @@ export function EpiDashboardPanel({ dashboard, month, onMonth, onPeople, onRequi
 
     <section className={styles.coveragePanel} aria-label="Distribuição da conformidade">
       <div className={styles.coverageHeader}>
-        <div><span>COBERTURA ATUAL</span><strong>{summary.compliantEmployees} em dia</strong></div>
+        <div><span>Cobertura atual</span><strong>{summary.compliantEmployees} em dia</strong></div>
         <button className={styles.ghostButton} onClick={onRequirements}><ShieldCheck aria-hidden="true" /> Configurar obrigatoriedade</button>
       </div>
       <div className={styles.coverageBar} aria-label={`${coveredPercent}% com EPIs obrigatórios`}>
@@ -91,7 +91,7 @@ export function EpiDashboardPanel({ dashboard, month, onMonth, onPeople, onRequi
 
     <div className={styles.dashboardColumns}>
       <section className={styles.chartPanel}>
-        <header><div><span>UTILIZAÇÃO EM {month}</span><h3>EPIs mais entregues</h3></div><BarChart3 aria-hidden="true" /></header>
+        <header><div><span>Utilização em {month}</span><h3>EPIs mais entregues</h3></div><BarChart3 aria-hidden="true" /></header>
         {dashboard.utilization.length ? <div className={styles.usageList}>
           {dashboard.utilization.map((item) => <div key={item.productId} className={styles.usageRow}>
             <div><strong>{item.productName}</strong><small>{item.delivered} entregue(s) · {item.returned} devolvido(s) · saldo {item.availableQuantity}</small></div>
@@ -101,7 +101,7 @@ export function EpiDashboardPanel({ dashboard, month, onMonth, onPeople, onRequi
         </div> : <EmptyState icon={BarChart3} size="compact" title="Sem utilização nesta competência" text="As entregas registradas no mês aparecerão aqui." />}
       </section>
       <section className={styles.chartPanel}>
-        <header><div><span>PLANEJAMENTO DE ESTOQUE</span><h3>Falta para cobrir colaboradores</h3></div><AlertTriangle aria-hidden="true" /></header>
+        <header><div><span>Planejamento de estoque</span><h3>Falta para cobrir colaboradores</h3></div><AlertTriangle aria-hidden="true" /></header>
         {dashboard.shortages.length ? <div className={styles.shortageList}>
           {dashboard.shortages.map((item) => <div key={item.productId}>
             <span><strong>{item.productName}</strong><small>{item.missing} necessário(s) · {item.available} disponível(is)</small></span>
@@ -129,11 +129,11 @@ export function EpiPeoplePanel({ employees, initialStatus, products, onDeliver }
   }), [employees, search, status]);
 
   return <>
-    <PanelHeader eyebrow="MAPA POR COLABORADOR" title="Quem tem EPI e quem precisa de atendimento"
+    <PanelHeader eyebrow="Mapa por colaborador" title="Quem tem EPI e quem precisa de atendimento"
       description="A situação compara os EPIs em poder do colaborador com a regra do cargo e departamento." />
     <div className={styles.filterBar}>
-      <label><span>BUSCAR</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Nome, matrícula, cargo…" /></label>
-      <label><span>SITUAÇÃO</span><select value={status} onChange={(event) => setStatus(event.target.value)}>
+      <label><span>Buscar</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Nome, matrícula, cargo…" /></label>
+      <label><span>Situação</span><select value={status} onChange={(event) => setStatus(event.target.value)}>
         <option value="">Todas</option>
         {Object.entries(epiComplianceStatusLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
       </select></label>
@@ -179,7 +179,7 @@ export function EpiRequirementsPanel({ companyId, requirements, departments, pos
 }) {
   const [editing, setEditing] = useState<EpiRequirement | null>(null);
   return <div className={styles.requirementsStack}>
-    <PanelHeader eyebrow="REGRAS DE COBERTURA" title="EPIs obrigatórios por lotação"
+    <PanelHeader eyebrow="Regras de cobertura" title="EPIs obrigatórios por lotação"
       description="Defina por empresa, unidade, departamento e/ou cargo. Deixe qualquer um em branco para aplicar a todos daquele recorte."
       action={<button className={styles.secondaryButton} onClick={onReload}><RefreshCw aria-hidden="true" /> Atualizar</button>} />
     {canManage ? <RequirementEditor key={editing?.id ?? "new"} companyId={companyId} requirement={editing}
@@ -234,14 +234,14 @@ function RequirementEditor({ companyId, requirement, departments, positions, est
   return <form className={styles.requirementEditor} onSubmit={(event) => void submit(event)}>
     <header><div><span>{requirement ? "EDITAR REGRA" : "NOVA REGRA"}</span><h3>{requirement ? requirement.productName : "Definir EPI obrigatório"}</h3></div>{requirement && <button type="button" className={styles.closeButton} onClick={onCancel} aria-label="Cancelar edição"><XCircle aria-hidden="true" /></button>}</header>
     <div className={styles.stockOperationForm}>
-      <label><span>UNIDADE</span><select value={establishmentId} onChange={(event) => setEstablishmentId(event.target.value)} disabled={Boolean(requirement)}><option value="">Todas</option>{establishments.filter((item) => item.status === "active").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-      <label><span>DEPARTAMENTO</span><select value={departmentId} onChange={(event) => setDepartmentId(event.target.value)} disabled={Boolean(requirement)}><option value="">Todos</option>{departments.filter((item) => item.status === "active").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-      <label><span>CARGO</span><select value={positionId} onChange={(event) => setPositionId(event.target.value)} disabled={Boolean(requirement)}><option value="">Todos</option>{positions.filter((item) => item.status === "active").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+      <label><span>Unidade</span><select value={establishmentId} onChange={(event) => setEstablishmentId(event.target.value)} disabled={Boolean(requirement)}><option value="">Todas</option>{establishments.filter((item) => item.status === "active").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+      <label><span>Departamento</span><select value={departmentId} onChange={(event) => setDepartmentId(event.target.value)} disabled={Boolean(requirement)}><option value="">Todos</option>{departments.filter((item) => item.status === "active").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+      <label><span>Cargo</span><select value={positionId} onChange={(event) => setPositionId(event.target.value)} disabled={Boolean(requirement)}><option value="">Todos</option>{positions.filter((item) => item.status === "active").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
       <label><span>EPI *</span><select required value={productId} onChange={(event) => setProductId(event.target.value)} disabled={Boolean(requirement)}><option value="">Selecione</option>{products.filter((item) => item.status !== "inactive").map((item) => <option key={item.id} value={item.id}>{item.name} · {item.size}</option>)}</select></label>
-      <label><span>QUANTIDADE *</span><input required type="number" min="1" max="100" value={quantity} onChange={(event) => setQuantity(event.target.value)} /></label>
-      <label><span>TROCAR A CADA (DIAS)</span><input type="number" min="0" max="3650" value={replacementDays} onChange={(event) => setReplacementDays(event.target.value)} /></label>
-      <label><span>ALERTAR ANTES (DIAS)</span><input type="number" min="0" max="365" value={warningDays} onChange={(event) => setWarningDays(event.target.value)} /></label>
-      <label className={styles.formWide}><span>OBSERVAÇÃO</span><input maxLength={1000} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Ex.: obrigatório em atividades com risco de queda" /></label>
+      <label><span>Quantidade *</span><input required type="number" min="1" max="100" value={quantity} onChange={(event) => setQuantity(event.target.value)} /></label>
+      <label><span>Trocar a cada (dias)</span><input type="number" min="0" max="3650" value={replacementDays} onChange={(event) => setReplacementDays(event.target.value)} /></label>
+      <label><span>Alertar antes (dias)</span><input type="number" min="0" max="365" value={warningDays} onChange={(event) => setWarningDays(event.target.value)} /></label>
+      <label className={styles.formWide}><span>Observação</span><input maxLength={1000} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Ex.: obrigatório em atividades com risco de queda" /></label>
       <div className={styles.commandActions}>{requirement && <button type="button" className={styles.secondaryButton} onClick={onCancel}>Cancelar</button>}<button className={styles.primaryButton} disabled={busy || !productId}><Plus aria-hidden="true" /> {busy ? "Salvando…" : requirement ? "Salvar regra" : "Adicionar regra"}</button></div>
     </div>
   </form>;

@@ -83,8 +83,9 @@ test("o cabeçalho da tela nomeia a seção aberta, e não duas dentre nove", ()
      havia o painel por baixo. A exigência é a mesma: o nome vem do catálogo, e
      não de um texto escrito à mão para cada ramo. */
   assert.match(source, /<h1 id="admin-page-title">\{settingsSectionMeta\[settingsSection\]\.title\}<\/h1>/u);
-  assert.match(source, /<span className="dashboard-eyebrow">\{settingsSectionMeta\[settingsSection\]\.group\}<\/span>/u);
-  assert.match(source, /\{settingsSectionMeta\[settingsSection\]\.description\}/u);
+  // Só o título: a aba já diz "Administração", e grupo, caminho e descrição
+  // repetiam o que o menu de seções ao lado mostra.
+  assert.doesNotMatch(source, /className="admin-breadcrumb"/u);
   const meta = source.slice(source.indexOf("const settingsSectionMeta"), source.indexOf("\n};", source.indexOf("const settingsSectionMeta")));
   const titulos = [...meta.matchAll(/title: "([^"]+)"/gu)].map((match) => match[1]);
   assert.equal(titulos.length, declaradas.length, "há seção sem nome no cabeçalho");
@@ -135,9 +136,10 @@ test("a tela abre por um caminho só, e o botão do topo diz o que há atrás de
   // A seção passou a poder vir do endereço (§46, /painel/configuracoes/...),
   // e "security" continua sendo o padrão de quem chega sem seção nenhuma.
   assert.match(source, /useState<SettingsSection>\(\s*\(initialLocation\.settings \?\? "security"\)/u);
-  // O rótulo antigo dizia só "Perfil e segurança" enquanto escondia empresas,
-  // usuários, colunas e automações atrás do mesmo botão.
-  assert.match(source, /aria-label=\{isAdmin \? "Abrir configurações do workspace e do perfil" : "Abrir perfil e segurança"\}/u);
+  // O menu da conta separa as duas portas por nome: "Administração" para quem
+  // administra, "Perfil e segurança" para todos.
+  assert.match(source, /isAdmin=\{isAdmin\} onAdministration=/u);
+  assert.match(source, /onSecurity=\{openSecuritySettings\}/u);
 });
 
 test("a tela de empresas edita, e a edição chega ao PATCH da API", async () => {

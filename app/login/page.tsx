@@ -25,7 +25,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
     <main className="auth-page auth-page-solo">
       <section className="auth-solo-card">
         <div className="auth-solo-logo">
-          <VinculatoLogo size={52} tone="light" priority />
+          <VinculatoLogo size={32} tone="color" priority />
         </div>
 
         <div className="auth-form-card">

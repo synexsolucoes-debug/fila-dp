@@ -61,7 +61,6 @@ export function EpiDialog({ editor, products, employees, deliveries, companyId, 
       <form onSubmit={handleSubmit}>
         <header className={styles.drawerHeader}>
           <div>
-            <span className={styles.eyebrow}>{meta.eyebrow}</span>
             <h2 id="epi-dialog-title">{meta.title}</h2>
             <p>{meta.description}</p>
           </div>
@@ -106,24 +105,24 @@ function dialogMeta(editor: NonNullable<EpiEditor>) {
   switch (editor.kind) {
     case "product":
       return editor.product
-        ? { eyebrow: "CADASTRO DE EPI", title: editor.product.name, description: "Altere os dados do equipamento. O ajuste de estoque exige motivo.", confirm: "Salvar alterações" }
-        : { eyebrow: "CADASTRO DE EPI", title: "Novo EPI", description: "Registre o equipamento, o CA e a quantidade que entra em estoque.", confirm: "Cadastrar EPI" };
+        ? { eyebrow: "Cadastro de EPI", title: editor.product.name, description: "Altere os dados do equipamento. O ajuste de estoque exige motivo.", confirm: "Salvar alterações" }
+        : { eyebrow: "Cadastro de EPI", title: "Novo EPI", description: "Registre o equipamento, o CA e a quantidade que entra em estoque.", confirm: "Cadastrar EPI" };
     case "delivery":
-      return { eyebrow: "ENTREGA AO COLABORADOR", title: "Entregar EPI", description: "A quantidade sai do estoque e passa a constar com o colaborador.", confirm: "Registrar entrega" };
+      return { eyebrow: "Entrega ao colaborador", title: "Entregar EPI", description: "A quantidade sai do estoque e passa a constar com o colaborador.", confirm: "Registrar entrega" };
     case "return":
-      return { eyebrow: "DEVOLUÇÃO", title: "Receber devolução", description: "A condição informada decide o destino do equipamento.", confirm: "Registrar devolução" };
+      return { eyebrow: "Devolução", title: "Receber devolução", description: "A condição informada decide o destino do equipamento.", confirm: "Registrar devolução" };
     case "damage":
-      return { eyebrow: "TROCA POR DANIFICAÇÃO", title: "Registrar danificação", description: "Descreva o ocorrido e decida o que acontece com o equipamento.", confirm: "Registrar decisão" };
+      return { eyebrow: "Troca por danificação", title: "Registrar danificação", description: "Descreva o ocorrido e decida o que acontece com o equipamento.", confirm: "Registrar decisão" };
     case "disposal":
-      return { eyebrow: "DESCARTE", title: "Abrir descarte", description: "O registro entra na janela como “Aguardando descarte”.", confirm: "Abrir descarte" };
+      return { eyebrow: "Descarte", title: "Abrir descarte", description: "O registro entra na janela como “Aguardando descarte”.", confirm: "Abrir descarte" };
     case "disposal-decision":
       return editor.action === "confirm"
-        ? { eyebrow: "DESCARTE", title: "Confirmar descarte", description: "Depois de confirmado, o EPI não volta ao estoque e o registro fica imutável.", confirm: "Confirmar descarte" }
+        ? { eyebrow: "Descarte", title: "Confirmar descarte", description: "Depois de confirmado, o EPI não volta ao estoque e o registro fica imutável.", confirm: "Confirmar descarte" }
         : editor.action === "cancel"
-          ? { eyebrow: "DESCARTE", title: "Cancelar descarte", description: "O registro é encerrado sem descarte. Informe o motivo.", confirm: "Cancelar descarte" }
-          : { eyebrow: "DESCARTE", title: "Reavaliar equipamento", description: "O EPI volta para higienização em vez de ser descartado.", confirm: "Enviar para reavaliação" };
+          ? { eyebrow: "Descarte", title: "Cancelar descarte", description: "O registro é encerrado sem descarte. Informe o motivo.", confirm: "Cancelar descarte" }
+          : { eyebrow: "Descarte", title: "Reavaliar equipamento", description: "O EPI volta para higienização em vez de ser descartado.", confirm: "Enviar para reavaliação" };
     case "discount":
-      return { eyebrow: "ANÁLISE DE DESCONTO", title: "Decidir análise", description: "A decisão é registrada como parecer. Nenhum valor é lançado em folha por aqui.", confirm: "Registrar decisão" };
+      return { eyebrow: "Análise de desconto", title: "Decidir análise", description: "A decisão é registrada como parecer. Nenhum valor é lançado em folha por aqui.", confirm: "Registrar decisão" };
   }
 }
 
@@ -194,31 +193,31 @@ function ProductForm({ product }: { product?: EpiProduct }) {
       <span><strong>Cadastro do grupo inteiro</strong>Este EPI, seu código e todo o saldo ficam disponíveis para o workspace, sem vínculo com um CNPJ.</span>
     </div>
     <div className={styles.formGrid}>
-      <label><span>NOME DO EPI<Required /></span><input name="name" defaultValue={product?.name ?? ""} required maxLength={160} /></label>
-      <label><span>TIPO<Required /></span><select name="epiType" defaultValue={product?.epiType ?? "head"}>
+      <label><span>Nome do EPI<Required /></span><input name="name" defaultValue={product?.name ?? ""} required maxLength={160} /></label>
+      <label><span>Tipo<Required /></span><select name="epiType" defaultValue={product?.epiType ?? "head"}>
         {epiTypes.map((item) => <option key={item} value={item}>{epiTypeLabels[item]}</option>)}
       </select></label>
-      <label><span>NÚMERO DO CA<Required /></span><input name="caNumber" defaultValue={product?.caNumber ?? ""} required maxLength={40} /></label>
-      <label><span>TAMANHO<Required /></span><input name="size" defaultValue={product?.size ?? ""} required maxLength={40} /></label>
-      <label><span>MARCA<Required /></span><input name="brand" defaultValue={product?.brand ?? ""} required maxLength={120} /></label>
-      <label><span>MODELO<Required /></span><input name="model" defaultValue={product?.model ?? ""} required maxLength={120} /></label>
-      <label><span>VALOR UNITÁRIO<Required /></span><input name="unitValue" type="number" min="0" step="0.01" defaultValue={product?.unitValue ?? 0} required /></label>
-      <label><span>QUANTIDADE EM ESTOQUE<Required /></span>
+      <label><span>Número do CA<Required /></span><input name="caNumber" defaultValue={product?.caNumber ?? ""} required maxLength={40} /></label>
+      <label><span>Tamanho<Required /></span><input name="size" defaultValue={product?.size ?? ""} required maxLength={40} /></label>
+      <label><span>Marca<Required /></span><input name="brand" defaultValue={product?.brand ?? ""} required maxLength={120} /></label>
+      <label><span>Modelo<Required /></span><input name="model" defaultValue={product?.model ?? ""} required maxLength={120} /></label>
+      <label><span>Valor unitário<Required /></span><input name="unitValue" type="number" min="0" step="0.01" defaultValue={product?.unitValue ?? 0} required /></label>
+      <label><span>Quantidade em estoque<Required /></span>
         <input name="stockQuantity" type="number" min="0" step="1" value={stock} readOnly={Boolean(product)} onChange={(event) => setStock(event.target.value)} required />
         {product && <em className={styles.fieldHint}>Use Entrada ou Transferência na aba Estoque para alterar o saldo por local.</em>}
       </label>
-      <label><span>DATA DO CADASTRO<Required /></span><input name="registeredOn" type="date" defaultValue={product?.registeredOn || today()} required /></label>
-      <label><span>STATUS DO CADASTRO<Required /></span><select name="status" defaultValue={product?.status === "inactive" ? "inactive" : "active"}>
+      <label><span>Data do cadastro<Required /></span><input name="registeredOn" type="date" defaultValue={product?.registeredOn || today()} required /></label>
+      <label><span>Status do cadastro<Required /></span><select name="status" defaultValue={product?.status === "inactive" ? "inactive" : "active"}>
         <option value="active">Ativo</option><option value="inactive">Inativo</option>
       </select></label>
-      <label><span>MOTIVO DO CADASTRO<Required /></span><select name="registrationReason" defaultValue={product?.registrationReason ?? "initial_purchase"}>
+      <label><span>Motivo do cadastro<Required /></span><select name="registrationReason" defaultValue={product?.registrationReason ?? "initial_purchase"}>
         {epiRegistrationReasons.map((item) => <option key={item} value={item}>{epiRegistrationReasonLabels[item]}</option>)}
       </select></label>
-      <label><span>VALIDADE DO PRODUTO</span><input name="productExpiresOn" type="date" defaultValue={product?.productExpiresOn ?? ""} /></label>
-      <label><span>VALIDADE DO CA</span><input name="caExpiresOn" type="date" defaultValue={product?.caExpiresOn ?? ""} /></label>
-      <label><span>FORNECEDOR</span><input name="supplier" defaultValue={product?.supplier ?? ""} maxLength={160} /></label>
-      <label><span>CÓDIGO INTERNO</span><input name="internalCode" defaultValue={product?.internalCode ?? ""} maxLength={80} /></label>
-      <label className={styles.formWide}><span>OBSERVAÇÃO<Required /></span>
+      <label><span>Validade do produto</span><input name="productExpiresOn" type="date" defaultValue={product?.productExpiresOn ?? ""} /></label>
+      <label><span>Validade do CA</span><input name="caExpiresOn" type="date" defaultValue={product?.caExpiresOn ?? ""} /></label>
+      <label><span>Fornecedor</span><input name="supplier" defaultValue={product?.supplier ?? ""} maxLength={160} /></label>
+      <label><span>Código interno</span><input name="internalCode" defaultValue={product?.internalCode ?? ""} maxLength={80} /></label>
+      <label className={styles.formWide}><span>Observação<Required /></span>
         <textarea name="notes" defaultValue={product?.notes ?? ""} required maxLength={2000} />
       </label>
     </div>
@@ -248,33 +247,33 @@ function DeliveryForm({ products, employees, preselected, preselectedEmployee, c
           </option>)}
         </select>
       </label>
-      <label className={styles.formWide}><span>COLABORADOR<Required /></span>
+      <label className={styles.formWide}><span>Colaborador<Required /></span>
         <select name="employeeId" value={employeeId} onChange={(event) => setEmployeeId(event.target.value)} required>
           {preselectedEmployee && !employees.some((item) => item.id === preselectedEmployee.id)
             && <option value={preselectedEmployee.id}>{preselectedEmployee.name} · {preselectedEmployee.registrationNumber}</option>}
           {employees.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.registrationNumber}</option>)}
         </select>
       </label>
-      <label><span>CARGO</span><input name="positionName" key={employee?.id} defaultValue={employee?.positionName ?? ""} maxLength={160} /></label>
-      <label><span>SETOR</span><input name="departmentName" key={`${employee?.id}-dep`} defaultValue={employee?.departmentName ?? ""} maxLength={160} /></label>
-      <label><span>DATA DA ENTREGA<Required /></span><input name="deliveredOn" type="date" defaultValue={today()} required /></label>
-      <label><span>QUANTIDADE<Required /></span>
+      <label><span>Cargo</span><input name="positionName" key={employee?.id} defaultValue={employee?.positionName ?? ""} maxLength={160} /></label>
+      <label><span>Setor</span><input name="departmentName" key={`${employee?.id}-dep`} defaultValue={employee?.departmentName ?? ""} maxLength={160} /></label>
+      <label><span>Data da entrega<Required /></span><input name="deliveredOn" type="date" defaultValue={today()} required /></label>
+      <label><span>Quantidade<Required /></span>
         <input name="quantity" type="number" min="1" max={product?.stockQuantity || 1} step="1" defaultValue={1} required />
       </label>
       <label><span>CA</span><input name="caNumber" key={`${productId}-ca`} defaultValue={product?.caNumber ?? ""} maxLength={40} /></label>
-      <label><span>TAMANHO</span><input name="size" key={`${productId}-size`} defaultValue={product?.size ?? ""} maxLength={40} /></label>
-      <label><span>VALOR UNITÁRIO</span>
+      <label><span>Tamanho</span><input name="size" key={`${productId}-size`} defaultValue={product?.size ?? ""} maxLength={40} /></label>
+      <label><span>Valor unitário</span>
         <input name="unitValue" key={`${productId}-value`} type="number" min="0" step="0.01" defaultValue={product?.unitValue ?? 0} />
       </label>
-      <label><span>MOTIVO DA ENTREGA<Required /></span><select name="deliveryReason" defaultValue="first_delivery">
+      <label><span>Motivo da entrega<Required /></span><select name="deliveryReason" defaultValue="first_delivery">
         {epiRegistrationReasons.map((item) => <option key={item} value={item}>{epiRegistrationReasonLabels[item]}</option>)}
       </select></label>
-      <label><span>STATUS DA ENTREGA<Required /></span><select name="status" defaultValue="pending_signature">
+      <label><span>Status da entrega<Required /></span><select name="status" defaultValue="pending_signature">
         {(["delivered", "pending_signature", "signed"] as const).map((item) =>
           <option key={item} value={item}>{epiDeliveryStatusLabels[item]}</option>)}
       </select></label>
-      <label><span>ASSINATURA DO COLABORADOR</span><input name="signatureName" maxLength={160} placeholder="Quem assinou o termo, se já assinado" /></label>
-      <label className={styles.formWide}><span>OBSERVAÇÃO</span><textarea name="notes" maxLength={2000} /></label>
+      <label><span>Assinatura do colaborador</span><input name="signatureName" maxLength={160} placeholder="Quem assinou o termo, se já assinado" /></label>
+      <label className={styles.formWide}><span>Observação</span><textarea name="notes" maxLength={2000} /></label>
     </div>
     <div className={styles.consequence}>
       <strong>O que acontece ao gravar</strong>
@@ -303,17 +302,17 @@ function ReturnForm({ delivery, condition, onCondition, preview }: {
       <div><dt>Em poder do colaborador</dt><dd>{delivery.outstanding}</dd></div>
     </dl>
     <div className={styles.formGrid}>
-      <label><span>DATA DA DEVOLUÇÃO<Required /></span><input name="returnedOn" type="date" defaultValue={today()} required /></label>
-      <label><span>QUANTIDADE<Required /></span>
+      <label><span>Data da devolução<Required /></span><input name="returnedOn" type="date" defaultValue={today()} required /></label>
+      <label><span>Quantidade<Required /></span>
         <input name="quantity" type="number" min="1" max={delivery.outstanding} step="1" defaultValue={delivery.outstanding} required />
       </label>
-      <label className={styles.formWide}><span>CONDIÇÃO DO EPI<Required /></span>
+      <label className={styles.formWide}><span>Condição do EPI<Required /></span>
         <select name="epiCondition" value={condition} onChange={(event) => onCondition(event.target.value as EpiReturnCondition)} required>
           {epiReturnConditions.map((item) => <option key={item} value={item}>{epiReturnConditionLabels[item]}</option>)}
         </select>
       </label>
-      <label><span>RESPONSÁVEL PELO RECEBIMENTO</span><input name="receivedBy" maxLength={120} /></label>
-      <label className={styles.formWide}><span>OBSERVAÇÃO</span><textarea name="notes" maxLength={2000} /></label>
+      <label><span>Responsável pelo recebimento</span><input name="receivedBy" maxLength={120} /></label>
+      <label className={styles.formWide}><span>Observação</span><textarea name="notes" maxLength={2000} /></label>
     </div>
     <div className={styles.consequence}>
       <strong>Destino desta devolução</strong>
@@ -345,41 +344,41 @@ function DamageForm({ products, employees, deliveries, delivery, decision, onDec
   return <>
     <input type="hidden" name="companyId" value={delivery?.companyId ?? companyId} />
     <div className={styles.formGrid}>
-      <label className={styles.formWide}><span>COLABORADOR<Required /></span>
+      <label className={styles.formWide}><span>Colaborador<Required /></span>
         <select name="employeeId" defaultValue={delivery?.employeeId ?? employees[0]?.id ?? ""} required>
           {employees.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.registrationNumber}</option>)}
         </select>
       </label>
-      <label className={styles.formWide}><span>EPI DANIFICADO<Required /></span>
+      <label className={styles.formWide}><span>EPI danificado<Required /></span>
         <select name="productId" value={productId} onChange={(event) => setProductId(event.target.value)} required>
           {products.map((item) => <option key={item.id} value={item.id}>{item.name} · CA {item.caNumber} · {item.size}</option>)}
         </select>
       </label>
-      <label className={styles.formWide}><span>ENTREGA DE ORIGEM</span>
+      <label className={styles.formWide}><span>Entrega de origem</span>
         <select name="deliveryId" defaultValue={delivery?.id ?? ""}>
           <option value="">Sem entrega vinculada</option>
           {deliveries.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
         </select>
       </label>
-      <label><span>DATA DA OCORRÊNCIA<Required /></span><input name="occurredOn" type="date" defaultValue={today()} required /></label>
-      <label><span>QUANTIDADE<Required /></span>
+      <label><span>Data da ocorrência<Required /></span><input name="occurredOn" type="date" defaultValue={today()} required /></label>
+      <label><span>Quantidade<Required /></span>
         <input name="quantity" type="number" min="1" max={delivery?.outstanding || undefined} step="1" defaultValue={1} required />
       </label>
-      <label className={styles.formWide}><span>MOTIVO DA DANIFICAÇÃO<Required /></span>
+      <label className={styles.formWide}><span>Motivo da danificação<Required /></span>
         <select name="damageReason" defaultValue="natural_wear" required>
           {epiDamageReasons.map((item) => <option key={item} value={item}>{epiDamageReasonLabels[item]}</option>)}
         </select>
       </label>
-      <label className={styles.formWide}><span>DESCRIÇÃO DO OCORRIDO<Required /></span>
+      <label className={styles.formWide}><span>Descrição do ocorrido<Required /></span>
         <textarea name="description" required maxLength={2000} placeholder="O que aconteceu, quando e em que circunstância." />
       </label>
-      <label className={styles.formWide}><span>DECISÃO<Required /></span>
+      <label className={styles.formWide}><span>Decisão<Required /></span>
         <select name="decision" value={decision} onChange={(event) => onDecision(event.target.value as EpiDamageDecision)} required>
           {epiDamageDecisions.map((item) => <option key={item} value={item}>{epiDamageDecisionLabels[item]}</option>)}
         </select>
       </label>
       {preview.deliverReplacement && <>
-        <label className={styles.formWide}><span>NOVO EPI ENTREGUE{decision === "exchange_without_discount" && <Required />}</span>
+        <label className={styles.formWide}><span>Novo EPI entregue{decision === "exchange_without_discount" && <Required />}</span>
           <select name="replacementProductId" defaultValue="">
             <option value="">Não entregar substituto agora</option>
             {replacements.map((item) => <option key={item.id} value={item.id}>
@@ -387,11 +386,11 @@ function DamageForm({ products, employees, deliveries, delivery, decision, onDec
             </option>)}
           </select>
         </label>
-        <label><span>CA DO NOVO EPI</span><input name="replacementCaNumber" maxLength={40} /></label>
-        <label><span>TAMANHO DO NOVO EPI</span><input name="replacementSize" maxLength={40} /></label>
-        <label><span>QUANTIDADE DO NOVO EPI</span><input name="replacementQuantity" type="number" min="0" step="1" defaultValue={1} /></label>
+        <label><span>CA do novo EPI</span><input name="replacementCaNumber" maxLength={40} /></label>
+        <label><span>Tamanho do novo EPI</span><input name="replacementSize" maxLength={40} /></label>
+        <label><span>Quantidade do novo EPI</span><input name="replacementQuantity" type="number" min="0" step="1" defaultValue={1} /></label>
       </>}
-      <label className={styles.formWide}><span>OBSERVAÇÃO</span><textarea name="notes" maxLength={2000} /></label>
+      <label className={styles.formWide}><span>Observação</span><textarea name="notes" maxLength={2000} /></label>
     </div>
     <div className={styles.consequence}>
       <strong>O que esta decisão provoca</strong>
@@ -424,18 +423,18 @@ function DisposalForm({ products, preselected, companyId }: { products: EpiProdu
           </option>)}
         </select>
       </label>
-      <label><span>DATA DO DESCARTE<Required /></span><input name="disposalDate" type="date" defaultValue={today()} required /></label>
-      <label><span>QUANTIDADE<Required /></span>
+      <label><span>Data do descarte<Required /></span><input name="disposalDate" type="date" defaultValue={today()} required /></label>
+      <label><span>Quantidade<Required /></span>
         <input name="quantity" type="number" min="1" max={stock || 1} step="1" defaultValue={Math.min(1, stock) || 1} required />
       </label>
       <label><span>CA</span><input name="caNumber" key={`${productId}-ca`} defaultValue={product?.caNumber ?? preselected?.caNumber ?? ""} maxLength={40} /></label>
-      <label><span>TAMANHO</span><input name="size" key={`${productId}-size`} defaultValue={product?.size ?? preselected?.size ?? ""} maxLength={40} /></label>
-      <label className={styles.formWide}><span>MOTIVO DO DESCARTE<Required /></span>
+      <label><span>Tamanho</span><input name="size" key={`${productId}-size`} defaultValue={product?.size ?? preselected?.size ?? ""} maxLength={40} /></label>
+      <label className={styles.formWide}><span>Motivo do descarte<Required /></span>
         <select name="disposalReason" defaultValue="natural_wear" required>
           {epiDisposalReasons.map((item) => <option key={item} value={item}>{epiDisposalReasonLabels[item]}</option>)}
         </select>
       </label>
-      <label className={styles.formWide}><span>OBSERVAÇÃO</span><textarea name="notes" maxLength={2000} /></label>
+      <label className={styles.formWide}><span>Observação</span><textarea name="notes" maxLength={2000} /></label>
     </div>
     <div className={styles.consequence}>
       <strong>O que acontece ao gravar</strong>
@@ -489,21 +488,21 @@ function DiscountForm({ discount, decision, onDecision }: {
     </dl>
     {discount.reasonNote && <p className={styles.fieldHint}>{discount.reasonNote}</p>}
     <div className={styles.formGrid}>
-      <label className={styles.formWide}><span>DECISÃO<Required /></span>
+      <label className={styles.formWide}><span>Decisão<Required /></span>
         <select name="decision" value={decision} onChange={(event) => onDecision(event.target.value as EpiDiscountDecision)} required>
           {epiDiscountDecisions.map((item) => <option key={item} value={item}>{epiDiscountDecisionLabels[item]}</option>)}
         </select>
       </label>
-      {needsValue && <label><span>VALOR DO DESCONTO<Required /></span>
+      {needsValue && <label><span>Valor do desconto<Required /></span>
         <input name="decidedValue" type="number" min="0.01" max={discount.totalValue} step="0.01" required />
         <em className={styles.fieldHint}>No máximo {currency(discount.totalValue)}.</em>
       </label>}
-      {createsMovement && <label><span>COMPETÊNCIA DE REFERÊNCIA<Required /></span>
+      {createsMovement && <label><span>Competência de referência<Required /></span>
         <input name="competence" type="month" defaultValue={new Date().toISOString().slice(0, 7)} required />
         <em className={styles.fieldHint}>Cria uma movimentação em rascunho na Central; não desconta automaticamente.</em>
       </label>}
       <label className={styles.formWide}>
-        <span>PARECER{(decision === "no_discount" || decision === "request_more_info") && <Required />}</span>
+        <span>Parecer{(decision === "no_discount" || decision === "request_more_info") && <Required />}</span>
         <textarea name="comment" required={decision === "no_discount" || decision === "request_more_info"} maxLength={2000} />
       </label>
     </div>

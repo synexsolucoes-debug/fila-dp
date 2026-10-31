@@ -115,7 +115,7 @@ function SectionState({ loading, error, reload, title }: { loading: boolean; err
 }
 
 export function ErpDpView({
-  companyId, scopeLabel, canManageMovements, canManageEmployees, canReadMovements, canReadCycles, canCheckEsocial, canReadPayroll, canManagePayroll, onExit,
+  companyId, scopeLabel, canManageMovements, canManageEmployees, canReadMovements, canReadCycles, canCheckEsocial, canReadPayroll, canManagePayroll,
 }: {
   companyId: string;
   scopeLabel: string;
@@ -131,7 +131,6 @@ export function ErpDpView({
   canReadPayroll: boolean;
   /** Gravar a remuneração — `payroll.manage`. */
   canManagePayroll: boolean;
-  onExit: () => void;
 }) {
   const [section, setSection] = useState<Section>("overview");
   /* A ficha pode ser aberta de outra tela do ERP já na aba certa — Prazos
@@ -152,7 +151,6 @@ export function ErpDpView({
           <Icon aria-hidden="true" /><span><strong>{item.label}</strong><small>{item.sap}</small></span>
         </button></li>;
       })}</ul>
-      <button type="button" className={styles.exit} onClick={onExit}>Voltar ao Vinculato</button>
     </nav>
     <section className={styles.work} aria-labelledby="erp-section-title">
       <header className={styles.workHeader}>
@@ -268,7 +266,7 @@ function RecordSection({ companyId, target, canManage, canReadPayroll, canManage
       text="A ficha funcional mostra a pessoa numa data-base, o contrato com os prazos e a correção do registro vigente." />}
     {selected && <div className={styles.stack}>
       <div className={styles.recordHead}>
-        <div><small>MATRÍCULA {text(selected.registration_number)} · {text(selected.company_name)}</small>
+        <div><small>Matrícula {text(selected.registration_number)} · {text(selected.company_name)}</small>
           <h2>{text(selected.social_name) || text(selected.full_name)}</h2>
           <span>Admissão {dateLabel(selected.admission_date)} · {text(selected.position_name) || "Sem cargo"} · {text(selected.department_name) || "Sem departamento"}</span></div>
         <div className={styles.actionsRow}>
@@ -375,7 +373,7 @@ function ReturnToWorkAction({ companyId, onDone }: { companyId: string; onDone: 
 
   const people = onLeave.data?.employees ?? [];
   return <form className={styles.actionCard} onSubmit={(event) => void submit(event)}>
-    <header><span>MEDIDA</span><strong>Retorno de afastamento</strong></header>
+    <header><span>Medida</span><strong>Retorno de afastamento</strong></header>
     {error && <ErrorBanner title="O retorno não foi registrado" message={error} />}
     {people.length ? <div className={styles.toolbar}>
       <label className={styles.grow}><span>Colaborador afastado</span>

@@ -260,7 +260,56 @@ Data · sincronização**
 - Telas que desenham o próprio cabeçalho (`header.ownHeader`) não são
   afetadas.
 
-### 5.4 Travas
+### 5.4 Launchpad na janela de módulos (Fiori §2.2, próximo passo 2)
+
+- Tiles agrupados pelo tipo de trabalho — **Processos, Áreas, Sistemas,
+  Apoio** —, que é o `kind` de `lib/process-navigation.ts` mais o ERP DP como
+  sistema.
+- Número vivo no rodapé do tile, calculado do snapshot já carregado (nenhuma
+  consulta a mais): demandas abertas na Operação DP, competências em andamento
+  em Pagamentos, obrigações vencidas no ERP DP (em vermelho quando há). Módulo
+  sem número honesto fica sem número.
+- Campo **Buscar módulo** (sem acento e sem caixa); Enter abre o primeiro
+  resultado. Recebe o foco só com ponteiro fino — no celular abriria o teclado
+  por cima dos tiles.
+- A entrada no sistema não tem mais abertura animada do logotipo: o login vai
+  direto para esta janela.
+
+### 5.5 Cálculos como object page (próximo passo 1)
+
+- Cabeçalho de objeto com nome inteiro, matrícula e empresa, no lugar de
+  "matrícula · nome".
+- Tipo de cálculo em controle segmentado; a rescisão separa **Desligamento**
+  de **Saldos e médias** (opcionais).
+- **Rodapé de ações** preso à área visível (footer toolbar) com Calcular; no
+  celular volta ao fluxo para não disputar a base da tela com a navegação.
+- O líquido é a resposta da tela: número grande, sozinho, com proventos,
+  descontos e FGTS ao lado. A tela rola até o resultado depois do cálculo.
+
+### 5.6 Abas de módulos (ERP de mesa) e faixa única
+
+O pedido do cliente foi "sistematização de janelas": o modelo escolhido é o
+dos ERPs de mesa (Centi, SAP GUI), com uma aba por módulo aberto.
+
+- **Sem barra lateral.** Com a janela de módulos (§5.4) e as abas, ela
+  repetia a mesma navegação pela terceira vez. A faixa superior é única:
+  marca, **Módulos**, abas abertas e, à direita, empresa, busca, avisos,
+  ajuda e conta.
+- **Cada módulo aberto vira aba** e guarda a última tela; a tela continua
+  montada enquanto a aba existir, então trocar de aba não perde filtro,
+  rolagem nem o que estava preenchido (`keepAlive` em `WorkspaceApp.tsx`).
+  ERP DP e Administração também são abas. Até 8, por grupo, no navegador.
+- **Dentro do módulo**, as telas são as abas do cabeçalho do processo.
+- **Seletor de empresa** próprio (nome curto, razão social e CNPJ, busca) no
+  lugar do `<select>` nativo com "★" e "↳".
+- **Menu da conta** com opções nomeadas — tema, densidade, grupo,
+  Administração, perfil, trocar de conta, sair — no lugar dos cinco ícones
+  sem rótulo do pé da barra lateral.
+- Padrão visual comum em `app/vinculato-shell.css`: uma família tipográfica,
+  títulos de 20px, superfícies chapadas, raio 6–8px, caixa normal (sem
+  rótulos em caixa alta), texto mínimo de 11–12px e um acento só.
+
+### 5.7 Travas
 
 `tests/density-preference.test.mts`: vocabulário da densidade, ordem de carga
 da folha, ausência de cor crua na camada e os seis rótulos da barra de status.
@@ -287,11 +336,11 @@ da folha, ausência de cor crua na camada e os seis rótulos da barra de status.
 
 ## 7. Próximos passos
 
-1. **Rodapé de ações (footer toolbar)** nos formulários longos — cadastro de
-   colaborador, ficha de admissão: Gravar/Cancelar presos ao rodapé enquanto
-   houver alteração não gravada.
-2. **Número vivo nos tiles** da janela de módulos (pendências por módulo),
-   como o KPI tile do launchpad.
+1. **Rodapé de ações (footer toolbar)** nos formulários longos — feito em
+   Cálculos (§5.5); faltam cadastro de colaborador e ficha de admissão:
+   Gravar/Cancelar presos ao rodapé enquanto houver alteração não gravada.
+2. ~~**Número vivo nos tiles** da janela de módulos~~ — feito (§5.4). Falta
+   número nos módulos de área (EPI, Segurança), que hoje não vêm no snapshot.
 3. **Variantes em Cadastros e Folha**, reaproveitando os recortes salvos do
    quadro.
 4. **Seletor de competência na barra de status** (clicar na competência abre a

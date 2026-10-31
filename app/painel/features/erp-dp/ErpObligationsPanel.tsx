@@ -50,7 +50,7 @@ export function ErpObligationsPanel({ runId, canManage }: { runId: string; canMa
   const file = (kind: string) => `/api/erp-dp/payroll-runs/${encodeURIComponent(runId)}/exports?kind=${kind}`;
 
   return <section className={styles.requirementEditor} aria-labelledby="obligations-title">
-    <header><div><span>FGTS DIGITAL · DCTFWEB · CNAB 240</span><h3 id="obligations-title">Obrigações e pagamento</h3></div></header>
+    <header><div><span>FGTS digital · DCTFWEB · cnab 240</span><h3 id="obligations-title">Obrigações e pagamento</h3></div></header>
     <div className={styles.tableWrap}><table className={styles.table}>
       <caption className="sr-only">Guias e pagamentos da folha</caption>
       <thead><tr><th>Guia</th><th>Onde</th><th className={styles.num}>Valor</th><th>Vencimento</th><th>Detalhe</th></tr></thead>
@@ -123,7 +123,7 @@ export function ErpPayrollSettingsForm({ companyId }: { companyId: string }) {
 
   if (!open) return <div><button type="button" className={styles.secondaryButton} onClick={() => setOpen(true)}><Settings aria-hidden="true" /> Configuração da folha da empresa</button></div>;
   return <form className={styles.requirementEditor} onSubmit={(event) => void submit(event)}>
-    <header><div><span>ENCARGOS · BANCO · CONTAS</span><h3>Configuração da folha da empresa</h3></div></header>
+    <header><div><span>Encargos · banco · contas</span><h3>Configuração da folha da empresa</h3></div></header>
     {error && <ErrorBanner title="Não salvo" message={error} />}
     {saved && <p className={styles.infoNote}><Check aria-hidden="true" /><span><strong>Configuração salva</strong></span></p>}
     {!settings ? <LoadingState size="compact" title="Carregando" /> : <div className={styles.formGrid}>
@@ -185,7 +185,7 @@ export function ErpBankAccountForm({ employeeId, canManage }: { employeeId: stri
     <input value={account[key]} disabled={!canManage} onChange={(event) => setAccount({ ...account, [key]: event.target.value })} {...props} /></label>;
 
   return <form className={styles.requirementEditor} onSubmit={(event) => void submit(event)}>
-    <header><div><span>INFOTIPO 0009</span><h3>Conta de salário</h3></div></header>
+    <header><div><span>Infotipo 0009</span><h3>Conta de salário</h3></div></header>
     {error && <ErrorBanner title="Atenção" message={error} />}
     {saved && <p className={styles.infoNote}><Check aria-hidden="true" /><span><strong>Conta salva</strong><small>Entra no próximo arquivo CNAB.</small></span></p>}
     {!loaded ? <LoadingState size="compact" title="Carregando" /> : <div className={styles.formGrid}>

@@ -130,7 +130,7 @@ export function TriageView({ initialItemId = "" }: { initialItemId?: string }) {
 
   return <section className={styles.workspace} aria-busy={busy}>
     <PanelHeader
-      eyebrow="CENTRAL DE TRIAGEM"
+      eyebrow="Central de triagem"
       title="O que o sistema não teve certeza"
       description="Entradas que a automação não conseguiu classificar sozinha. Aqui se resolve a dúvida — a ação continua acontecendo pelo fluxo do módulo, com as regras dele."
       action={<button type="button" className={styles.secondaryButton} onClick={() => void load(true)} disabled={busy}>

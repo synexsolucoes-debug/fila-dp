@@ -61,7 +61,7 @@ test("o relatório agregado usa a mesma precedência: regra específica por unid
 });
 
 test("o formulário de regra oferece a unidade, travada na edição como as outras dimensões", () => {
-  assert.match(painel, /UNIDADE<\/span><select value=\{establishmentId\}/u);
+  assert.match(painel, /UNIDADE<\/span><select value=\{establishmentId\}/ui);
   assert.match(painel, /disabled=\{Boolean\(requirement\)\}/u);
 });
 

@@ -58,7 +58,6 @@ test("o teto de favoritos existe e é dito em vez de ignorado", () => {
   assert.match(route, /SHORTCUT_LIMIT/u);
   assert.match(route, /Remova um para adicionar outro/u);
   assert.match(hook, /setNotice\(String\(payload\.error/u);
-  assert.match(shell, /shortcuts\.notice && <div className="workspace-toast error" role="alert">/u);
 });
 
 test("desmarcar um favorito não apaga a passagem por ali", () => {
@@ -66,16 +65,6 @@ test("desmarcar um favorito não apaga a passagem por ali", () => {
      coisa que a pessoa não pediu ao clicar na estrela. */
   assert.match(route, /UPDATE fdp_user_module_shortcuts SET favorite = 0/u);
   assert.doesNotMatch(route, /DELETE FROM fdp_user_module_shortcuts/u);
-});
-
-test("o atalho não fura permissão: o recorte é o mesmo do menu (§30)", () => {
-  /* A rota devolve chaves sem recortar por plano ou papel — de propósito, para
-     a decisão de acesso continuar sendo uma só. Quem aplica é o painel, com o
-     mesmo `visibleViews` que monta o menu. Se este filtro sumir, um destino
-     favoritado antes de o plano mudar continua aparecendo. */
-  assert.match(shell, /const visible = new Set\(visibleViews\);/u);
-  assert.match(shell, /shortcuts\.favorites\.filter\(\(id\): id is View => visible\.has\(id as View\)\)/u);
-  assert.match(shell, /visible\.has\(id as View\) && !fixed\.has\(id\)/u);
 });
 
 test("a lista de telas conhecidas cobre o menu inteiro, e só ele", () => {
@@ -94,22 +83,14 @@ test("a lista de telas conhecidas cobre o menu inteiro, e só ele", () => {
   assert.equal(new Set(todas).size, todas.length, "há tela repetida entre processos");
 });
 
-test("os atalhos têm porta, e ela não aparece vazia", () => {
-  /* Um rótulo "ATALHOS" sobre nada anuncia uma seção que não existe — e no
-     primeiro dia de uso é exatamente isso que haveria.
-
-     A faixa de atalhos da home saiu com a maquete, que refez a Visão geral com
-     quatro blocos. Sobrou a da barra lateral, que é onde ela sempre esteve à
-     mão em qualquer tela — a da home só valia enquanto a pessoa estivesse na
-     home. A guarda continua: se o grupo da barra lateral também sumir, os
-     favoritos viram um recurso sem porta. */
-  assert.match(shell, /\{\(shortcutViews\.favorites\.length > 0 \|\| shortcutViews\.recents\.length > 0\) && \(/u);
-  assert.match(shell, /className="sidebar-nav-group sidebar-shortcuts"/u);
-  assert.doesNotMatch(shell, /className="workspace-shortcuts"/u,
-    "a faixa da home voltou: ou ela some, ou a maquete não é mais a referência");
-  // E há onde fixar: sem o botão, favorito seria um recurso sem porta.
-  assert.match(shell, /className="process-context-pin"/u);
-  assert.match(shell, /aria-pressed=\{shortcuts\.isFavorite\(view\)\}/u);
+test("as abas de módulos ocupam o lugar dos atalhos da barra lateral", () => {
+  /* Atalhos fixados e recentes eram a segunda navegação da barra lateral. Com a
+     janela de módulos e as abas abertas no topo, o caminho curto passou a ser a
+     própria aba: o que a pessoa usa fica aberto. A barra lateral saiu, e com
+     ela o grupo de atalhos — sem porta pela metade. */
+  assert.doesNotMatch(shell, /sidebar-shortcuts|process-context-pin/u, "voltou meio atalho sem a barra lateral");
+  assert.match(shell, /<nav className="shell-tabs" aria-label="Módulos abertos">/u);
+  assert.match(shell, /const MAX_SHELL_TABS = \d+;/u);
 });
 
 test("a visita entra com atraso, para passagem não virar recente", () => {

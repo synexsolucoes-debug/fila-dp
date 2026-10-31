@@ -385,7 +385,7 @@ export function EpiControlView({ role }: { role: WorkspaceRole }) {
     <div className={styles.commandBar}>
       <div className={styles.commandSelectors}>
         {overview.companies.length ? <label>
-          <span>EMPRESA PARA COLABORADORES E CONSUMO</span>
+          <span>Empresa para colaboradores e consumo</span>
           <select value={companyId} onChange={(event) => { setCompanyId(event.target.value); setFilters({}); }} aria-label="Empresa do Controle de EPI">
             {overview.companies.map((item) => <option key={item.id} value={item.id}>
               {item.name}{item.taxId ? ` · ${item.taxId}` : ""}{item.status === "inactive" ? " (inativa)" : ""}
@@ -519,7 +519,7 @@ function StockPanel({ products, filters, onFilters, permissions, canConsume, onC
 }) {
   const today = new Date().toISOString().slice(0, 10);
   return <>
-    <PanelHeader eyebrow="ESTOQUE COMPARTILHADO DO GRUPO" title="EPIs cadastrados"
+    <PanelHeader eyebrow="Estoque compartilhado do grupo" title="EPIs cadastrados"
       description="Produto, código e saldo pertencem ao Workspace e são separados somente por local físico."
       action={permissions?.create && <button className={styles.primaryButton} onClick={onCreate}><HardHat aria-hidden="true" /> Cadastrar EPI</button>} />
     {permissions?.stockAdjust && <StockOperations products={products} onChanged={onChanged} />}
@@ -627,24 +627,24 @@ function StockOperations({ products, onChanged }: { products: EpiProduct[]; onCh
     </div>}
     <form className={styles.stockOperationForm} onSubmit={(event) => void submit(event)}>
       {mode === "location" ? <>
-        <label><span>CÓDIGO</span><input required value={form.code ?? ""} onChange={(event) => set("code", event.target.value)} placeholder="ALMOX" /></label>
-        <label><span>NOME DO LOCAL</span><input required value={form.name ?? ""} onChange={(event) => set("name", event.target.value)} placeholder="Almoxarifado central" /></label>
-        <label><span>DESCRIÇÃO</span><input value={form.description ?? ""} onChange={(event) => set("description", event.target.value)} /></label>
+        <label><span>Código</span><input required value={form.code ?? ""} onChange={(event) => set("code", event.target.value)} placeholder="ALMOX" /></label>
+        <label><span>Nome do local</span><input required value={form.name ?? ""} onChange={(event) => set("name", event.target.value)} placeholder="Almoxarifado central" /></label>
+        <label><span>Descrição</span><input value={form.description ?? ""} onChange={(event) => set("description", event.target.value)} /></label>
       </> : <>
         <label><span>EPI</span><select required value={form.productId ?? ""} onChange={(event) => set("productId", event.target.value)}>
           <option value="">Selecione</option>{products.map((item) => <option key={item.id} value={item.id}>{item.name} · CA {item.caNumber}</option>)}
         </select></label>
-        {mode === "entry" ? <label><span>LOCAL DE DESTINO</span><select required value={form.stockLocationId ?? ""} onChange={(event) => set("stockLocationId", event.target.value)}>
+        {mode === "entry" ? <label><span>Local de destino</span><select required value={form.stockLocationId ?? ""} onChange={(event) => set("stockLocationId", event.target.value)}>
           <option value="">Selecione</option>{locations.filter((item) => item.status === "active").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
         </select></label> : <>
-          <label><span>ORIGEM</span><select required value={form.sourceStockLocationId ?? ""} onChange={(event) => set("sourceStockLocationId", event.target.value)}>
+          <label><span>Origem</span><select required value={form.sourceStockLocationId ?? ""} onChange={(event) => set("sourceStockLocationId", event.target.value)}>
             <option value="">Selecione</option>{locations.filter((item) => item.status === "active").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-          <label><span>DESTINO</span><select required value={form.targetStockLocationId ?? ""} onChange={(event) => set("targetStockLocationId", event.target.value)}>
+          <label><span>Destino</span><select required value={form.targetStockLocationId ?? ""} onChange={(event) => set("targetStockLocationId", event.target.value)}>
             <option value="">Selecione</option>{locations.filter((item) => item.status === "active").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
         </>}
-        <label><span>QUANTIDADE</span><input required type="number" min="1" value={form.quantity ?? ""} onChange={(event) => set("quantity", event.target.value)} /></label>
-        <label><span>DATA</span><input required type="date" value={form.movementDate ?? ""} onChange={(event) => set("movementDate", event.target.value)} /></label>
-        <label><span>OBSERVAÇÃO</span><input value={form.notes ?? ""} onChange={(event) => set("notes", event.target.value)} /></label>
+        <label><span>Quantidade</span><input required type="number" min="1" value={form.quantity ?? ""} onChange={(event) => set("quantity", event.target.value)} /></label>
+        <label><span>Data</span><input required type="date" value={form.movementDate ?? ""} onChange={(event) => set("movementDate", event.target.value)} /></label>
+        <label><span>Observação</span><input value={form.notes ?? ""} onChange={(event) => set("notes", event.target.value)} /></label>
       </>}
       <button className={styles.secondaryButton} disabled={busy}>{busy ? "Salvando…" : mode === "location" ? "Criar local" : "Confirmar operação"}</button>
     </form>
@@ -659,7 +659,7 @@ function DeliveriesPanel({ deliveries, filters, onFilters, permissions, busy, on
   onAckLink: (delivery: EpiDelivery) => void;
 }) {
   return <>
-    <PanelHeader eyebrow="ENTREGAS" title="EPIs entregues a colaboradores"
+    <PanelHeader eyebrow="Entregas" title="EPIs entregues a colaboradores"
       description="Quem está com o quê, desde quando, e o estado do termo de entrega."
       action={permissions?.deliver && <button className={styles.primaryButton} onClick={onCreate}><PackageCheck aria-hidden="true" /> Nova entrega</button>} />
     <FilterBar filters={filters} onFilters={onFilters} fields={[
@@ -707,7 +707,7 @@ function DamagesPanel({ damages, permissions, onCreate }: {
   damages: EpiDamage[]; permissions?: EpiOverview["permissions"]; onCreate: () => void;
 }) {
   return <>
-    <PanelHeader eyebrow="TROCA POR DANIFICAÇÃO" title="Ocorrências e decisões"
+    <PanelHeader eyebrow="Troca por danificação" title="Ocorrências e decisões"
       description="Motivo apurado, decisão tomada e o que ela provocou — troca, descarte, higienização ou análise de desconto."
       action={permissions?.damage && <button className={styles.primaryButton} onClick={onCreate}><ArrowLeftRight aria-hidden="true" /> Registrar danificação</button>} />
     {damages.length ? <div className={styles.tableWrap}>
@@ -740,7 +740,7 @@ function ReturnsPanel({ returns, filters, onFilters, permissions, busy, onSaniti
   onSanitize: (item: EpiReturn, action: "start" | "complete") => void; onGoToDeliveries: () => void;
 }) {
   return <>
-    <PanelHeader eyebrow="DEVOLUÇÕES" title="EPIs devolvidos"
+    <PanelHeader eyebrow="Devoluções" title="EPIs devolvidos"
       description="A condição informada na devolução define o destino: estoque, higienização, descarte ou análise de desconto." />
     <FilterBar filters={filters} onFilters={onFilters} fields={[
       { name: "condition", label: "CONDIÇÃO", options: Object.entries(epiReturnConditionLabels) },
@@ -788,7 +788,7 @@ function DisposalsPanel({ disposals, disposable, filters, onFilters, permissions
   onDecide: (disposal: EpiDisposal, action: "confirm" | "cancel" | "reevaluate") => void;
 }) {
   return <>
-    <PanelHeader eyebrow="JANELA DE DESCARTE" title="Descarte de EPI"
+    <PanelHeader eyebrow="Janela de descarte" title="Descarte de EPI"
       description="Confirmar é definitivo: o equipamento não volta ao estoque e o registro passa a ser imutável."
       action={permissions?.dispose && <button className={styles.primaryButton} onClick={() => onCreate()}><Trash2 aria-hidden="true" /> Abrir descarte</button>} />
     <FilterBar filters={filters} onFilters={onFilters} fields={[
@@ -842,7 +842,7 @@ function DiscountsPanel({ discounts, filters, onFilters, permissions, onDecide }
   permissions?: EpiOverview["permissions"]; onDecide: (discount: EpiDiscount) => void;
 }) {
   return <>
-    <PanelHeader eyebrow="ANÁLISE DE DESCONTO" title="Casos abertos para o Departamento Pessoal"
+    <PanelHeader eyebrow="Análise de desconto" title="Casos abertos para o Departamento Pessoal"
       description="Cada caso tem uma demanda no quadro. O desconto nunca é lançado automaticamente: ele depende do parecer registrado aqui." />
     <FilterBar filters={filters} onFilters={onFilters} fields={[
       { name: "status", label: "STATUS", options: Object.entries(epiDiscountStatusLabels) },
@@ -896,7 +896,7 @@ function ReportsPanel({ catalog, report, reportKey, filters, onFilters, canExpor
       </button>)}
     </nav>
     <div>
-      <PanelHeader eyebrow="RELATÓRIO" title={report?.title ?? "Selecione um relatório"}
+      <PanelHeader eyebrow="Relatório" title={report?.title ?? "Selecione um relatório"}
         description={report?.description ?? "Escolha um relatório à esquerda para ver os dados do período."}
         action={report && canExport && <button className={styles.secondaryButton} onClick={onExport}>
           <Download aria-hidden="true" /> Exportar CSV

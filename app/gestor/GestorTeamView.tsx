@@ -49,7 +49,6 @@ export function GestorTeamView({ userName, signOutPath }: { userName: string; si
       <div className={styles.card}>
         <header className={styles.header}>
           <div>
-            <span className={styles.eyebrow}>PORTAL DO GESTOR</span>
             <h1>Minha equipe</h1>
           </div>
           <a href={signOutPath} className={styles.signOut}>Sair ({userName})</a>

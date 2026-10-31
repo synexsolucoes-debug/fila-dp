@@ -148,7 +148,6 @@ export function TrelloImportPanel({ busy, processTypes, onImport }: {
   return <section className={styles.panel} aria-labelledby="trello-import-title">
     <header className={styles.header}>
       <div>
-        <span className={styles.eyebrow}>MIGRAÇÃO</span>
         <h3 id="trello-import-title" className={styles.title}>Importar quadro do Trello</h3>
         <p className={styles.lead}>No Trello: Menu do quadro → Imprimir, exportar e compartilhar → Exportar como JSON. O arquivo é lido aqui; nada é gravado antes de você conferir a prévia.</p>
       </div>
