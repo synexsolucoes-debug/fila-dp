@@ -7,17 +7,24 @@ para atualizar, recopie do upstream e registre a mudança aqui.
 |---|---|---|
 | `frontend-design` | [anthropics/claude-code](https://github.com/anthropics/claude-code/tree/main/plugins/frontend-design/skills/frontend-design) | `frontend-design/LICENSE.txt` |
 | `animate` | [emilkowalski/skills](https://github.com/emilkowalski/skills) | MIT — `LICENSE.emilkowalski-skills.txt` |
+| `animation-performance` | [emilkowalski/skills](https://github.com/emilkowalski/skills) | MIT — `LICENSE.emilkowalski-skills.txt` |
 | `animate-expo` | [emilkowalski/skills](https://github.com/emilkowalski/skills) | MIT — `LICENSE.emilkowalski-skills.txt` |
 | `animation-vocabulary` | [emilkowalski/skills](https://github.com/emilkowalski/skills) | MIT — `LICENSE.emilkowalski-skills.txt` |
 | `apple-design` | [emilkowalski/skills](https://github.com/emilkowalski/skills) | MIT — `LICENSE.emilkowalski-skills.txt` |
 | `ask-sonner` | [emilkowalski/skills](https://github.com/emilkowalski/skills) | MIT — `LICENSE.emilkowalski-skills.txt` |
+| `break-ui` | [emilkowalski/skills](https://github.com/emilkowalski/skills) | MIT — `LICENSE.emilkowalski-skills.txt` |
 | `emil-design-eng` | [emilkowalski/skills](https://github.com/emilkowalski/skills) | MIT — `LICENSE.emilkowalski-skills.txt` |
 | `find-animation-opportunities` | [emilkowalski/skills](https://github.com/emilkowalski/skills) | MIT — `LICENSE.emilkowalski-skills.txt` |
 | `improve-animations` | [emilkowalski/skills](https://github.com/emilkowalski/skills) | MIT — `LICENSE.emilkowalski-skills.txt` |
+| `mobile-native` | [emilkowalski/skills](https://github.com/emilkowalski/skills) | MIT — `LICENSE.emilkowalski-skills.txt` |
 | `pick-ui-library` | [emilkowalski/skills](https://github.com/emilkowalski/skills) | MIT — `LICENSE.emilkowalski-skills.txt` |
 | `prototype` | [emilkowalski/skills](https://github.com/emilkowalski/skills) | MIT — `LICENSE.emilkowalski-skills.txt` |
+| `remove-animations` | [emilkowalski/skills](https://github.com/emilkowalski/skills) | MIT — `LICENSE.emilkowalski-skills.txt` |
 | `review-animations` | [emilkowalski/skills](https://github.com/emilkowalski/skills) | MIT — `LICENSE.emilkowalski-skills.txt` |
 | `write-swift` | [emilkowalski/skills](https://github.com/emilkowalski/skills) | MIT — `LICENSE.emilkowalski-skills.txt` |
+
+Skills de `emilkowalski/skills` sincronizadas com o commit
+`a81dbca07f2217b7103e510c0f13f8d5b017afc9` (2026-10-28).
 
 ## Skills carregadas como plugin
 
