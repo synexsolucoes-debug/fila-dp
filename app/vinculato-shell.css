@@ -223,9 +223,12 @@
 }
 .shell-actions .global-search-trigger svg { width: 15px; height: 15px; }
 .shell-actions .global-search-trigger kbd { padding: 1px 5px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); background: var(--ui-surface-muted); color: var(--ui-text-muted); font: inherit; font-size: 11px; }
-.shell-actions .header-period-select { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); }
+/* 36px, e não 32: é um campo, e campo no produto tem 36–40px (a conferência
+   de consistência reprova altura que nenhum outro controle usa). */
+.shell-actions .header-period-select { position: relative; display: inline-flex; align-items: center; height: 36px; }
 .shell-actions .header-period-select svg { width: 15px; height: 15px; color: var(--ui-text-muted); }
-.shell-actions .header-period-select select { height: 30px; border: 0; background: transparent; color: var(--ui-text); font: inherit; font-size: 13px; }
+.shell-actions .header-period-select svg { position: absolute; left: 9px; pointer-events: none; }
+.shell-actions .header-period-select select { height: 36px; padding: 0 8px 0 30px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface); color: var(--ui-text); font: inherit; font-size: 13px; }
 .shell-actions .new-demand { height: 32px; padding: 0 12px; font-size: 13px; }
 
 /* --- Seletor de empresa ---------------------------------------------------- */
