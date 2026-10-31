@@ -38,22 +38,31 @@ const PROVIDERS: Record<AssistantProviderName, {
   baseUrl: string;
   defaultModel: string;
   keyEnv: string;
+  /**
+   * Teto de saída quando FDP_ASSISTANT_MAX_TOKENS não é definido. No Claude o
+   * raciocínio interno fica ligado e gasta deste mesmo teto: com 900 a resposta
+   * saía cortada ou vazia antes de chegar ao texto.
+   */
+  defaultMaxOutputTokens: number;
   acceptsVercelOidc?: boolean;
 }> = {
   anthropic: {
     baseUrl: "https://api.anthropic.com/v1/messages",
-    defaultModel: "claude-sonnet-5",
+    defaultModel: "claude-sonnet-5-5",
     keyEnv: "ANTHROPIC_API_KEY",
+    defaultMaxOutputTokens: 4000,
   },
   openai: {
     baseUrl: "https://api.openai.com/v1/chat/completions",
     defaultModel: "gpt-4o-mini",
     keyEnv: "OPENAI_API_KEY",
+    defaultMaxOutputTokens: 900,
   },
   gateway: {
     baseUrl: "",
     defaultModel: "openai/gpt-5.5",
     keyEnv: "AI_GATEWAY_API_KEY",
+    defaultMaxOutputTokens: 900,
     acceptsVercelOidc: true,
   },
 };
@@ -104,9 +113,14 @@ export function readAssistantConfig(env: Readonly<Record<string, string | undefi
       model: String(env.FDP_ASSISTANT_MODEL ?? "").trim() || definition.defaultModel,
       apiKey,
       baseUrl: String(env.FDP_ASSISTANT_BASE_URL ?? "").trim() || definition.baseUrl,
-      maxOutputTokens: Number(env.FDP_ASSISTANT_MAX_TOKENS ?? 900) || 900,
+      maxOutputTokens: readMaxOutputTokens(env.FDP_ASSISTANT_MAX_TOKENS, definition.defaultMaxOutputTokens),
     },
   };
+}
+
+function readMaxOutputTokens(raw: string | undefined, fallback: number) {
+  const value = Number(String(raw ?? "").trim());
+  return Number.isInteger(value) && value > 0 ? value : fallback;
 }
 
 /** Recusa clara: o que falta, sem expor nome de chave secreta ao usuário final. */
@@ -244,6 +258,12 @@ export async function askAssistant(input: {
   }
 
   const payload = await response.json() as Record<string, unknown>;
+  if (config.provider === "anthropic" && payload.stop_reason === "refusal") {
+    // Recusa do modelo não é falha técnica: "tente de novo" faria a pessoa
+    // repetir a mesma pergunta e receber a mesma recusa.
+    throw new ApiError(422, "ASSISTANT_REFUSED",
+      "O assistente não pode responder a esta pergunta. Reformule com foco em como usar o sistema.");
+  }
   const text = extractText(config.provider, payload);
   if (!text) {
     throw new ApiError(502, "ASSISTANT_EMPTY_REPLY", "O assistente não conseguiu responder agora. Tente de novo em instantes.");
