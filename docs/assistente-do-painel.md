@@ -64,11 +64,40 @@ O produto não embute chave de ninguém e não escolhe provedor por você.
 
 | Variável | Obrigatória | Observação |
 | --- | --- | --- |
-| `FDP_ASSISTANT_PROVIDER` | sim | `anthropic` ou `openai` |
-| `FDP_ASSISTANT_API_KEY` | sim | aceita também `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` |
-| `FDP_ASSISTANT_MODEL` | não | cai no padrão do provedor |
+| `FDP_ASSISTANT_PROVIDER` | fora da Vercel | `anthropic`, `openai` ou `gateway`. Na Vercel, sem valor, usa `gateway` |
+| `FDP_ASSISTANT_API_KEY` | sim, exceto Gateway na Vercel | aceita também `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `AI_GATEWAY_API_KEY` |
+| `FDP_ASSISTANT_MODEL` | não | cai no padrão do provedor (tabela abaixo) |
 | `FDP_ASSISTANT_BASE_URL` | não | para gateway próprio ou ensaio local |
-| `FDP_ASSISTANT_MAX_TOKENS` | não | padrão 900 |
+| `FDP_ASSISTANT_MAX_TOKENS` | não | teto de saída; padrão por provedor (tabela abaixo) |
+
+| Provedor | Modelo padrão | Teto de saída padrão |
+| --- | --- | --- |
+| `anthropic` | `claude-sonnet-5-5` | 4000 |
+| `openai` | `gpt-4o-mini` | 900 |
+| `gateway` | `openai/gpt-5.5` | 900 |
+
+### Usando o Claude
+
+```env
+FDP_ASSISTANT_PROVIDER=anthropic
+ANTHROPIC_API_KEY=sk-ant-...
+# opcional: claude-opus-5-5 para respostas mais elaboradas, a custo maior
+FDP_ASSISTANT_MODEL=claude-sonnet-5-5
+```
+
+O teto do Claude é maior porque o raciocínio interno do modelo fica ligado e
+consome do mesmo `max_tokens` que a resposta. Com 900 a resposta podia sair
+cortada ou vazia. Se definir `FDP_ASSISTANT_MAX_TOKENS` à mão para o Claude, não
+fique abaixo de uns 2000.
+
+Pelo Gateway da Vercel também dá para usar o Claude: mantenha o provedor
+`gateway` e defina `FDP_ASSISTANT_MODEL` com o identificador `anthropic/...`
+como aparece na lista de modelos do Gateway. Nesse caminho o teto padrão continua
+900; defina `FDP_ASSISTANT_MAX_TOKENS` junto.
+
+Quando o Claude recusa uma pergunta, a rota responde `422 ASSISTANT_REFUSED` e a
+tela pede para reformular, em vez de "tente de novo": repetir a mesma pergunta
+traria a mesma recusa.
 
 Sem configuração o assistente **não some da tela**: ele abre e diz "Assistente
 não configurado", sem campo de digitar e sem citar nome de variável secreta ao
@@ -84,7 +113,7 @@ deploy, como as demais.
 
 ## Como isto foi verificado
 
-- `tests/assistant.test.mts` — 14 testes, incluindo os que leem o próprio código
+- `tests/assistant.test.mts` — 17 testes, incluindo os que leem o próprio código
   para provar a ordem da redação e a ausência de bypass.
 - Ensaio no navegador sem provedor: painel recolhido por padrão, recusa clara,
   sem campo de digitar, Esc fecha, `POST` responde 503 sem citar segredo, e o
