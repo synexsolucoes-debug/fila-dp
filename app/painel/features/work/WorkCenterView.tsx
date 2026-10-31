@@ -163,6 +163,7 @@ export function WorkCenterView({ onOpenCompanyFilter, onNavigate, companyId }: {
     return [...buckets].map(([key, list]) => ({ key, list, total: totals.get(key) ?? list.length }));
   }, [filters.group, items, payload]);
 
+  const [actionReload, setActionReload] = useState(0);
   const counts = payload?.counts;
 
   if (loading && !payload) return <LoadingState title="Reunindo o seu trabalho…" />;
@@ -172,7 +173,7 @@ export function WorkCenterView({ onOpenCompanyFilter, onNavigate, companyId }: {
       eyebrow="Central de trabalho"
       title="Meu trabalho"
       description="Demandas, aprovações, movimentações, entregas, pendências, triagem e falhas que exigem ação — em uma lista só. Cada item é resolvido na tela do módulo dono dele."
-      action={<button type="button" className={styles.secondaryButton} onClick={() => void load(filters, true)} disabled={refreshing}>
+      action={<button type="button" className={styles.secondaryButton} onClick={() => { void load(filters, true); setActionReload((n) => n + 1); }} disabled={refreshing}>
         <RefreshCw aria-hidden="true" />{refreshing ? "Atualizando…" : "Atualizar"}
       </button>}
     />
@@ -184,7 +185,7 @@ export function WorkCenterView({ onOpenCompanyFilter, onNavigate, companyId }: {
         ela. Aqui é o lugar certo: "o que está comigo hoje" e "o que precisa ser
         feito agora" são a mesma pergunta, e mantê-las em telas diferentes
         obrigava a pessoa a conferir as duas para saber se tinha acabado. */}
-    {onNavigate ? <ActionCenter onNavigate={onNavigate} companyId={companyId ?? ""} /> : null}
+    {onNavigate ? <ActionCenter onNavigate={onNavigate} companyId={companyId ?? ""} embedded reloadSignal={actionReload} /> : null}
 
     {counts ? <div className={styles.counters} role="group" aria-label="Resumo do seu trabalho">
       <Counter label="Comigo" value={counts.total} active={!filters.due && !filters.source} onClick={() => setFilters({ ...filters, due: "", source: "" })} />
@@ -289,10 +290,12 @@ export function WorkCenterView({ onOpenCompanyFilter, onNavigate, companyId }: {
 function Counter({ label, value, tone, active, onClick }: {
   label: string; value: number; tone?: "critical" | "warning"; active: boolean; onClick: () => void;
 }) {
+  // Nome antes do número, como aba de filtro: a fileira de cartões grandes com
+  // "0" em cada um era uma parede de zeros que não dizia nada.
   return <button type="button" className={styles.counter} data-tone={value > 0 ? tone : undefined}
-    aria-pressed={active} onClick={onClick}>
-    <strong>{value}</strong>
+    data-zero={value === 0 ? "" : undefined} aria-pressed={active} onClick={onClick}>
     <span>{label}</span>
+    <strong>{value}</strong>
   </button>;
 }
 

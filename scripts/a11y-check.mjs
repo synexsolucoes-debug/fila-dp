@@ -389,7 +389,8 @@ async function auditBoardSurfaces(prefix) {
  * só aparece quando chamado ainda precisa ser legível quando aparece.
  */
 async function auditAssistant(theme = "") {
-  const launcher = page.locator('button[class*="launcher"]').filter({ hasText: /Assistente/u }).first();
+  // A porta do assistente é o "?" da faixa superior.
+  const launcher = page.locator('button.help-button[aria-label="Abrir o assistente"]').first();
   if (await launcher.count() === 0) {
     console.log("\n### Assistente — lançador não encontrado");
     failures += 1;

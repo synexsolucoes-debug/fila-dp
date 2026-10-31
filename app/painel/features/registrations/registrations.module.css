@@ -323,7 +323,7 @@
 .importStatus[data-status="conflict"] { background: color-mix(in srgb, var(--ui-danger) 10%, var(--reg-surface)); color: var(--ui-danger); }
 
 .historyTrail { position: relative; max-width: 610px; margin: 0 auto; padding: 4px 0 30px; }
-.historyTrail > header { position: relative; display: flex; align-items: center; gap: 14px; margin-bottom: 28px; padding: 18px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--reg-mint) 30%, var(--reg-border)); border-radius: 10px; background: linear-gradient(110deg, var(--reg-navy), color-mix(in srgb, var(--reg-navy) 74%, var(--reg-mint))); color: #fff; }
+.historyTrail > header { position: relative; display: flex; align-items: center; gap: 14px; margin-bottom: 28px; padding: 18px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--reg-mint) 30%, var(--reg-border)); border-radius: 10px; background: var(--reg-navy); color: #fff; }
 .historyTrail > header::after { content: ""; position: absolute; right: -24px; width: 130px; height: 130px; border: 1px solid rgba(255,255,255,.12); border-radius: 50%; box-shadow: 0 0 0 24px rgba(255,255,255,.035), 0 0 0 48px rgba(255,255,255,.025); }
 .historyTrail > header > span { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid rgba(255,255,255,.22); border-radius: 9px; background: rgba(255,255,255,.09); color: var(--brand-accent-on-dark); }
 .historyTrail > header > div { position: relative; z-index: 1; }
@@ -332,7 +332,7 @@
 .historyTrail > header p { margin: 0; color: rgba(255,255,255,.68); font-size: .75rem; }
 .historyTrail ol { margin: 0; padding: 0; list-style: none; }
 .historyTrail li { position: relative; display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 14px; min-height: 100px; }
-.historyTrail li:not(:last-child)::before { content: ""; position: absolute; top: 26px; bottom: -2px; left: 17px; width: 2px; background: linear-gradient(var(--reg-mint), color-mix(in srgb, var(--reg-mint) 16%, var(--reg-border))); }
+.historyTrail li:not(:last-child)::before { content: ""; position: absolute; top: 26px; bottom: -2px; left: 17px; width: 2px; background: var(--reg-border); }
 .historyTrail li > span { position: relative; z-index: 1; display: grid; place-items: center; width: 36px; height: 36px; border: 5px solid var(--reg-surface); border-radius: 50%; background: var(--reg-border); color: #fff; box-shadow: 0 0 0 1px var(--reg-border); }
 .historyTrail li > .latestDot { background: var(--reg-mint); box-shadow: 0 0 0 1px var(--reg-mint), 0 0 0 6px var(--reg-mint-soft); }
 .historyTrail li > span svg { width: 13px; }

@@ -565,3 +565,18 @@
 .dashboard-shell.operational-ui .dashboard-task-labels .urgent { background: var(--ui-state-danger-bg); color: var(--ui-state-danger-text); }
 .dashboard-shell.operational-ui .planner-focus .planner-connections p { color: var(--ui-text-soft); }
 .dashboard-shell.operational-ui .planner-focus .planner-connections header button { color: var(--ui-accent-text, var(--ui-primary)); }
+
+/* ========================================================================== */
+/* 5. Menos enfeite                                                            */
+/* ========================================================================== */
+/* Abas internas só com texto, como em ERP: o ícone repetido em cada aba era
+   enfeite, e a aba já diz o que é pelo nome. */
+.dashboard-shell.operational-ui :is(.process-context, .dashboard-content) [role="tab"] > svg { display: none; }
+
+/* Desfoque só onde algo flutua sobre a tela (janela de módulos, menus). No
+   resto, superfície sólida. */
+.dashboard-shell.operational-ui .dashboard-content *:not(.module-launcher) { backdrop-filter: none; }
+
+/* Fonte de código só para dado (matrícula, CNPJ, valor, data). Rótulo e
+   título voltam à fonte da interface. */
+.dashboard-shell.operational-ui .dashboard-content :is(small, label, th, dt, legend, h2, h3, h4) { font-family: var(--font-interface), "Inter", sans-serif; }

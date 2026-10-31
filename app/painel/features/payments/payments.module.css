@@ -107,7 +107,7 @@
 .approvalPanel {
   display: grid; gap: 12px; margin-bottom: 12px; padding: 15px 16px;
   border: 1px solid color-mix(in srgb, var(--pay-accent) 34%, var(--pay-border));
-  border-radius: 12px; background: linear-gradient(135deg, var(--pay-surface), color-mix(in srgb, var(--pay-accent-soft) 38%, var(--pay-surface)));
+  border-radius: 12px; background: var(--pay-surface);
 }
 .approvalPanel > header { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .approvalPanel h3 { margin: 3px 0; font-size: .96rem; }

@@ -4004,7 +4004,7 @@
   justify-content: space-between;
   gap: 18px;
   border-bottom: 1px solid var(--ui-border);
-  background: linear-gradient(118deg, color-mix(in srgb, var(--ui-primary) 9%, var(--ui-surface)), var(--ui-surface) 58%);
+  background: color-mix(in srgb, var(--ui-primary) 9%, var(--ui-surface));
 }
 
 .workspace-settings-modal > header span { color: var(--ui-primary); font-size: 12px; font-weight: 850; letter-spacing: normal; }
@@ -4126,7 +4126,7 @@
 
 /* Processos operacionais: cada processo possui as próprias colunas do Kanban. */
 .process-management-view { display: grid; gap: 18px; }
-.process-management-intro { padding: 21px; display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; align-items: center; gap: 15px; border: 1px solid color-mix(in srgb, var(--ui-mint) 50%, var(--ui-border)); border-radius: var(--ui-radius-lg); background: linear-gradient(112deg, color-mix(in srgb, var(--ui-mint) 13%, var(--ui-surface)), var(--ui-surface) 60%); }
+.process-management-intro { padding: 21px; display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; align-items: center; gap: 15px; border: 1px solid color-mix(in srgb, var(--ui-mint) 50%, var(--ui-border)); border-radius: var(--ui-radius-lg); background: color-mix(in srgb, var(--ui-mint) 13%, var(--ui-surface)); }
 .process-management-icon { width: 46px; height: 46px; display: grid; place-items: center; border-radius: var(--ui-radius-lg); background: var(--ui-primary); color: var(--ui-mint); }
 .process-management-icon svg { width: 22px; height: 22px; }
 .process-management-intro > div > span, .process-board-catalog header > div > span, .process-create-panel header > div > span { color: var(--ui-primary); font-size: 12px; font-weight: 850; letter-spacing: normal; }
@@ -4323,7 +4323,7 @@
 .company-settings-list .secondary-button { min-height: 30px; padding: 0 11px; justify-self: end; font-size: 11px; white-space: nowrap; }
 .company-settings-list .danger-link { justify-self: end; font-size: 11px; }
 
-.payroll-toolbar { padding: 19px 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border: 1px solid color-mix(in srgb, var(--ui-mint) 44%, var(--ui-border)); border-radius: var(--ui-radius-lg); background: linear-gradient(112deg, color-mix(in srgb, var(--ui-mint) 12%, var(--ui-surface)), var(--ui-surface) 62%); }
+.payroll-toolbar { padding: 19px 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border: 1px solid color-mix(in srgb, var(--ui-mint) 44%, var(--ui-border)); border-radius: var(--ui-radius-lg); background: color-mix(in srgb, var(--ui-mint) 12%, var(--ui-surface)); }
 .payroll-toolbar > div > span, .payroll-entry-panel header span { color: var(--ui-primary); font-size: 12px; font-weight: 850; letter-spacing: normal; }
 .payroll-toolbar h2, .payroll-entry-panel h2 { margin: 5px 0 0; color: var(--ui-text); font-size: 19px; letter-spacing: -.04em; }
 .payroll-toolbar p, .payroll-entry-panel header p { margin: 5px 0 0; color: var(--ui-text-soft); font-size: 12px; line-height: 1.45; }

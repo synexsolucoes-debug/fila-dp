@@ -221,9 +221,12 @@ test("a tela avisa o que foi removido da pergunta", async () => {
   assert.match(source, /event\.key === "Escape"/u);
 });
 
-test("o assistente não cobre a navegação inferior no celular", async () => {
+test("o assistente abre pelo ? da faixa, sem pílula flutuante", async () => {
   const css = await readFile(new URL("../app/painel/features/assistant/assistant.module.css", import.meta.url), "utf8");
+  const shell = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+  const panel = await readFile(new URL("../app/painel/features/assistant/AssistantPanel.tsx", import.meta.url), "utf8");
+  assert.match(panel, /if \(!open\) return null;/u, "a pílula flutuante voltou");
+  assert.match(shell, /help-button" aria-label="Abrir o assistente"/u);
+  // No celular o painel aberto continua acima da base da tela.
   assert.match(css, /@media \(max-width: 760px\)/u);
-  assert.match(css, /\.launcher \{ right: 12px; bottom: calc\(82px \+ env\(safe-area-inset-bottom\)\); \}/u);
-  assert.match(css, /\.panel \{[\s\S]{0,180}bottom: calc\(82px \+ env\(safe-area-inset-bottom\)\)/u);
 });
