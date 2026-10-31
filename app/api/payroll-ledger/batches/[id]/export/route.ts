@@ -38,7 +38,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
        autorizou. A recusa nomeia a etapa que falta. */
     if (!["approved", "exported", "sent_to_payroll", "confirmed", "closed"].includes(String(batch.status))) {
       throw ApiError.badRequest(
-        "A conferência precisa estar aprovada antes de ser exportada — exportar antes levaria para a folha um desconto que ninguém autorizou.",
+        "A conferência precisa estar aprovada antes de ser exportada. Exportar antes levaria para a folha um desconto que ninguém autorizou.",
         "LEDGER_BATCH_NOT_APPROVED",
       );
     }

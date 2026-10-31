@@ -41,19 +41,20 @@
 
 /* --- Indicadores ---------------------------------------------------------- */
 
-.counters { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 10px; margin-bottom: 14px; }
+/* Filtros de contagem em linha: nome e número lado a lado, zerados apagados. */
+.counters { display: flex; flex-wrap: wrap; gap: 2px; margin-bottom: 12px; padding: 3px; border: 1px solid var(--work-border); border-radius: 8px; background: var(--work-surface); width: fit-content; max-width: 100%; }
 .counter {
-  display: grid; gap: 4px; padding: 12px 14px; border: 1px solid var(--work-border);
-  border-radius: 10px; background: var(--work-surface); text-align: left; cursor: pointer;
-  transition: border-color .14s ease, transform .14s ease;
+  display: inline-flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 12px;
+  border: 0; border-radius: 6px; background: transparent; color: var(--work-text); text-align: left; cursor: pointer;
+  font: inherit; font-size: 13px; transition: background-color .13s ease;
 }
-.counter:hover { transform: translateY(-1px); border-color: var(--work-accent); }
-/* Indicador que não filtra nada não pode parecer clicável. */
+@media (hover: hover) and (pointer: fine) { .counter:hover { background: var(--work-muted); } }
 div.counter { cursor: default; }
-div.counter:hover { transform: none; border-color: var(--work-border); }
-.counter[aria-pressed="true"] { border-color: var(--work-accent); box-shadow: inset 0 0 0 1px var(--work-accent); }
-.counter strong { font-size: 1.3rem; font-variant-numeric: tabular-nums; line-height: 1; }
-.counter span { color: var(--work-soft); font-size: .75rem; font-weight: 700; letter-spacing: .02em; }
+.counter[aria-pressed="true"] { background: var(--ui-accent-soft, var(--work-muted)); }
+.counter span { color: var(--work-soft); font-size: 13px; font-weight: 500; }
+.counter strong { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.counter[aria-pressed="true"] span { color: var(--work-text); }
+.counter[data-zero] strong { color: var(--work-soft); font-weight: 500; }
 .counter[data-tone="critical"] strong { color: var(--work-danger); }
 .counter[data-tone="warning"] strong { color: var(--work-warning); }
 
@@ -189,10 +190,13 @@ div.counter:hover { transform: none; border-color: var(--work-border); }
 .agentCard header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .agentCard h3 { font-size: .92rem; font-weight: 760; }
 .agentDetail { color: var(--work-soft); font-size: .78rem; line-height: 1.45; }
-.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; }
-.metric { display: grid; gap: 2px; padding: 8px 10px; border-radius: 8px; background: var(--work-muted); }
-.metric strong { font-size: .92rem; font-variant-numeric: tabular-nums; }
-.metric span { color: var(--work-soft); font-size: .75rem; font-weight: 700; letter-spacing: .03em; }
+.agentSteps { margin: 0; color: var(--work-soft); font-size: .78rem; line-height: 1.45; }
+.agentSteps span { color: var(--work-text); font-weight: 600; }
+/* Números do agente como lista de chave e valor, não como mosaico de cartões. */
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); column-gap: 20px; border-top: 1px solid var(--work-border); }
+.metric { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--work-border); }
+.metric strong { order: 2; font-size: .82rem; font-variant-numeric: tabular-nums; }
+.metric span { order: 1; color: var(--work-soft); font-size: .78rem; }
 .agentActions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .agentActions label { display: flex; align-items: center; gap: 6px; color: var(--work-soft); font-size: .75rem; }
 .agentActions select { min-height: 34px; padding: 0 8px; border: 1px solid var(--work-border); border-radius: 7px; background: var(--work-surface); color: var(--work-text); font-size: .78rem; }
@@ -288,3 +292,24 @@ div.counter:hover { transform: none; border-color: var(--work-border); }
 
 .scheduleNote, .scheduleOverdue { margin: 10px 0 0; font-size: .82rem; color: var(--ui-text-soft); }
 .scheduleOverdue { color: var(--ui-warning); }
+
+/* Lista de Meu trabalho em tabela. A faixa à esquerda da linha herda o tom
+   do item (vencido, hoje, bloqueado) no lugar do cartão com borda colorida. */
+.tableWrap { overflow-x: auto; border: 1px solid var(--work-border); border-radius: 6px; background: var(--work-surface); }
+.workTable { width: 100%; border-collapse: collapse; font-size: .8125rem; }
+.workTable th { position: sticky; top: 0; padding: 7px 10px; border-bottom: 1px solid var(--work-strong); background: var(--work-muted); color: var(--work-soft); font-size: .75rem; font-weight: 600; text-align: left; white-space: nowrap; }
+.workTable td { padding: 7px 10px; border-bottom: 1px solid var(--work-border); vertical-align: top; }
+.workTable tbody tr:last-child td { border-bottom: 0; }
+.workTable tbody tr:hover td { background: var(--work-muted); }
+.workTable tbody tr td:first-child { box-shadow: inset 3px 0 0 transparent; }
+.workTable tbody tr[data-tone="critical"] td:first-child { box-shadow: inset 3px 0 0 var(--work-danger); }
+.workTable tbody tr[data-tone="warning"] td:first-child { box-shadow: inset 3px 0 0 var(--work-warning); }
+.workTable .numeric { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.itemCell { min-width: 260px; }
+.itemCell strong { display: block; font-weight: 600; }
+.itemCell span { display: block; margin-top: 2px; color: var(--work-soft); font-size: .75rem; }
+.itemCell .blocked { color: var(--work-danger); }
+.workTable td .badge + .badge { margin-left: 4px; }
+.rowLink { color: var(--work-accent-text); font-weight: 600; text-decoration: none; white-space: nowrap; }
+.rowLink:hover { text-decoration: underline; }
+.workTable .code { font-family: var(--font-mono, ui-monospace, monospace); font-size: .75rem; white-space: nowrap; color: var(--work-soft); }

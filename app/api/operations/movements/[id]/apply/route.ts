@@ -93,7 +93,7 @@ export async function POST(request: Request, context: Context) {
         );
       }
       if (!transferEffect.departmentId && !transferEffect.positionId && !transferEffect.costCenterId) {
-        throw ApiError.badRequest("Informe ao menos um destino — departamento, cargo ou centro de custo.", "TRANSFER_NO_TARGET");
+        throw ApiError.badRequest("Informe ao menos um destino: departamento, cargo ou centro de custo.", "TRANSFER_NO_TARGET");
       }
       transfer = transferEffect;
     }

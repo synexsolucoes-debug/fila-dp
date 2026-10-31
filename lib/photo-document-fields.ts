@@ -94,13 +94,13 @@ export function extractPhotoFields(text: string): { fields: PhotoFieldSuggestion
     const formatted = `${cpf[0].slice(0, 3)}.${cpf[0].slice(3, 6)}.${cpf[0].slice(6, 9)}-${cpf[0].slice(9)}`;
     fields.taxId = { value: formatted, confidence: "ok" };
   } else if (cpf.length > 1) {
-    warnings.push("Mais de um CPF válido encontrado na foto — confira manualmente qual é o correto.");
+    warnings.push("Mais de um CPF válido encontrado na foto. Confira manualmente qual é o correto.");
   }
   if (pis.length === 1) {
     const formatted = `${pis[0].slice(0, 3)}.${pis[0].slice(3, 8)}.${pis[0].slice(8, 10)}-${pis[0].slice(10)}`;
     fields.pisNumber = { value: formatted, confidence: "ok" };
   } else if (pis.length > 1) {
-    warnings.push("Mais de um PIS/PASEP válido encontrado na foto — confira manualmente qual é o correto.");
+    warnings.push("Mais de um PIS/PASEP válido encontrado na foto. Confira manualmente qual é o correto.");
   }
 
   const anchored = sliceByLabels(text, identityLabels, 160);

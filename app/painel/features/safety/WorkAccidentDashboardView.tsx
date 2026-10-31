@@ -223,9 +223,9 @@ export function WorkAccidentDashboardView() {
   const canManage = permissions?.manage ?? false;
 
   return <section className={styles.workspace}>
-    <PanelHeader
+    <PanelHeader page
       eyebrow="Segurança do trabalho"
-      title="Dashboard de Acidente de Trabalho"
+      title="Acidentes de trabalho"
       description="Acidentes, dias afastados e despesas do período, alimentados pela própria equipe do SESMT."
       action={<div className={styles.headerActions}>
         <button type="button" className={styles.secondaryButton}

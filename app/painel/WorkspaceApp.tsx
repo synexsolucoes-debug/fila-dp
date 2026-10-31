@@ -34,9 +34,7 @@ import { LayoutGrid, Settings,
   Inbox,
   LayoutDashboard,
   ListChecks,
-  Mail,
   MessageCircle,
-  MessageSquareMore,
 
   MoreHorizontal,
   Paperclip,
@@ -362,7 +360,7 @@ const viewCatalog: Record<View, ViewEntry> = {
   },
   work: {
     label: "Meu trabalho", icon: ClipboardList,
-    eyebrow: "Central de trabalho", title: "O que está comigo hoje",
+    eyebrow: "Central de trabalho", title: "Meu trabalho",
     description: "Demandas, aprovações, movimentações, entregas, pendências, triagem e falhas que exigem ação — em uma lista só.",
     ownHeader: true,
   },
@@ -412,7 +410,7 @@ const viewCatalog: Record<View, ViewEntry> = {
   },
   agents: {
     label: "Agentes", icon: Bot, module: "integrations", hiddenFor: ["guest", "observer"], ownHeader: true,
-    eyebrow: "Central de agentes", title: "Automação sob controle",
+    eyebrow: "Central de agentes", title: "Agentes",
     description: "Estado, cadência, execução e histórico dos agentes que leem os sistemas de origem.",
   },
   triage: {
@@ -3724,7 +3722,7 @@ export function WorkspaceApp({
                   <label className="full">Processo
                     <select value={cardForm.processVersionId} disabled={!canEdit}
                       onChange={(event) => setCardForm({ ...cardForm, processVersionId: event.target.value })}>
-                      <option value="">Demanda avulsa — sem processo</option>
+                      <option value="">Demanda avulsa (sem processo)</option>
                       {[...new Set(startableProcesses.map((item) => item.areaName))].sort().map((area) => (
                         <optgroup label={area} key={area}>
                           {startableProcesses.filter((item) => item.areaName === area).map((item) => (
@@ -4686,7 +4684,7 @@ function PayrollView({ companies, metrics, busy, canEdit, onSaveMetric, onImport
     {/* Movimentos para o Sankhya: lança os eventos variáveis por colaborador e
         gera a planilha do Importador de Movimentos (docs/movimentos-para-o-sankhya.md). */}
     <PayrollMovementsPanel companies={companies} canEdit={canEdit} />
-    {canEdit && <section className="payroll-entry-panel"><header><div><span>Novo lançamento</span><h2>Registrar dados da folha</h2><p>Informe os valores já apurados na folha ou ERP. O sistema consolida custos e indicadores, sem aplicar alíquotas legais por conta própria.</p></div><b>Total calculado: {money(formTotal)}</b></header><form onSubmit={(event) => void submit(event)}>
+    {canEdit && <section className="payroll-entry-panel"><header><div><span>Novo lançamento</span><h2>Registrar dados da folha</h2><p>Informe os valores já apurados na folha ou no ERP.</p></div><b>Total calculado: {money(formTotal)}</b></header><form onSubmit={(event) => void submit(event)}>
       <label>Empresa<select value={form.companyId} required disabled={busy} onChange={(event) => setForm({ ...form, companyId: event.target.value })}><option value="" disabled>Selecione</option>{companies.filter((company) => company.status === "active").map((company) => <option value={company.id} key={company.id}>{company.tradeName || company.legalName}</option>)}</select></label>
       <label>Competência<input type="month" value={form.period} required disabled={busy} onChange={(event) => setForm({ ...form, period: event.target.value })} /></label>
       <fieldset className="payroll-form-section"><legend>Pessoas e movimentação</legend>{numericField("Headcount no início", "headcountStart")}{numericField("Headcount no fim", "headcountEnd")}{numericField("Afastados no período", "leavesCount")}{numericField("Admissões", "admissions")}{numericField("Desligamentos voluntários", "voluntaryTerminations")}{numericField("Desligamentos involuntários", "involuntaryTerminations")}<p>Headcount médio: <strong>{formHeadcount.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</strong> · encerramento esperado: <strong>{expectedHeadcount.toLocaleString("pt-BR")}</strong></p></fieldset>
@@ -4841,7 +4839,7 @@ function PermissionMatrix() {
     <header>
       <div>
         <strong id="permission-matrix-title">O que cada papel permite</strong>
-        <span>Lista completa, direto do modelo de autorização — não é um resumo escrito à mão.</span>
+        <span>Permissões de cada papel.</span>
       </div>
     </header>
     {capabilityAreas.map((area) => {
@@ -5089,15 +5087,25 @@ function RulesSettings({ snapshot, busy, isAdmin, onCatalog, onConfirm }: { snap
 function InboxView({ items, busy, canEdit, onConvert, onNew }: { items: InboxItem[]; busy: boolean; canEdit: boolean; onConvert: (item: InboxItem) => Promise<void>; onNew: () => void }) {
   const pending = items.filter((item) => item.status === "new");
   const converted = items.filter((item) => item.status === "converted");
-  const channelIcon = (channel: string) => channel === "whatsapp" ? <Smartphone aria-hidden="true" /> : channel === "email" ? <Mail aria-hidden="true" /> : channel === "teams" ? <MessageSquareMore aria-hidden="true" /> : <Plus aria-hidden="true" />;
+  const channelLabels: Record<string, string> = { whatsapp: "WhatsApp", email: "E-mail", teams: "Teams", manual: "Registro manual" };
   return (
     <div className="inbox-layout">
       <section className="inbox-list-panel">
-        <header><div><strong>Aguardando triagem</strong><span>{pending.length} nova(s) • {converted.length} convertida(s)</span></div>{canEdit && <button onClick={onNew}><Plus aria-hidden="true" /> Registrar solicitação</button>}</header>
-        <div className="inbox-items">
-          {pending.length === 0 && <div className="empty-view"><span><CheckCircle2 aria-hidden="true" /></span><strong>Inbox organizada</strong><p>Não há solicitações aguardando triagem.</p></div>}
-          {pending.map((item) => <article className="inbox-item" key={item.id}><span className={`channel-icon ${item.channel}`}>{channelIcon(item.channel)}</span><div><div><strong>{item.subject}</strong><time>{formatReceived(item.receivedAt)}</time></div><span>{item.senderName} • {item.channel}</span><p>{item.body}</p>{canEdit && <button disabled={busy} onClick={() => void onConvert(item)}>Transformar em demanda <ArrowRight aria-hidden="true" /></button>}</div></article>)}
-        </div>
+        {/* O botão de criar fica só no cabeçalho da tela ("Nova solicitação"):
+            o segundo, aqui dentro, fazia a mesma coisa com outro nome. */}
+        <header><div><strong>Aguardando triagem</strong><span>{pending.length} nova(s) • {converted.length} convertida(s)</span></div></header>
+        {pending.length === 0
+          ? <div className="inbox-items"><div className="empty-view"><span><CheckCircle2 aria-hidden="true" /></span><strong>Nada aguardando triagem</strong><p>Solicitações recebidas por e-mail, Teams ou registro manual aparecem aqui.</p>{canEdit && <button className="secondary-button" onClick={onNew}><Plus aria-hidden="true" /> Registrar solicitação</button>}</div></div>
+          : <div className="inbox-table-wrap"><table className="inbox-table">
+            <thead><tr><th scope="col">Recebida</th><th scope="col">Canal</th><th scope="col">Remetente</th><th scope="col">Assunto</th>{canEdit && <th scope="col"><span className="sr-only">Ação</span></th>}</tr></thead>
+            <tbody>{pending.map((item) => <tr key={item.id}>
+              <td className="numeric">{formatReceived(item.receivedAt)}</td>
+              <td>{channelLabels[item.channel] ?? item.channel}</td>
+              <td>{item.senderName}</td>
+              <td className="inbox-subject"><strong>{item.subject}</strong>{item.body && <span>{item.body}</span>}</td>
+              {canEdit && <td><button className="secondary-button" disabled={busy} onClick={() => void onConvert(item)}>Transformar em demanda</button></td>}
+            </tr>)}</tbody>
+          </table></div>}
       </section>
     </div>
   );

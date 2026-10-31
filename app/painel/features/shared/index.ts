@@ -4,7 +4,7 @@ export {
   competenceLabel, competenceWindow, cycleProgress, cycleStages, nextFreeCompetence, shiftCompetence, stageIndex,
   type CompetenceChoice, type CycleStatus,
 } from "./competence-cycle";
-export { connectionStatusLabel, connectionStatusLabels, connectionTone, lastSyncLabel } from "./connection-status";
+export { connectionStatusLabel, connectionStatusLabels, connectionTone, lastSyncLabel, runStatusLabel } from "./connection-status";
 export { MemberModules } from "./MemberModules";
 export {
   AnimatedDrawer, AnimatedModal, AnimatedTabs, FadeIn, MotionCard, PageTransition,

@@ -114,7 +114,7 @@ test("a central de ação é clicável, acessível e não inventa números", asy
 
      O que este teste continua exigindo é o que importava antes: que ela exista
      numa tela de verdade, receba o recorte de empresa e navegue. */
-  assert.match(trabalho, /<ActionCenter onNavigate=\{onNavigate\} companyId=\{companyId \?\? ""\} \/>/u);
+  assert.match(trabalho, /<ActionCenter onNavigate=\{onNavigate\} companyId=\{companyId \?\? ""\} embedded reloadSignal=\{actionReload\} \/>/u);
   assert.match(workspace, /<WorkCenterView[\s\S]{0,200}companyId=\{companyFilter === "all" \? "" : companyFilter\}/u,
     "a central voltou a receber o grupo inteiro, ignorando o seletor de empresa");
   assert.match(component, /\/api\/dashboard\/action-center\$\{query\}/u);

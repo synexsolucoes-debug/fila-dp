@@ -64,6 +64,8 @@ export type WorkItem = {
   updatedAt: string;
   processId?: string;
   processStep?: string;
+  /** Código que a pessoa usa para falar do item ("#DM-12"); vazio quando a fonte não tem. */
+  reference?: string;
   /** De onde o item veio: manual, integração, processo… (§5) */
   origin: string;
   originLabel: string;
@@ -135,7 +137,7 @@ export type WorkItemSourceDefinition = {
 export const WORK_ITEM_COLUMNS = [
   "source_type", "source_id", "title", "description", "priority", "company_id",
   "company_name", "employee_id", "due_at", "created_at", "updated_at", "status",
-  "process_id", "process_step", "process_version", "origin",
+  "process_id", "process_step", "process_version", "reference", "origin",
 ] as const;
 
 export const workItemSources: readonly WorkItemSourceDefinition[] = [
@@ -154,6 +156,7 @@ export const workItemSources: readonly WorkItemSourceDefinition[] = [
              WHEN c.closed_at IS NOT NULL THEN 'closed' ELSE c.sla_status END AS status,
         c.process_definition_id AS process_id, c.current_step_id AS process_step,
         c.process_version_number AS process_version,
+        CASE WHEN c.reference_number IS NULL THEN '' ELSE '#DM-' || c.reference_number END AS reference,
         COALESCE(NULLIF(c.source_type, ''), 'manual') AS origin
       FROM fdp_cards c
       LEFT JOIN fdp_companies co ON co.workspace_id = c.workspace_id AND co.id = c.company_id
@@ -174,7 +177,7 @@ export const workItemSources: readonly WorkItemSourceDefinition[] = [
         -- registra é a decisão. Enquanto ninguém decide, a última mudança é a
         -- criação, e é isso que a ordenação por atualização precisa enxergar.
         COALESCE(s.decided_at, s.created_at) AS updated_at,
-        s.status, NULL::text AS process_id, NULL::text AS process_step, '' AS process_version,
+        s.status, NULL::text AS process_id, NULL::text AS process_step, '' AS process_version, '' AS reference,
         'operacao' AS origin
       FROM fdp_movement_approval_steps s
       JOIN fdp_employee_movements m ON m.workspace_id = s.workspace_id AND m.id = s.movement_id
@@ -192,7 +195,7 @@ export const workItemSources: readonly WorkItemSourceDefinition[] = [
         'normal' AS priority, m.company_id,
         COALESCE(NULLIF(co.trade_name, ''), co.legal_name) AS company_name,
         m.employee_id, m.effective_date::timestamptz AS due_at, m.created_at, m.updated_at,
-        m.status, NULL::text AS process_id, NULL::text AS process_step, '' AS process_version,
+        m.status, NULL::text AS process_id, NULL::text AS process_step, '' AS process_version, '' AS reference,
         'operacao' AS origin
       FROM fdp_employee_movements m
       LEFT JOIN fdp_companies co ON co.workspace_id = m.workspace_id AND co.id = m.company_id
@@ -209,7 +212,7 @@ export const workItemSources: readonly WorkItemSourceDefinition[] = [
         'normal' AS priority, e.company_id,
         COALESCE(NULLIF(co.trade_name, ''), co.legal_name) AS company_name,
         NULL::text AS employee_id, e.due_date::timestamptz AS due_at, e.created_at, e.updated_at,
-        e.status, NULL::text AS process_id, NULL::text AS process_step, '' AS process_version,
+        e.status, NULL::text AS process_id, NULL::text AS process_step, '' AS process_version, '' AS reference,
         'auxiliares' AS origin
       FROM fdp_auxiliary_executions e
       LEFT JOIN fdp_companies co ON co.workspace_id = e.workspace_id AND co.id = e.company_id
@@ -227,7 +230,7 @@ export const workItemSources: readonly WorkItemSourceDefinition[] = [
         CASE WHEN p.blocking = 1 THEN 'urgent' ELSE 'normal' END AS priority, p.company_id,
         COALESCE(NULLIF(co.trade_name, ''), co.legal_name) AS company_name,
         NULL::text AS employee_id, p.due_date::timestamptz AS due_at, p.created_at, p.updated_at,
-        p.status, NULL::text AS process_id, NULL::text AS process_step, '' AS process_version,
+        p.status, NULL::text AS process_id, NULL::text AS process_step, '' AS process_version, '' AS reference,
         'operacao' AS origin
       FROM fdp_operational_pending_items p
       LEFT JOIN fdp_companies co ON co.workspace_id = p.workspace_id AND co.id = p.company_id
@@ -248,7 +251,7 @@ export const workItemSources: readonly WorkItemSourceDefinition[] = [
         t.movement_kind AS description, 'high' AS priority,
         NULL::text AS company_id, NULL::text AS company_name,
         t.employee_id, NULL::timestamptz AS due_at, t.created_at, t.updated_at,
-        'pending' AS status, NULL::text AS process_id, NULL::text AS process_step, '' AS process_version,
+        'pending' AS status, NULL::text AS process_id, NULL::text AS process_step, '' AS process_version, '' AS reference,
         'teams' AS origin
       FROM fdp_movement_suggestions t
       WHERE t.workspace_id = ? AND t.status = 'pending'`,
@@ -271,7 +274,7 @@ export const workItemSources: readonly WorkItemSourceDefinition[] = [
         'urgent' AS priority,
         NULL::text AS company_id, NULL::text AS company_name, NULL::text AS employee_id,
         j.completed_at AS due_at, j.created_at, j.updated_at,
-        'dead_letter' AS status, NULL::text AS process_id, NULL::text AS process_step, '' AS process_version,
+        'dead_letter' AS status, NULL::text AS process_id, NULL::text AS process_step, '' AS process_version, '' AS reference,
         i.channel AS origin
       FROM fdp_integration_jobs j
       JOIN fdp_integrations i ON i.workspace_id = j.workspace_id AND i.id = j.integration_id
@@ -303,7 +306,7 @@ export const workItemSources: readonly WorkItemSourceDefinition[] = [
         'Obrigação legal' AS description, 'normal' AS priority, o.company_id,
         COALESCE(NULLIF(co.trade_name, ''), co.legal_name) AS company_name,
         NULL::text AS employee_id, o.due_date::timestamptz AS due_at, o.created_at, o.updated_at,
-        o.status, NULL::text AS process_id, NULL::text AS process_step, '' AS process_version,
+        o.status, NULL::text AS process_id, NULL::text AS process_step, '' AS process_version, '' AS reference,
         'operacao' AS origin
       FROM fdp_compliance_obligations o
       LEFT JOIN fdp_companies co ON co.workspace_id = o.workspace_id AND co.id = o.company_id
@@ -335,7 +338,7 @@ export const workItemSources: readonly WorkItemSourceDefinition[] = [
         p.ca_expires_on::timestamptz AS due_at, p.created_at, p.updated_at,
         CASE WHEN p.ca_expires_on < CURRENT_DATE THEN 'overdue'
              WHEN p.ca_expires_on = CURRENT_DATE THEN 'warning' ELSE 'safe' END AS status,
-        NULL::text AS process_id, NULL::text AS process_step, '' AS process_version,
+        NULL::text AS process_id, NULL::text AS process_step, '' AS process_version, '' AS reference,
         'epi' AS origin
       FROM fdp_epi_products p
       WHERE p.workspace_id = ? AND p.status = 'active'
@@ -374,7 +377,7 @@ export const workItemSources: readonly WorkItemSourceDefinition[] = [
         e.employee_id, e.next_due_date::timestamptz AS due_at, e.created_at, e.updated_at,
         CASE WHEN e.next_due_date < CURRENT_DATE THEN 'overdue'
              WHEN e.next_due_date = CURRENT_DATE THEN 'warning' ELSE 'safe' END AS status,
-        NULL::text AS process_id, NULL::text AS process_step, '' AS process_version,
+        NULL::text AS process_id, NULL::text AS process_step, '' AS process_version, '' AS reference,
         'operacao' AS origin
       FROM fdp_occupational_exams e
       LEFT JOIN fdp_companies co ON co.workspace_id = e.workspace_id AND co.id = e.company_id
@@ -397,7 +400,7 @@ export const workItemSources: readonly WorkItemSourceDefinition[] = [
         a.company_id, COALESCE(NULLIF(co.trade_name, ''), co.legal_name) AS company_name,
         a.employee_id, a.due_date::timestamptz AS due_at, a.created_at, a.updated_at,
         CASE a.severity WHEN 'overdue' THEN 'overdue' WHEN 'urgent' THEN 'warning' ELSE 'safe' END AS status,
-        NULL::text AS process_id, NULL::text AS process_step, '' AS process_version,
+        NULL::text AS process_id, NULL::text AS process_step, '' AS process_version, '' AS reference,
         'operacao' AS origin
       FROM fdp_dp_alerts a
       LEFT JOIN fdp_companies co ON co.workspace_id = a.workspace_id AND co.id = a.company_id
@@ -417,7 +420,7 @@ export const workItemSources: readonly WorkItemSourceDefinition[] = [
         t.employee_id, t.valid_until::timestamptz AS due_at, t.created_at, t.updated_at,
         CASE WHEN t.valid_until < CURRENT_DATE THEN 'overdue'
              WHEN t.valid_until = CURRENT_DATE THEN 'warning' ELSE 'safe' END AS status,
-        NULL::text AS process_id, NULL::text AS process_step, '' AS process_version,
+        NULL::text AS process_id, NULL::text AS process_step, '' AS process_version, '' AS reference,
         'operacao' AS origin
       FROM fdp_trainings t
       LEFT JOIN fdp_companies co ON co.workspace_id = t.workspace_id AND co.id = t.company_id
@@ -461,7 +464,7 @@ export const workItemSources: readonly WorkItemSourceDefinition[] = [
                      WHEN 6 THEN a.occurred_on + 2
                      ELSE a.occurred_on + 1
                    END) < CURRENT_DATE THEN 'overdue' ELSE 'warning' END AS status,
-        NULL::text AS process_id, NULL::text AS process_step, '' AS process_version,
+        NULL::text AS process_id, NULL::text AS process_step, '' AS process_version, '' AS reference,
         'operacao' AS origin
       FROM fdp_work_accidents a
       LEFT JOIN fdp_companies co ON co.workspace_id = a.workspace_id AND co.id = a.company_id
@@ -500,7 +503,7 @@ export const workItemSources: readonly WorkItemSourceDefinition[] = [
         COALESCE(NULLIF(co.trade_name, ''), co.legal_name) AS company_name,
         emp.id AS employee_id, emp.admission_date::timestamptz AS due_at, emp.created_at, emp.updated_at,
         'overdue' AS status,
-        NULL::text AS process_id, NULL::text AS process_step, '' AS process_version,
+        NULL::text AS process_id, NULL::text AS process_step, '' AS process_version, '' AS reference,
         'operacao' AS origin
       FROM fdp_employees emp
       JOIN fdp_positions pos ON pos.workspace_id = emp.workspace_id AND pos.id = emp.position_id
@@ -551,6 +554,10 @@ export const PRIORITY_LABELS: Record<string, string> = {
 
 const ORIGIN_LABELS: Record<string, string> = {
   manual: "Criada no Vinculato",
+  automation: "Automação",
+  automacao: "Automação",
+  system: "Sistema",
+  agent: "Agente",
   operacao: "Operação DP",
   auxiliares: "Módulos auxiliares",
   epi: "Controle de EPI",
@@ -695,6 +702,7 @@ export function toWorkItem(row: Record<string, unknown>, today = new Date().toIS
     updatedAt: text(row.updated_at) || createdAt,
     processId: text(row.process_id) || undefined,
     processStep: text(row.process_step) || undefined,
+    reference: text(row.reference) || undefined,
     origin,
     originLabel: originLabel(origin),
     blockedReason: blockedReasonOf(sourceType, status, dueAt || null, today) || undefined,

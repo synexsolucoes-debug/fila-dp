@@ -111,7 +111,7 @@ test("o painel é operacional e recebe o conector Sankhya pronto da Plataforma G
   assert.match(panel, /id: "admin", label: "Administração", icon: Settings/u,
     "a porta de configurações do painel precisa abrir as configurações do grupo");
   assert.match(panel, /openWorkspaceSettings\(\);/u);
-  assert.match(integrations, /INTEGRAÇÕES DO WORKSPACE/ui);
+  assert.match(integrations, /<strong>Integrações<\/strong>/u);
   assert.match(integrations, /SankhyaConnectorPanel/u);
   assert.match(integrations, /IntegrationDrawer/u);
   assert.match(integrations, /Configurar[\s\S]+Credencial[\s\S]+Testar conexão/u);

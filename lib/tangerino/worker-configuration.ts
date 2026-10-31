@@ -61,7 +61,7 @@ export function inspectWorkerConfiguration(
        lá, escrita, na frente dela. */
     problems.push({
       variable: "DATABASE_URL",
-      remedy: "o valor precisa começar com postgres:// ou postgresql:// — o que está lá não é uma string de conexão.",
+      remedy: "o valor precisa começar com postgres:// ou postgresql://. O que está lá não é uma string de conexão.",
     });
   }
 
@@ -124,7 +124,7 @@ export function inspectWorkerConfiguration(
     if (!config.profileRoot) {
       problems.push({
         variable: "FDP_TANGERINO_PROFILE_ROOT",
-        remedy: "aponte para uma pasta só desta conta do Windows — é onde fica a sessão autenticada da Sólides.",
+        remedy: "aponte para uma pasta só desta conta do Windows. É onde fica a sessão autenticada da Sólides.",
       });
     }
     /* A conferência é do que está escrito no arquivo, e não de

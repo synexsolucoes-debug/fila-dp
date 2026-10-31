@@ -1,10 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  AlertTriangle, ArrowRight, Building2, CalendarClock, CheckCircle2, Filter,
-  Inbox, ListChecks, RefreshCw, Workflow,
-} from "lucide-react";
+import { CheckCircle2, Filter, RefreshCw } from "lucide-react";
 import { EmptyState, ErrorBanner, LoadingState, PanelHeader } from "../shared";
 import { ActionCenter } from "../action-center";
 import type { ActionTarget } from "@/lib/action-center";
@@ -163,16 +160,18 @@ export function WorkCenterView({ onOpenCompanyFilter, onNavigate, companyId }: {
     return [...buckets].map(([key, list]) => ({ key, list, total: totals.get(key) ?? list.length }));
   }, [filters.group, items, payload]);
 
+  const [actionReload, setActionReload] = useState(0);
   const counts = payload?.counts;
+  const sourceLabels = useMemo(() => new Map((payload?.sources ?? []).map((source) => [source.key, source.label])), [payload?.sources]);
 
   if (loading && !payload) return <LoadingState title="Reunindo o seu trabalho…" />;
 
   return <section className={styles.workspace} aria-busy={refreshing}>
-    <PanelHeader
+    <PanelHeader page
       eyebrow="Central de trabalho"
-      title="O que está comigo hoje"
+      title="Meu trabalho"
       description="Demandas, aprovações, movimentações, entregas, pendências, triagem e falhas que exigem ação — em uma lista só. Cada item é resolvido na tela do módulo dono dele."
-      action={<button type="button" className={styles.secondaryButton} onClick={() => void load(filters, true)} disabled={refreshing}>
+      action={<button type="button" className={styles.secondaryButton} onClick={() => { void load(filters, true); setActionReload((n) => n + 1); }} disabled={refreshing}>
         <RefreshCw aria-hidden="true" />{refreshing ? "Atualizando…" : "Atualizar"}
       </button>}
     />
@@ -184,7 +183,7 @@ export function WorkCenterView({ onOpenCompanyFilter, onNavigate, companyId }: {
         ela. Aqui é o lugar certo: "o que está comigo hoje" e "o que precisa ser
         feito agora" são a mesma pergunta, e mantê-las em telas diferentes
         obrigava a pessoa a conferir as duas para saber se tinha acabado. */}
-    {onNavigate ? <ActionCenter onNavigate={onNavigate} companyId={companyId ?? ""} /> : null}
+    {onNavigate ? <ActionCenter onNavigate={onNavigate} companyId={companyId ?? ""} embedded reloadSignal={actionReload} /> : null}
 
     {counts ? <div className={styles.counters} role="group" aria-label="Resumo do seu trabalho">
       <Counter label="Comigo" value={counts.total} active={!filters.due && !filters.source} onClick={() => setFilters({ ...filters, due: "", source: "" })} />
@@ -274,9 +273,9 @@ export function WorkCenterView({ onOpenCompanyFilter, onNavigate, companyId }: {
       : grouped
         ? grouped.map((group) => <div key={group.key}>
           <h3 className={styles.groupHeading}>{group.key} <em>({group.total})</em></h3>
-          <div className={styles.list}>{group.list.map((item) => <WorkRow key={item.id} item={item} />)}</div>
+          <WorkTable items={group.list} sourceLabels={sourceLabels} />
         </div>)
-        : <div className={styles.list}>{items.map((item) => <WorkRow key={item.id} item={item} />)}</div>}
+        : <WorkTable items={items} sourceLabels={sourceLabels} />}
 
     {cursor ? <div className={styles.loadMore}>
       <button type="button" className={styles.secondaryButton} onClick={() => void loadMore()} disabled={loadingMore}>
@@ -289,54 +288,66 @@ export function WorkCenterView({ onOpenCompanyFilter, onNavigate, companyId }: {
 function Counter({ label, value, tone, active, onClick }: {
   label: string; value: number; tone?: "critical" | "warning"; active: boolean; onClick: () => void;
 }) {
+  // Nome antes do número, como aba de filtro: a fileira de cartões grandes com
+  // "0" em cada um era uma parede de zeros que não dizia nada.
   return <button type="button" className={styles.counter} data-tone={value > 0 ? tone : undefined}
-    aria-pressed={active} onClick={onClick}>
-    <strong>{value}</strong>
+    data-zero={value === 0 ? "" : undefined} aria-pressed={active} onClick={onClick}>
     <span>{label}</span>
+    <strong>{value}</strong>
   </button>;
 }
 
-const SOURCE_ICONS: Record<string, typeof ListChecks> = {
-  card: ListChecks,
-  approval: CheckCircle2,
-  movement: ArrowRight,
-  auxiliary: Inbox,
-  pending_item: AlertTriangle,
-  triage: Workflow,
-  integration_failure: AlertTriangle,
+/** Rótulo de uma linha: o filtro fala no plural ("Demandas"), a linha é uma só. */
+const SOURCE_SINGULAR: Record<string, string> = {
+  card: "Demanda", approval: "Aprovação", movement: "Movimentação", auxiliary: "Entrega auxiliar",
+  pending_item: "Pendência", triage: "Triagem", integration_failure: "Falha de integração",
 };
 
-function WorkRow({ item }: { item: WorkItem }) {
-  const Icon = SOURCE_ICONS[item.sourceType] ?? ListChecks;
-  return <article className={styles.item} data-tone={item.tone}>
-    <span className={styles.rail} aria-hidden="true" />
-    <div className={styles.itemBody}>
-      <div className={styles.itemTop}>
-        <Icon aria-hidden="true" />
-        <span className={styles.itemTitle}>{item.title}</span>
-        <span className={styles.badge} data-tone={item.tone === "neutral" ? undefined : item.tone}>{item.statusLabel}</span>
-        {item.priority === "urgent" ? <span className={styles.badge} data-tone="critical">{item.priorityLabel}</span> : null}
-      </div>
-      <div className={styles.itemMeta}>
-        <span><CalendarClock aria-hidden="true" /> {dueLabel(item.dueAt)}</span>
-        {item.companyName ? <span><Building2 aria-hidden="true" /> {item.companyName}</span> : null}
-        {item.processStep ? <span><Workflow aria-hidden="true" /> Etapa <strong>{item.processStep}</strong></span> : null}
-        <span>Origem: {item.originLabel}</span>
-        <span>Atualizado {formatDateTime(item.updatedAt)}</span>
-      </div>
-      {item.blockedReason ? <p className={styles.blocked}>
-        <AlertTriangle aria-hidden="true" />{item.blockedReason}
-      </p> : null}
-    </div>
-    <div className={styles.itemActions}>
-      {/* Um link de verdade, e não um botão que navega: assim copiar, abrir em
-          nova aba e o menu do navegador funcionam como em qualquer link (§10). */}
-      <a className={styles.primaryButton} href={item.href}>
-        Abrir<ArrowRight aria-hidden="true" />
-      </a>
-      <span className={styles.nextAction}>{item.nextAction}</span>
-    </div>
-  </article>;
+/**
+ * A lista em tabela, como em qualquer sistema de DP: uma linha por item,
+ * colunas fixas e o prazo alinhado para comparar de cima a baixo. Os cartões
+ * com ícone em cada campo pediam leitura item a item.
+ */
+function WorkTable({ items, sourceLabels }: { items: readonly WorkItem[]; sourceLabels: ReadonlyMap<string, string> }) {
+  return <div className={styles.tableWrap}>
+    <table className={styles.workTable}>
+      <thead>
+        <tr>
+          <th scope="col">Código</th>
+          <th scope="col">Item</th>
+          <th scope="col">Tipo</th>
+          <th scope="col">Empresa</th>
+          <th scope="col">Etapa</th>
+          <th scope="col">Situação</th>
+          <th scope="col" className={styles.numeric}>Prazo</th>
+          <th scope="col" className={styles.numeric}>Atualizado</th>
+          <th scope="col"><span className="sr-only">Ação</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        {items.map((item) => <tr key={item.id} data-tone={item.tone}>
+          <td className={styles.code}>{item.reference || "—"}</td>
+          <td className={styles.itemCell}>
+            <strong>{item.title}</strong>
+            {item.blockedReason ? <span className={styles.blocked}>{item.blockedReason}</span>
+              : <span>{item.nextAction}{item.originLabel ? ` · ${item.originLabel}` : ""}</span>}
+          </td>
+          <td>{SOURCE_SINGULAR[item.sourceType] ?? sourceLabels.get(item.sourceType) ?? item.sourceType}</td>
+          <td>{item.companyName || "—"}</td>
+          <td>{item.processStep || "—"}</td>
+          <td>
+            <span className={styles.badge} data-tone={item.tone === "neutral" ? undefined : item.tone}>{item.statusLabel}</span>
+            {item.priority === "urgent" ? <span className={styles.badge} data-tone="critical">{item.priorityLabel}</span> : null}
+          </td>
+          <td className={styles.numeric}>{item.dueAt ? dueLabel(item.dueAt) : "—"}</td>
+          <td className={styles.numeric}>{formatDateTime(item.updatedAt)}</td>
+          {/* Um link de verdade, e não um botão que navega: assim copiar, abrir
+              em nova aba e o menu do navegador funcionam como em qualquer link (§10). */}
+          <td><a className={styles.rowLink} href={item.href} aria-label={`Abrir: ${item.title}`}>Abrir</a></td>
+        </tr>)}
+      </tbody>
+    </table>
+  </div>;
 }
 
 /** A mesma chave que o servidor conta, para o rótulo do grupo bater com o total. */

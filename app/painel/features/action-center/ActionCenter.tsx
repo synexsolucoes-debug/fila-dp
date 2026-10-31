@@ -32,8 +32,12 @@ function dueLabel(value: string | null) {
  * decorativo. Indicadores zerados são mantidos fora da lista para que a tela
  * responda de fato "o que precisa ser feito agora?".
  */
-export function ActionCenter({ onNavigate, companyId = "" }: {
+export function ActionCenter({ onNavigate, companyId = "", embedded = false, reloadSignal = 0 }: {
   onNavigate: (target: ActionTarget) => void;
+  /** Dentro de Meu trabalho: sem "Atualizar" próprio (o da tela recarrega as
+   *  duas partes) e sem o link "Ver item a item", que levaria à mesma tela. */
+  embedded?: boolean;
+  reloadSignal?: number;
   /** Empresa escolhida na barra superior. Vazio = todas as autorizadas. */
   companyId?: string;
 }) {
@@ -70,6 +74,11 @@ export function ActionCenter({ onNavigate, companyId = "" }: {
     const frame = window.requestAnimationFrame(() => void load());
     return () => window.cancelAnimationFrame(frame);
   }, [load]);
+  useEffect(() => {
+    if (reloadSignal === 0) return;
+    const frame = window.requestAnimationFrame(() => void load(true));
+    return () => window.cancelAnimationFrame(frame);
+  }, [reloadSignal, load]);
 
   const active = items.filter((item) => item.count > 0);
 
@@ -86,7 +95,7 @@ export function ActionCenter({ onNavigate, companyId = "" }: {
                 : `${pendingTotal === 1 ? "1 pendência em aberto" : `${pendingTotal} pendências em aberto`}${criticalTotal ? `, ${criticalTotal === 1 ? "1 crítica" : `${criticalTotal} críticas`}` : ""}.`}
           </p>
         </div>
-        <div className={styles.headerActions}>
+        {!embedded && <div className={styles.headerActions}>
           {/* A porta para a lista inteira (§46). A central de ação responde
               "quanta coisa há" por módulo; a Central de Trabalho responde "o
               que exatamente está comigo", item a item. Uma leva à outra em vez
@@ -98,7 +107,7 @@ export function ActionCenter({ onNavigate, companyId = "" }: {
             <RefreshCw aria-hidden="true" className={refreshing ? styles.spin : undefined} />
             {refreshing ? "Atualizando…" : "Atualizar"}
           </button>
-        </div>
+        </div>}
       </header>
 
       {error && <p className={styles.error} role="alert"><AlertOctagon aria-hidden="true" /> {error}</p>}

@@ -562,7 +562,7 @@ function ContractorEditor({ mode, current, busy, onClose, onSubmit, dialogRef }:
               </label>
               <label>Empresa sugerida
                 <input name="companyId" defaultValue={current?.companyId ?? ""} />
-                <small>Opcional. O prestador é do grupo — quem paga é a empresa que apurar a competência.</small>
+                <small>Opcional. Quem paga é a empresa que apurar a competência.</small>
               </label>
               <label>E-mail<input name="email" type="email" defaultValue={current?.email ?? ""} maxLength={180} /></label>
               <label>Telefone<input name="phone" defaultValue={current?.phone ?? ""} maxLength={40} /></label>

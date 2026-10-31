@@ -874,7 +874,7 @@ function DiscountsPanel({ discounts, filters, onFilters, permissions, onDecide }
         </tr>)}</tbody>
       </table>
     </div> : <EmptyState icon={Scale} title="Nenhum caso em análise"
-      text="Extravio, não devolução e dano por uso inadequado abrem a demanda automaticamente. Nada aqui significa nenhum desconto pendente." />}
+      text="Extravio, não devolução e dano por uso inadequado abrem a demanda automaticamente. Nenhuma análise pendente." />}
   </>;
 }
 
@@ -885,8 +885,8 @@ function ReportsPanel({ catalog, report, reportKey, filters, onFilters, canExpor
 }) {
   if (!catalog.length) {
     return <EmptyState icon={ClipboardList} title="Relatórios indisponíveis"
-      text="Não foi possível carregar o catálogo de relatórios. Atualize a tela para tentar novamente."
-      action={<button className={styles.secondaryButton} onClick={onReload}><RefreshCw aria-hidden="true" /> Atualizar</button>} />;
+      text="Não foi possível carregar o catálogo de relatórios."
+      action={<button className={styles.secondaryButton} onClick={onReload}><RefreshCw aria-hidden="true" /> Tentar de novo</button>} />;
   }
   return <div className={styles.reportLayout}>
     <nav className={styles.reportPicker} aria-label="Relatórios do Controle de EPI">

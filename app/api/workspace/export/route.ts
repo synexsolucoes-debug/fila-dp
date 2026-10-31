@@ -49,7 +49,7 @@ export async function GET(request: Request) {
           // que falta.
           write(`  "aviso": ${JSON.stringify({
             anexos: "os arquivos anexados não vão no JSON; a tabela fdp_card_attachments traz nome, tamanho e a referência de cada um",
-            colunasOmitidas: "segredos cifrados e hashes de correlação interna foram omitidos — a lista completa está em omissoes",
+            colunasOmitidas: "segredos cifrados e hashes de correlação interna foram omitidos. A lista completa está em omissoes",
           })},\n`);
           write(`  "omissoes": ${JSON.stringify(redactions)},\n`);
           write(`  "tabelas": {`);

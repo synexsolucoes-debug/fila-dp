@@ -86,7 +86,7 @@ export function decideSankhyaChange(input: {
   if (input.classification === "new") {
     return {
       outcome: "proposal",
-      reason: "Colaborador encontrado na origem sem correspondência no Vinculato. Pode ser uma admissão nova ou o mesmo colaborador com cadastro duplicado — criar sem conferir produziria duas folhas para a mesma pessoa.",
+      reason: "Colaborador encontrado na origem sem correspondência no Vinculato. Pode ser uma admissão nova ou o mesmo colaborador com cadastro duplicado. Criar sem conferir produziria duas folhas para a mesma pessoa.",
       sensitiveFields: [],
     };
   }

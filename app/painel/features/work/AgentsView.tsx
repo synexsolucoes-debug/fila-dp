@@ -65,7 +65,7 @@ function WorkerHealthCard({ worker, schedule }: {
     <section className={styles.workerHealth} data-tone={tone} aria-labelledby="worker-health-title">
       <header>
         <div>
-          <span>Worker no computador do DP</span>
+          <span>Agente local (computador do DP)</span>
           <h3 id="worker-health-title">
             {worker?.availability === "online" ? "Ativo"
               : worker?.availability === "needs_authentication" ? "Aguardando autenticação"
@@ -107,10 +107,7 @@ function WorkerHealthCard({ worker, schedule }: {
         </p>
       )}
 
-      <small>
-        O worker só funciona com este computador ligado, conectado e com a sessão do Windows aberta.
-        Desligado ou suspenso, nenhuma admissão é consultada.
-      </small>
+      <small>Depende do computador ligado e com o Windows desbloqueado.</small>
     </section>
   );
 }
@@ -245,9 +242,9 @@ export function AgentsView({ initialRunId = "" }: { initialRunId?: string }) {
   const permissions = payload?.permissions;
 
   return <section className={styles.workspace}>
-    <PanelHeader
+    <PanelHeader page
       eyebrow="Central de agentes"
-      title="Automação sob controle"
+      title="Agentes"
       description="Cada agente lê um sistema de origem e propõe. Nenhum deles escreve no domínio sozinho: o que eles produzem passa pelo motor determinístico e, quando não há certeza, pela triagem."
       action={<button type="button" className={styles.secondaryButton} onClick={() => void load(true)}>
         <RefreshCw aria-hidden="true" />Atualizar
@@ -282,7 +279,7 @@ export function AgentsView({ initialRunId = "" }: { initialRunId?: string }) {
               {agent.state.label}
             </span>
             {agent.kind === "channel"
-              ? <span className={styles.badge}>Recebe avisos — não entra em sistema nenhum</span>
+              ? <span className={styles.badge}>Só recebe avisos</span>
               : null}
           </header>
 
@@ -292,9 +289,9 @@ export function AgentsView({ initialRunId = "" }: { initialRunId?: string }) {
           {/* O caminho até o agente trabalhar, na ordem (§11, §12, §13). Some
               quando ele já está pronto: passo a passo de setup em cima de um
               agente ativo é ruído. */}
-          {SETUP_STATES.has(agent.state.key) && agent.steps.length ? <ol className={styles.itemMeta}>
-            {agent.steps.map((step, index) => <li key={step}>{index + 1}. {step}</li>)}
-          </ol> : null}
+          {SETUP_STATES.has(agent.state.key) && agent.steps.length
+            ? <p className={styles.agentSteps}><span>Passos:</span> {agent.steps.join(" › ")}</p>
+            : null}
 
           {/* Quando o acesso não é preparado aqui, a tela diz **onde** e **por
               quê**. Um card sem formulário e sem explicação seria o mesmo beco
@@ -311,6 +308,11 @@ export function AgentsView({ initialRunId = "" }: { initialRunId?: string }) {
             </span>
           </div> : null}
 
+          {/* Contadores só depois que existe algo rodando: nove cartões com "0"
+              num agente que nunca executou eram uma parede de zeros. */}
+          {agent.runs.total === 0 && agent.events.received === 0
+            ? <p className={styles.agentDetail}>Sem execuções nos últimos 30 dias.</p>
+            : <>
           <div className={styles.metrics}>
             <Metric label="Execuções (30d)" value={String(agent.runs.total)} />
             <Metric label="Falharam" value={String(agent.runs.failed)} />
@@ -328,6 +330,7 @@ export function AgentsView({ initialRunId = "" }: { initialRunId?: string }) {
             Última execução {formatDateTime(agent.runs.lastAt)} · última bem-sucedida {formatDateTime(agent.runs.lastSuccessAt)}
             {agent.schedule.enabled ? ` · próxima prevista ${formatDateTime(agent.schedule.nextRunAt)} (${agent.schedule.timeZone})` : " · sem execução automática"}
           </p>
+          </>}
 
           <div className={styles.agentActions}>
             {/* Cadência só para quem tem o que executar periodicamente. O

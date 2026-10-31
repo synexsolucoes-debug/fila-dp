@@ -327,8 +327,8 @@ function checkField(field: RegistrationFormField, raw: string): { status: Regist
 
 const NOTES: Record<RegistrationFieldStatus, string> = {
   ok: "",
-  blank: "Em branco no registro — buscar na origem.",
-  invalid: "Não foi possível ler com segurança — confira no arquivo.",
+  blank: "Em branco no registro. Buscar na origem.",
+  invalid: "Não foi possível ler com segurança. Confira no arquivo.",
 };
 
 /**
