@@ -74,10 +74,10 @@ export async function GET() {
         /* O rótulo diz o que a política faz, não o nome dela: "suggest_only"
            não significa nada para quem opera. */
         label: policy === "off"
-          ? "Desligada — toda entrada vai para triagem"
+          ? "Desligada. Toda entrada vai para triagem."
           : policy === "trusted"
-            ? "Automática para rotina de alta confiança, com evidência"
-            : "Só sugere — nenhuma ação acontece sem confirmação",
+            ? "Automática na rotina de alta confiança, com evidência."
+            : "Só sugere. Nada acontece sem confirmação.",
       },
       permissions: {
         manage: hasCapability(workspace, "integrations.manage"),

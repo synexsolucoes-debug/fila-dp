@@ -127,18 +127,20 @@ export function IntegrationsView({ role }: { role: WorkspaceRole }) {
   const standardConnectors = overview.connectors.filter((connector) => connector.channel !== "sankhya_browser");
 
   return <section className={styles.workspace}>
-    <div className={styles.connectionRail}><header><span><Cable /><strong>Integrações do workspace</strong><small>Dados e credenciais segregados por organização</small></span><button className={styles.refreshButton} onClick={() => void load()}><RefreshCw />Atualizar</button></header></div>
-    {error && <ErrorBanner title="Não foi possível consultar o estado" message={error} />}
-    <div className={styles.kpis}>
-      <article data-tone="safe"><span><Cable /></span><div><small>Conectadas</small><strong>{overview.connectors.filter((item) => item.status === "connected").length}</strong><em>{overview.connectors.length} configuradas</em></div></article>
-      <article data-tone={queue ? "warning" : "safe"}><span><Clock3 /></span><div><small>Fila</small><strong>{queue}</strong><em>jobs persistidos</em></div></article>
-      <article data-tone={failures ? "warning" : "safe"}><span><AlertTriangle /></span><div><small>Falhas recentes</small><strong>{failures}</strong><em>execuções carregadas</em></div></article>
-      <article><span><KeyRound /></span><div><small>Segurança</small><strong>Tenant</strong><em>isolamento por workspace</em></div></article>
+    <div className={styles.statusStrip}>
+      <strong>Integrações</strong>
+      <dl>
+        <div><dt>Conectadas</dt><dd>{overview.connectors.filter((item) => item.status === "connected").length} de {overview.connectors.length}</dd></div>
+        <div data-zero={queue === 0 || undefined}><dt>Na fila</dt><dd>{queue}</dd></div>
+        <div data-zero={failures === 0 || undefined} data-tone={failures ? "warning" : undefined}><dt>Falhas recentes</dt><dd>{failures}</dd></div>
+      </dl>
+      <button className={styles.refreshButton} onClick={() => void load()}><RefreshCw />Atualizar</button>
     </div>
+    {error && <ErrorBanner title="Não foi possível consultar o estado" message={error} />}
 
     {sankhya && <SankhyaConnectorPanel connector={sankhya} runs={overview.runs} companies={overview.companies} permissions={overview.permissions} refresh={refresh} />}
 
-    <section className={styles.tabPanel}><PanelHeader eyebrow="Outras conexões" title="Configuração e teste do piloto" description="Em cada conector: salve a configuração necessária, guarde a credencial no cofre e faça uma verificação real antes de sincronizar." />
+    <section className={styles.tabPanel}><PanelHeader eyebrow="Outras conexões" title="Conectores" description="Para cada um: configure, guarde a credencial e teste antes de sincronizar." />
       {standardConnectors.length ? <div className={styles.connectorRack}>{standardConnectors.map((connector) => {
         const config = (connector.config ?? {}) as StandardConnectorConfig;
         const isTeams = connector.channel === "teams";

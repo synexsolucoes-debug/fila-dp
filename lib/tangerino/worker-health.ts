@@ -130,8 +130,8 @@ export async function readWorkerHealth(d1: Database, workspaceId: string, now = 
       availability: "never_seen", heartbeat: null, secondsSinceLastSeen: null,
       pendingConsultations, pendingAttachments,
       detail: pending > 0
-        ? `O worker nunca se comunicou e há ${pending} ${pending === 1 ? "tarefa esperando" : "tarefas esperando"}. Confira se ele está instalado e em execução no computador do DP.`
-        : "O worker ainda não se comunicou. Ele precisa estar em execução no computador do DP para consultar admissões.",
+        ? `O agente local nunca se comunicou e há ${pending} ${pending === 1 ? "tarefa esperando" : "tarefas esperando"}. Confira se está instalado e rodando no computador do DP.`
+        : "Ainda não se comunicou. Instale e deixe rodando no computador do DP.",
     };
   }
 
@@ -156,22 +156,22 @@ export async function readWorkerHealth(d1: Database, workspaceId: string, now = 
   if (stale) {
     return {
       availability: "stale", heartbeat, secondsSinceLastSeen, pendingConsultations, pendingAttachments,
-      detail: `O worker não se comunica há ${secondsSinceLastSeen === null ? "um tempo indeterminado" : describeSeconds(secondsSinceLastSeen)}. `
+      detail: `O agente local não se comunica há ${secondsSinceLastSeen === null ? "um tempo indeterminado" : describeSeconds(secondsSinceLastSeen)}. `
         + "O computador pode estar desligado, suspenso ou sem rede. Enquanto isso, nenhuma admissão é consultada.",
     };
   }
   if (heartbeat.needsAuthentication) {
     return {
       availability: "needs_authentication", heartbeat, secondsSinceLastSeen, pendingConsultations, pendingAttachments,
-      detail: "O worker está de pé e parou esperando autenticação na Sólides (CAPTCHA, verificação em duas etapas ou senha recusada). "
+      detail: "O agente local está rodando, mas parou esperando autenticação na Sólides (CAPTCHA, verificação em duas etapas ou senha recusada). "
         + "Abra a janela do navegador no computador do DP e conclua o acesso.",
     };
   }
   return {
     availability: "online", heartbeat, secondsSinceLastSeen, pendingConsultations, pendingAttachments,
     detail: pending > 0
-      ? `O worker está ativo e tem ${pending} ${pending === 1 ? "tarefa na fila" : "tarefas na fila"}.`
-      : "O worker está ativo e sem tarefas na fila.",
+      ? `Ativo, com ${pending} ${pending === 1 ? "tarefa na fila" : "tarefas na fila"}.`
+      : "Ativo e sem tarefas na fila.",
   };
 }
 

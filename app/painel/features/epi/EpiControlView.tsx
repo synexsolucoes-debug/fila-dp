@@ -885,8 +885,8 @@ function ReportsPanel({ catalog, report, reportKey, filters, onFilters, canExpor
 }) {
   if (!catalog.length) {
     return <EmptyState icon={ClipboardList} title="Relatórios indisponíveis"
-      text="Não foi possível carregar o catálogo de relatórios. Atualize a tela para tentar novamente."
-      action={<button className={styles.secondaryButton} onClick={onReload}><RefreshCw aria-hidden="true" /> Atualizar</button>} />;
+      text="Não foi possível carregar o catálogo de relatórios."
+      action={<button className={styles.secondaryButton} onClick={onReload}><RefreshCw aria-hidden="true" /> Tentar de novo</button>} />;
   }
   return <div className={styles.reportLayout}>
     <nav className={styles.reportPicker} aria-label="Relatórios do Controle de EPI">

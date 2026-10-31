@@ -65,7 +65,7 @@ function WorkerHealthCard({ worker, schedule }: {
     <section className={styles.workerHealth} data-tone={tone} aria-labelledby="worker-health-title">
       <header>
         <div>
-          <span>Worker no computador do DP</span>
+          <span>Agente local (computador do DP)</span>
           <h3 id="worker-health-title">
             {worker?.availability === "online" ? "Ativo"
               : worker?.availability === "needs_authentication" ? "Aguardando autenticação"
@@ -107,10 +107,7 @@ function WorkerHealthCard({ worker, schedule }: {
         </p>
       )}
 
-      <small>
-        Precisa do computador ligado e com a sessão do Windows aberta.
-        Desligado ou suspenso, nenhuma admissão é consultada.
-      </small>
+      <small>Depende do computador ligado e com o Windows desbloqueado.</small>
     </section>
   );
 }

@@ -154,7 +154,7 @@ const SANKHYA: ProductAgent = {
       hint: "Opcional. O código ou nome que aparece na tela de login, quando o ambiente pede." },
   ],
   setupBy: "platform",
-  setupNote: "O acesso ao Sankhya é preparado pela Plataforma Global, e não aqui: credencial de ERP dá entrada no sistema onde a folha é fechada, e quem a grava responde por ela. Você continua acompanhando, testando, pausando e reprocessando este agente por esta tela.",
+  setupNote: "A credencial do Sankhya é gravada pela Plataforma Global. Aqui você acompanha, testa, pausa e reprocessa.",
   steps: [
     "Configurar acesso",
     "Credenciais",
