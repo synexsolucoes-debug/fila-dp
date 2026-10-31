@@ -313,6 +313,7 @@ function WorkTable({ items, sourceLabels }: { items: readonly WorkItem[]; source
     <table className={styles.workTable}>
       <thead>
         <tr>
+          <th scope="col">Código</th>
           <th scope="col">Item</th>
           <th scope="col">Tipo</th>
           <th scope="col">Empresa</th>
@@ -325,6 +326,7 @@ function WorkTable({ items, sourceLabels }: { items: readonly WorkItem[]; source
       </thead>
       <tbody>
         {items.map((item) => <tr key={item.id} data-tone={item.tone}>
+          <td className={styles.code}>{item.reference || "—"}</td>
           <td className={styles.itemCell}>
             <strong>{item.title}</strong>
             {item.blockedReason ? <span className={styles.blocked}>{item.blockedReason}</span>

@@ -312,3 +312,4 @@ div.counter { cursor: default; }
 .workTable td .badge + .badge { margin-left: 4px; }
 .rowLink { color: var(--work-accent-text); font-weight: 600; text-decoration: none; white-space: nowrap; }
 .rowLink:hover { text-decoration: underline; }
+.workTable .code { font-family: var(--font-mono, ui-monospace, monospace); font-size: .75rem; white-space: nowrap; color: var(--work-soft); }

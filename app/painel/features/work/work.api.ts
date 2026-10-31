@@ -50,6 +50,7 @@ export function normalizeWorkItem(row: Row): WorkItem {
     updatedAt: text(row.updatedAt),
     processId: text(row.processId),
     processStep: text(row.processStep),
+    reference: text(row.reference),
     origin: text(row.origin),
     originLabel: text(row.originLabel),
     blockedReason: text(row.blockedReason),
