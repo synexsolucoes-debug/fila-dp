@@ -404,13 +404,19 @@ async function auditAssistant(theme = "") {
 }
 
 async function signIn() {
-  if (!page.url().includes("/login")) return;
-  await page.locator('input[type="email"]').first().fill(EMAIL);
-  await page.locator('input[type="password"]').first().fill(PASSWORD);
-  await Promise.all([
-    page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 20000 }).catch(() => undefined),
-    page.getByRole("button", { name: /^Entrar$/u }).last().click(),
-  ]);
+  /* Espera o formulário ganhar vida antes de preencher. Preenchido antes da
+     hidratação, o clique em "Entrar" vira envio nativo do formulário: a página
+     recarrega /login, nenhuma sessão nasce, e a varredura segue sem conta —
+     foi o que fez o ensaio parar procurando o menu da conta. Duas tentativas. */
+  for (let tentativa = 0; tentativa < 2 && page.url().includes("/login"); tentativa += 1) {
+    await page.waitForLoadState("networkidle").catch(() => undefined);
+    await page.locator('input[type="email"]').first().fill(EMAIL);
+    await page.locator('input[type="password"]').first().fill(PASSWORD);
+    await Promise.all([
+      page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 20000 }).catch(() => undefined),
+      page.getByRole("button", { name: /^Entrar$/u }).last().click(),
+    ]);
+  }
 }
 
 /**
