@@ -19,7 +19,18 @@
  * reenviada ainda consegue receber a assinatura.
  */
 
-export type QueuedKind = "delivery" | "return" | "damage";
+/**
+ * O que pode esperar na fila.
+ *
+ * Entrada e transferência de estoque entram porque as duas rotas deduplicam
+ * pela chave de idempotência, como a entrega: reenviar não soma duas vezes.
+ * Higienização e descarte **não** entram, de propósito. São decisões sobre um
+ * registro que já existe no servidor, e o servidor recusa a segunda decisão com
+ * 409; enfileirada, uma conclusão feita sem rede poderia chegar depois de outra
+ * pessoa ter decidido o contrário no painel, e a tela teria mostrado "feito"
+ * para algo que não valeu.
+ */
+export type QueuedKind = "delivery" | "return" | "damage" | "stock_entry" | "stock_transfer";
 
 export type QueuedAttachment = {
   blob: Blob;
@@ -59,9 +70,12 @@ const endpoints: Record<QueuedKind, string> = {
   delivery: "/api/epi/deliveries",
   return: "/api/epi/returns",
   damage: "/api/epi/damages",
+  stock_entry: "/api/epi/stock/entries",
+  stock_transfer: "/api/epi/stock/transfers",
 };
 
-const entityTypes: Record<QueuedKind, string> = {
+/** Só os registros que aceitam anexo. Movimentação de estoque não leva evidência. */
+const entityTypes: Partial<Record<QueuedKind, string>> = {
   delivery: "delivery",
   return: "return",
   damage: "damage",
@@ -228,13 +242,15 @@ async function dispatch(operation: QueuedOperation) {
       body: JSON.stringify(operation.payload),
     });
     // A resposta nomeia o registro conforme a rota (`delivery`, `return`,
-    // `damage`); o `id` é a única parte de que o anexo depende.
-    const created = result[operation.kind] ?? result.delivery ?? result.return ?? result.damage;
+    // `damage`, `movement` para estoque); o `id` é a única parte de que o
+    // anexo depende.
+    const created = result[operation.kind] ?? result.delivery ?? result.return ?? result.damage ?? result.movement;
     id = created && typeof created === "object" ? String(created.id ?? "") : "";
     operation.recordId = id;
   }
-  if (operation.attachment && id) {
-    await sendAttachment(entityTypes[operation.kind], id, operation.attachment);
+  const entityType = entityTypes[operation.kind];
+  if (operation.attachment && id && entityType) {
+    await sendAttachment(entityType, id, operation.attachment);
   }
   return id;
 }

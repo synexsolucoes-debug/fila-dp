@@ -17,7 +17,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Vinculato Campo — Controle de EPI",
     short_name: "Vinculato Campo",
-    description: "Entrega, devolução e troca de EPI no local de trabalho, com assinatura e evidência.",
+    description: "Entrega, devolução e troca de EPI no local de trabalho, com assinatura e evidência. Vencimentos, estoque, higienização e descarte para o SESMT.",
     start_url: "/campo",
     scope: "/",
     display: "standalone",
@@ -43,6 +43,7 @@ export default function manifest(): MetadataRoute.Manifest {
       { name: "Entregar EPI", short_name: "Entregar", url: "/campo?acao=entrega" },
       { name: "Receber devolução", short_name: "Devolver", url: "/campo?acao=devolucao" },
       { name: "Registrar dano", short_name: "Dano", url: "/campo?acao=dano" },
+      { name: "Vencimentos e trocas de EPI", short_name: "Vencimentos", url: "/campo?acao=vencimentos" },
     ],
   };
 }
