@@ -500,7 +500,12 @@ async function setTheme(target) {
   // só então conclui que o menu sumiu.
   await page.waitForSelector(".account-menu-trigger", { timeout: 25000 }).catch(() => undefined);
   const trigger = page.locator(".account-menu-trigger");
-  if (await trigger.count() === 0) throw new Error("o menu da conta sumiu da interface");
+  if (await trigger.count() === 0) {
+    // Diz onde estava: sem isto a falha não distingue "sem sessão" de "tela quebrada".
+    const texto = await page.locator("body").innerText().catch(() => "");
+    console.log(`\nmenu da conta ausente em ${page.url()} — ${texto.replace(/\s+/gu, " ").slice(0, 200)}`);
+    throw new Error("o menu da conta sumiu da interface");
+  }
   for (let tentativa = 0; tentativa < 3; tentativa += 1) {
     const atual = await page.evaluate(() => document.querySelector(".dashboard-shell")?.dataset.theme ?? "");
     if (atual === target) return;
