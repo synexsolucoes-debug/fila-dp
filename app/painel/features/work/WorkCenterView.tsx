@@ -167,7 +167,7 @@ export function WorkCenterView({ onOpenCompanyFilter, onNavigate, companyId }: {
   if (loading && !payload) return <LoadingState title="Reunindo o seu trabalho…" />;
 
   return <section className={styles.workspace} aria-busy={refreshing}>
-    <PanelHeader
+    <PanelHeader page
       eyebrow="Central de trabalho"
       title="Meu trabalho"
       description="Demandas, aprovações, movimentações, entregas, pendências, triagem e falhas que exigem ação — em uma lista só. Cada item é resolvido na tela do módulo dono dele."

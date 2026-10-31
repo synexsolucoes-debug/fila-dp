@@ -242,7 +242,7 @@ export function AgentsView({ initialRunId = "" }: { initialRunId?: string }) {
   const permissions = payload?.permissions;
 
   return <section className={styles.workspace}>
-    <PanelHeader
+    <PanelHeader page
       eyebrow="Central de agentes"
       title="Agentes"
       description="Cada agente lê um sistema de origem e propõe. Nenhum deles escreve no domínio sozinho: o que eles produzem passa pelo motor determinístico e, quando não há certeza, pela triagem."

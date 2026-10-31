@@ -25,6 +25,10 @@
   border-bottom: 1px solid var(--ui-border);
 }
 .panelHeader > div { min-width: 0; }
+/* Cabeçalho de tela: mesmo desenho do `.dashboard-heading` do painel. */
+.pageHeader { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 40px; margin: 0 0 16px; }
+.pageHeader > div { min-width: 0; }
+.pageHeader h1 { margin: 0; color: var(--ui-text); font-size: 20px; font-weight: 650; line-height: 1.3; letter-spacing: -.01em; }
 .panelHeader h2 { margin: 4px 0 3px; font-size: 1rem; letter-spacing: -.015em; }
 .panelHeader p { margin: 0; color: var(--ui-text-soft); font-size: .75rem; line-height: 1.45; }
 .eyebrow {
@@ -161,6 +165,7 @@
    o botão espremido contra o texto. */
 @media (max-width: 760px) {
   .panelHeader { align-items: stretch; flex-direction: column; gap: 12px; min-height: 0; padding: 15px; }
+  .pageHeader { align-items: stretch; flex-direction: column; gap: 10px; }
   .headerAction { flex-wrap: wrap; }
   .headerAction > * { flex: 1; }
 }

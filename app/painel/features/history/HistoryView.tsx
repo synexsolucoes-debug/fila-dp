@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { History, RefreshCw } from "lucide-react";
+import { PanelHeader } from "../shared";
 
 /**
  * O histórico completo da operação (spec: "Ver histórico completo").
@@ -109,6 +110,8 @@ export function HistoryView({ onOpenCard }: { onOpenCard?: (cardId: string) => v
   }, [load]);
 
   return <section className="history-view" aria-label="Histórico da operação">
+    <PanelHeader page title="Histórico" action={<button type="button" className="secondary-button" disabled={loading}
+      onClick={() => { setLoading(true); void load(null); }}><RefreshCw aria-hidden="true" /> Atualizar</button>} />
     {error && <div className="history-error" role="alert">
       <p>{error}</p>
       <button type="button" onClick={() => { setLoading(true); void load(null); }}>

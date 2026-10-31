@@ -28,13 +28,17 @@ import styles from "./panel-ui.module.css";
  * gerado. `eyebrow` e `description` continuam aceitos para não obrigar a mexer
  * em quarenta chamadas, mas não são desenhados.
  */
-export function PanelHeader({ title, action }: {
+export function PanelHeader({ title, action, page = false }: {
   eyebrow?: string; title: string; description?: string; action?: ReactNode;
+  /** Cabeçalho da tela inteira, e não de um bloco dentro dela: título de
+   *  página e ações à direita, no mesmo lugar e tamanho do cabeçalho padrão
+   *  do painel. Assim toda tela tem a barra de ações no mesmo ponto. */
+  page?: boolean;
 }) {
   // A ação vai dentro de um invólucro próprio porque em tela estreita o
   // cabeçalho empilha e o botão precisa ocupar a largura.
-  return <header className={styles.panelHeader}>
-    <div><h2>{title}</h2></div>
+  return <header className={page ? styles.pageHeader : styles.panelHeader}>
+    <div>{page ? <h1>{title}</h1> : <h2>{title}</h2>}</div>
     {action ? <div className={styles.headerAction}>{action}</div> : null}
   </header>;
 }
