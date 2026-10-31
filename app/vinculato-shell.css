@@ -561,4 +561,4 @@
 .dashboard-shell.operational-ui .workspace-switcher > header span { color: var(--ui-text-muted); }
 .dashboard-shell.operational-ui .dashboard-task-labels .urgent { background: var(--ui-state-danger-bg); color: var(--ui-state-danger-text); }
 .dashboard-shell.operational-ui .planner-focus .planner-connections p { color: var(--ui-text-soft); }
-.dashboard-shell.operational-ui .planner-focus .planner-connections header button { color: var(--ui-primary); }
+.dashboard-shell.operational-ui .planner-focus .planner-connections header button { color: var(--ui-accent-text, var(--ui-primary)); }
