@@ -580,3 +580,17 @@
 /* Fonte de código só para dado (matrícula, CNPJ, valor, data). Rótulo e
    título voltam à fonte da interface. */
 .dashboard-shell.operational-ui .dashboard-content :is(small, label, th, dt, legend, h2, h3, h4) { font-family: var(--font-interface), "Inter", sans-serif; }
+
+/* ========================================================================== */
+/* 6. Listas em tabela                                                         */
+/* ========================================================================== */
+.dashboard-shell.operational-ui .inbox-table-wrap { overflow-x: auto; }
+.dashboard-shell.operational-ui .inbox-table { width: 100%; border-collapse: collapse; font-size: .8125rem; }
+.dashboard-shell.operational-ui .inbox-table th { padding: 7px 12px; border-bottom: 1px solid var(--ui-border-strong); background: var(--ui-surface-muted); color: var(--ui-text-soft); font-size: .75rem; font-weight: 600; text-align: left; white-space: nowrap; }
+.dashboard-shell.operational-ui .inbox-table td { padding: 8px 12px; border-bottom: 1px solid var(--ui-border); vertical-align: top; }
+.dashboard-shell.operational-ui .inbox-table tbody tr:hover td { background: var(--ui-surface-muted); }
+.dashboard-shell.operational-ui .inbox-table .numeric { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.dashboard-shell.operational-ui .inbox-table .inbox-subject strong { display: block; font-weight: 600; }
+.dashboard-shell.operational-ui .inbox-table .inbox-subject span { display: -webkit-box; overflow: hidden; margin-top: 2px; color: var(--ui-text-soft); font-size: .75rem; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.dashboard-shell.operational-ui .inbox-table td:last-child { text-align: right; white-space: nowrap; }
+.dashboard-shell.operational-ui .inbox-list-panel .empty-view .secondary-button { margin-top: 10px; }

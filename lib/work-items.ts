@@ -551,6 +551,10 @@ export const PRIORITY_LABELS: Record<string, string> = {
 
 const ORIGIN_LABELS: Record<string, string> = {
   manual: "Criada no Vinculato",
+  automation: "Automação",
+  automacao: "Automação",
+  system: "Sistema",
+  agent: "Agente",
   operacao: "Operação DP",
   auxiliares: "Módulos auxiliares",
   epi: "Controle de EPI",

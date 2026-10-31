@@ -34,9 +34,7 @@ import { LayoutGrid, Settings,
   Inbox,
   LayoutDashboard,
   ListChecks,
-  Mail,
   MessageCircle,
-  MessageSquareMore,
 
   MoreHorizontal,
   Paperclip,
@@ -5089,15 +5087,25 @@ function RulesSettings({ snapshot, busy, isAdmin, onCatalog, onConfirm }: { snap
 function InboxView({ items, busy, canEdit, onConvert, onNew }: { items: InboxItem[]; busy: boolean; canEdit: boolean; onConvert: (item: InboxItem) => Promise<void>; onNew: () => void }) {
   const pending = items.filter((item) => item.status === "new");
   const converted = items.filter((item) => item.status === "converted");
-  const channelIcon = (channel: string) => channel === "whatsapp" ? <Smartphone aria-hidden="true" /> : channel === "email" ? <Mail aria-hidden="true" /> : channel === "teams" ? <MessageSquareMore aria-hidden="true" /> : <Plus aria-hidden="true" />;
+  const channelLabels: Record<string, string> = { whatsapp: "WhatsApp", email: "E-mail", teams: "Teams", manual: "Registro manual" };
   return (
     <div className="inbox-layout">
       <section className="inbox-list-panel">
-        <header><div><strong>Aguardando triagem</strong><span>{pending.length} nova(s) • {converted.length} convertida(s)</span></div>{canEdit && <button onClick={onNew}><Plus aria-hidden="true" /> Registrar solicitação</button>}</header>
-        <div className="inbox-items">
-          {pending.length === 0 && <div className="empty-view"><span><CheckCircle2 aria-hidden="true" /></span><strong>Inbox organizada</strong><p>Não há solicitações aguardando triagem.</p></div>}
-          {pending.map((item) => <article className="inbox-item" key={item.id}><span className={`channel-icon ${item.channel}`}>{channelIcon(item.channel)}</span><div><div><strong>{item.subject}</strong><time>{formatReceived(item.receivedAt)}</time></div><span>{item.senderName} • {item.channel}</span><p>{item.body}</p>{canEdit && <button disabled={busy} onClick={() => void onConvert(item)}>Transformar em demanda <ArrowRight aria-hidden="true" /></button>}</div></article>)}
-        </div>
+        {/* O botão de criar fica só no cabeçalho da tela ("Nova solicitação"):
+            o segundo, aqui dentro, fazia a mesma coisa com outro nome. */}
+        <header><div><strong>Aguardando triagem</strong><span>{pending.length} nova(s) • {converted.length} convertida(s)</span></div></header>
+        {pending.length === 0
+          ? <div className="inbox-items"><div className="empty-view"><span><CheckCircle2 aria-hidden="true" /></span><strong>Nada aguardando triagem</strong><p>Solicitações recebidas por e-mail, Teams ou registro manual aparecem aqui.</p>{canEdit && <button className="secondary-button" onClick={onNew}><Plus aria-hidden="true" /> Registrar solicitação</button>}</div></div>
+          : <div className="inbox-table-wrap"><table className="inbox-table">
+            <thead><tr><th scope="col">Recebida</th><th scope="col">Canal</th><th scope="col">Remetente</th><th scope="col">Assunto</th>{canEdit && <th scope="col"><span className="sr-only">Ação</span></th>}</tr></thead>
+            <tbody>{pending.map((item) => <tr key={item.id}>
+              <td className="numeric">{formatReceived(item.receivedAt)}</td>
+              <td>{channelLabels[item.channel] ?? item.channel}</td>
+              <td>{item.senderName}</td>
+              <td className="inbox-subject"><strong>{item.subject}</strong>{item.body && <span>{item.body}</span>}</td>
+              {canEdit && <td><button className="secondary-button" disabled={busy} onClick={() => void onConvert(item)}>Transformar em demanda</button></td>}
+            </tr>)}</tbody>
+          </table></div>}
       </section>
     </div>
   );
