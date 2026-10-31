@@ -8,7 +8,7 @@ import { IntegrationDrawer } from "./IntegrationDrawers";
 import { normalizeOverview, requestJson, type Row } from "./integrations.api";
 import type { Connector, IntegrationEditor, IntegrationsOverview, StandardConnectorConfig } from "./integrations.types";
 import { SankhyaConnectorPanel } from "./SankhyaConnectorPanel";
-import { EmptyState, ErrorBanner, PageSkeleton, PanelHeader, StatusPill } from "../shared";
+import { connectionStatusLabel, EmptyState, ErrorBanner, PageSkeleton, PanelHeader, StatusPill } from "../shared";
 import styles from "./integrations.module.css";
 
 const empty: IntegrationsOverview = {
@@ -147,7 +147,7 @@ export function IntegrationsView({ role }: { role: WorkspaceRole }) {
         const credentialReady = isTeams ? connector.hasWebhookSecret : connector.hasCredentials;
         const canManage = overview.permissions.manage;
         const permissionTitle = canManage ? undefined : "Seu perfil não possui permissão para gerenciar integrações.";
-        return <article key={connector.id} data-status={connector.status}><header><span className={styles.connectorIcon}><Cable /></span><div><small>{channelLabel(connector.channel)}</small><strong>{connector.displayName}</strong></div><StatusPill status={connector.status} tone={tone(connector.status)} label={connector.status.replaceAll("_", " ")} /></header>
+        return <article key={connector.id} data-status={connector.status}><header><span className={styles.connectorIcon}><Cable /></span><div><small>{channelLabel(connector.channel)}</small><strong>{connector.displayName}</strong></div><StatusPill status={connector.status} tone={tone(connector.status)} label={connectionStatusLabel(connector.status)} /></header>
           <div className={styles.pilotFlow} aria-label="Etapas do piloto"><span data-done={configured}><b>1</b>Configurar</span><span data-done={credentialReady}><b>2</b>{isTeams ? "Webhook" : "Credencial"}</span><span data-done={connector.status === "connected"}><b>3</b>{isTeams ? "Receber evento" : "Testar"}</span></div>
           <dl><div><dt>Configuração</dt><dd><Settings2 />{configured ? (isTeams ? "canal salvo" : isTangerino ? "agente preparado" : "endpoint salvo") : "pendente"}</dd></div><div><dt>{isTeams ? "Webhook" : "Credencial"}</dt><dd><KeyRound />{credentialReady ? "configurado" : "não configurado"}</dd></div><div><dt>{isTeams ? "Último evento" : "Última verificação"}</dt><dd><ShieldCheck />{date(isTeams ? connector.lastSyncAt : connector.verifiedAt)}</dd></div><div><dt>Última sincronização</dt><dd><Clock3 />{date(connector.lastSyncAt)}</dd></div></dl>
           {connector.lastError && <div className={styles.safeError}><AlertTriangle />{connector.lastError}</div>}

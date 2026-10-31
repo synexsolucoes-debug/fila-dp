@@ -7,7 +7,7 @@ import {
   LoaderCircle, Plus, Trash2, Vault, X,
 } from "lucide-react";
 import type { Connector, IntegrationEditor, Mapping, RunDetail, StandardConnectorConfig } from "./integrations.types";
-import { StatusPill } from "../shared";
+import { runStatusLabel, StatusPill } from "../shared";
 import styles from "./integrations.module.css";
 
 type Props = {
@@ -281,5 +281,5 @@ function StatusMark({ status }: { status: string }) {
   // Vocabulário de conector: o desconhecido aqui pede atenção, não neutralidade
   // — um estado que o painel não reconhece num canal externo é sinal, não ruído.
   const tone = ["connected", "completed", "processed", "succeeded"].includes(status) ? "safe" : ["failed", "dead_letter", "conflict"].includes(status) ? "danger" : "warning";
-  return <StatusPill status={status} tone={tone} label={status.replaceAll("_", " ")} />;
+  return <StatusPill status={status} tone={tone} label={runStatusLabel(status)} />;
 }

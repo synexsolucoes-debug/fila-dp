@@ -362,7 +362,7 @@ const viewCatalog: Record<View, ViewEntry> = {
   },
   work: {
     label: "Meu trabalho", icon: ClipboardList,
-    eyebrow: "Central de trabalho", title: "O que está comigo hoje",
+    eyebrow: "Central de trabalho", title: "Meu trabalho",
     description: "Demandas, aprovações, movimentações, entregas, pendências, triagem e falhas que exigem ação — em uma lista só.",
     ownHeader: true,
   },
@@ -412,7 +412,7 @@ const viewCatalog: Record<View, ViewEntry> = {
   },
   agents: {
     label: "Agentes", icon: Bot, module: "integrations", hiddenFor: ["guest", "observer"], ownHeader: true,
-    eyebrow: "Central de agentes", title: "Automação sob controle",
+    eyebrow: "Central de agentes", title: "Agentes",
     description: "Estado, cadência, execução e histórico dos agentes que leem os sistemas de origem.",
   },
   triage: {
@@ -3724,7 +3724,7 @@ export function WorkspaceApp({
                   <label className="full">Processo
                     <select value={cardForm.processVersionId} disabled={!canEdit}
                       onChange={(event) => setCardForm({ ...cardForm, processVersionId: event.target.value })}>
-                      <option value="">Demanda avulsa — sem processo</option>
+                      <option value="">Demanda avulsa (sem processo)</option>
                       {[...new Set(startableProcesses.map((item) => item.areaName))].sort().map((area) => (
                         <optgroup label={area} key={area}>
                           {startableProcesses.filter((item) => item.areaName === area).map((item) => (
@@ -4686,7 +4686,7 @@ function PayrollView({ companies, metrics, busy, canEdit, onSaveMetric, onImport
     {/* Movimentos para o Sankhya: lança os eventos variáveis por colaborador e
         gera a planilha do Importador de Movimentos (docs/movimentos-para-o-sankhya.md). */}
     <PayrollMovementsPanel companies={companies} canEdit={canEdit} />
-    {canEdit && <section className="payroll-entry-panel"><header><div><span>Novo lançamento</span><h2>Registrar dados da folha</h2><p>Informe os valores já apurados na folha ou ERP. O sistema consolida custos e indicadores, sem aplicar alíquotas legais por conta própria.</p></div><b>Total calculado: {money(formTotal)}</b></header><form onSubmit={(event) => void submit(event)}>
+    {canEdit && <section className="payroll-entry-panel"><header><div><span>Novo lançamento</span><h2>Registrar dados da folha</h2><p>Informe os valores já apurados na folha ou no ERP.</p></div><b>Total calculado: {money(formTotal)}</b></header><form onSubmit={(event) => void submit(event)}>
       <label>Empresa<select value={form.companyId} required disabled={busy} onChange={(event) => setForm({ ...form, companyId: event.target.value })}><option value="" disabled>Selecione</option>{companies.filter((company) => company.status === "active").map((company) => <option value={company.id} key={company.id}>{company.tradeName || company.legalName}</option>)}</select></label>
       <label>Competência<input type="month" value={form.period} required disabled={busy} onChange={(event) => setForm({ ...form, period: event.target.value })} /></label>
       <fieldset className="payroll-form-section"><legend>Pessoas e movimentação</legend>{numericField("Headcount no início", "headcountStart")}{numericField("Headcount no fim", "headcountEnd")}{numericField("Afastados no período", "leavesCount")}{numericField("Admissões", "admissions")}{numericField("Desligamentos voluntários", "voluntaryTerminations")}{numericField("Desligamentos involuntários", "involuntaryTerminations")}<p>Headcount médio: <strong>{formHeadcount.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</strong> · encerramento esperado: <strong>{expectedHeadcount.toLocaleString("pt-BR")}</strong></p></fieldset>
@@ -4841,7 +4841,7 @@ function PermissionMatrix() {
     <header>
       <div>
         <strong id="permission-matrix-title">O que cada papel permite</strong>
-        <span>Lista completa, direto do modelo de autorização — não é um resumo escrito à mão.</span>
+        <span>Permissões de cada papel.</span>
       </div>
     </header>
     {capabilityAreas.map((area) => {

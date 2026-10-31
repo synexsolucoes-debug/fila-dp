@@ -260,13 +260,13 @@ export type AgentState =
 
 export const agentStateLabels: Record<AgentState, { label: string; detail: string }> = {
   not_configured: { label: "Não configurado", detail: "Falta informar o acesso deste agente." },
-  credential_pending: { label: "Credencial pendente", detail: "O acesso está descrito, mas usuário e senha ainda não foram gravados." },
-  test_pending: { label: "Teste pendente", detail: "A credencial está guardada. Gravar não prova que ela funciona — falta um teste bem-sucedido." },
-  ready: { label: "Pronto", detail: "Testado e conferido. Falta ativar para o agente passar a trabalhar." },
+  credential_pending: { label: "Credencial pendente", detail: "Falta gravar usuário e senha." },
+  test_pending: { label: "Teste pendente", detail: "Credencial gravada. Falta o teste de acesso." },
+  ready: { label: "Pronto", detail: "Testado. Falta ativar." },
   active: { label: "Ativo", detail: "Trabalhando normalmente." },
-  paused: { label: "Pausado", detail: "Alguém interrompeu de propósito. Nada é executado até retomar." },
-  degraded: { label: "Degradado", detail: "Continua de pé, mas algo mudou na origem ou vem falhando. Precisa de conferência." },
-  error: { label: "Erro", detail: "A última execução falhou e o agente não conseguiu se recuperar sozinho." },
+  paused: { label: "Pausado", detail: "Pausado manualmente. Nada roda até retomar." },
+  degraded: { label: "Degradado", detail: "Funciona, mas vem falhando. Confira a origem." },
+  error: { label: "Erro", detail: "A última execução falhou." },
 };
 
 /**

@@ -150,7 +150,7 @@ export async function PATCH(request: Request) {
     if (cadence || timeZone) {
       if (cadence && !isAgentCadence(cadence)) {
         throw ApiError.badRequest(
-          "Cadência desconhecida. Escolha uma das oferecidas — frequências menores que 15 minutos não são aceitas.",
+          "Cadência desconhecida. Escolha uma das oferecidas. Frequências menores que 15 minutos não são aceitas.",
           "AGENT_CADENCE_INVALID",
         );
       }

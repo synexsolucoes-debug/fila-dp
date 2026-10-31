@@ -427,7 +427,7 @@ export function ProcessManagementView({ role }: { role: WorkspaceRole }) {
           <div className={styles.settingsPanel}>
             <Settings2 aria-hidden="true" />
             <h3>Configurações</h3>
-            <p>Esta versão mantém definição e execução separadas: publicar um processo descreve como ele funciona, e não inicia instância nenhuma. A execução real entra na próxima fase sem alterar versões já publicadas.</p>
+            <p>Publicar um processo não inicia nenhuma execução.</p>
             <small>Perfil atual: {role}</small>
           </div>
         ) : <>

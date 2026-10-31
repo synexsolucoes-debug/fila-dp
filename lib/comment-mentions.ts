@@ -121,7 +121,7 @@ export function resolveMentions(
 export function mentionWarning(resolution: Pick<MentionResolution, "ambiguous" | "unknown" | "withoutAccess">): string {
   const parts: string[] = [];
   const list = (items: string[]) => items.map((item) => `@${item}`).join(", ");
-  if (resolution.ambiguous.length) parts.push(`${list(resolution.ambiguous)} combina com mais de uma pessoa — escreva o nome completo, como @ana.paula`);
+  if (resolution.ambiguous.length) parts.push(`${list(resolution.ambiguous)} combina com mais de uma pessoa. Escreva o nome completo, como @ana.paula`);
   if (resolution.unknown.length) parts.push(`${list(resolution.unknown)} não é ninguém do workspace`);
   if (resolution.withoutAccess.length) parts.push(`${list(resolution.withoutAccess)} não tem acesso à empresa desta demanda`);
   return parts.length ? `Comentário publicado, mas ninguém foi avisado por ${parts.join("; ")}.` : "";

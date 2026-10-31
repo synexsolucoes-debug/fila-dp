@@ -163,7 +163,7 @@ export async function readWorkerHealth(d1: Database, workspaceId: string, now = 
   if (heartbeat.needsAuthentication) {
     return {
       availability: "needs_authentication", heartbeat, secondsSinceLastSeen, pendingConsultations, pendingAttachments,
-      detail: "O worker está de pé e parou esperando autenticação na Sólides — CAPTCHA, verificação em duas etapas ou senha recusada. "
+      detail: "O worker está de pé e parou esperando autenticação na Sólides (CAPTCHA, verificação em duas etapas ou senha recusada). "
         + "Abra a janela do navegador no computador do DP e conclua o acesso.",
     };
   }
@@ -220,7 +220,7 @@ export async function readScheduleHealth(d1: Database, workspaceId: string, now 
     detail: !scheduleEnabled
       ? "A varredura automática está desligada para este agente. Só as execuções manuais enfileiram admissões."
       : overdue
-      ? "A varredura do servidor está atrasada. O worker pode estar bem e mesmo assim não receber tarefas — confira o agendamento do backend."
+      ? "A varredura do servidor está atrasada. O worker pode estar bem e mesmo assim não receber tarefas. Confira o agendamento do backend."
       : "O agendamento do servidor está em dia.",
   };
 }

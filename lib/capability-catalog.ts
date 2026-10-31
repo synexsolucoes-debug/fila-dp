@@ -180,7 +180,7 @@ export const roleLabels = {
 
 export const roleSummaries = {
   admin: "Administra o grupo inteiro: usuários, empresas, plano, integrações e auditoria. Enxerga todas as empresas.",
-  member: "Executa a operação do dia a dia — demandas, competências, movimentações e pagamentos auxiliares — nas empresas liberadas.",
+  member: "Executa a operação do dia a dia (demandas, competências, movimentações e pagamentos auxiliares) nas empresas liberadas.",
   observer: "Só consulta. Não cria, não edita e não aprova nada.",
   guest: "Acesso mínimo: vê demandas e pode comentar. Indicado para quem participa de um assunto pontual.",
 } as const;

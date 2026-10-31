@@ -185,7 +185,7 @@ export async function buildVinculatoAdmissionSheetPdf(input: VinculatoAdmissionS
     /* Legenda da cor roxa: sem ela, "Conferir (sugestão, foto)" apareceria como
        mais um campo lido, e é exatamente o que este recurso nunca pode ser. */
     if (hasAnySuggestion) {
-      target.drawText("Em roxo: lido por OCR de foto, ainda não confirmado — confira e corrija na tela antes do cadastro.", {
+      target.drawText("Em roxo: lido por OCR de foto, ainda não confirmado. Confira e corrija na tela antes do cadastro.", {
         x: MARGIN, y: 14, size: 6.2, font: bold, color: suggestion,
       });
     }

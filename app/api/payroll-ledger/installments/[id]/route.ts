@@ -51,7 +51,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     if (Number(installment.discounted_amount ?? 0) !== 0) {
       throw ApiError.badRequest(
-        "Esta parcela já teve desconto confirmado. Estorne a confirmação antes de mexer na programação — o histórico do que foi descontado é preservado.",
+        "Esta parcela já teve desconto confirmado. Estorne a confirmação antes de mexer na programação. O histórico do que foi descontado é preservado.",
         "LEDGER_INSTALLMENT_CONFIRMED",
       );
     }
@@ -122,7 +122,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       .bind(workspace.id, id).first<Record<string, unknown>>();
     if (String(aplicado?.competence) !== proximaCompetencia || String(aplicado?.status) !== proximoStatus) {
       throw new ApiError(409, "LEDGER_INSTALLMENT_CHANGED",
-        "A parcela mudou enquanto a alteração era aplicada — provavelmente alguém confirmou o desconto. Recarregue e confira.");
+        "A parcela mudou enquanto a alteração era aplicada. Provavelmente alguém confirmou o desconto. Recarregue e confira.");
     }
 
     return Response.json({ installment: aplicado });

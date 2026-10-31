@@ -874,7 +874,7 @@ function DiscountsPanel({ discounts, filters, onFilters, permissions, onDecide }
         </tr>)}</tbody>
       </table>
     </div> : <EmptyState icon={Scale} title="Nenhum caso em análise"
-      text="Extravio, não devolução e dano por uso inadequado abrem a demanda automaticamente. Nada aqui significa nenhum desconto pendente." />}
+      text="Extravio, não devolução e dano por uso inadequado abrem a demanda automaticamente. Nenhuma análise pendente." />}
   </>;
 }
 

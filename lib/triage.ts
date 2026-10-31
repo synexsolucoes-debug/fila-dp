@@ -107,7 +107,7 @@ const UNCERTAINTY: Record<string, { title: string; action: string }> = {
   },
   AGENT_EVIDENCE_REQUIRED: {
     title: "Sem evidência anexada, a ação automática vira sugestão.",
-    action: "Confira a origem antes de confirmar — não haverá o que reconferir depois.",
+    action: "Confira a origem antes de confirmar. Não haverá o que reconferir depois.",
   },
   AGENT_PAUSED: {
     title: "O agente estava pausado quando a entrada chegou.",

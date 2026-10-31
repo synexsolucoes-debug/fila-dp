@@ -63,7 +63,7 @@ export async function runDocumentOcr(input: { bytes: Uint8Array; contentType: st
   }
   if (input.bytes.byteLength === 0 || input.bytes.byteLength > MAX_IMAGE_BYTES) {
     throw new PhotoOcrError("OCR_IMAGE_SIZE_INVALID",
-      "A foto está vazia ou passa de 1 MB — o teto da cota gratuita do OCR.space. Reduza o tamanho e anexe de novo.");
+      "A foto está vazia ou passa de 1 MB, o teto da cota gratuita do OCR.space. Reduza o tamanho e anexe de novo.");
   }
 
   const form = new FormData();

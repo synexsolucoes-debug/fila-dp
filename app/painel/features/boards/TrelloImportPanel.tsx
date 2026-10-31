@@ -204,11 +204,11 @@ export function TrelloImportPanel({ busy, processTypes, onImport }: {
             <th scope="row">{label.name || `sem nome (${label.color ?? "sem cor"})`}</th>
             <td className={styles.num}>{label.cards}</td>
             <td><select aria-label={`Empresa da etiqueta ${label.name}`} value={mapping.labelCompany[label.id] ?? ""} onChange={(event) => setEntry("labelCompany", label.id, event.target.value)}>
-              <option value="">— etiqueta comum —</option>
+              <option value="">Etiqueta comum</option>
               {preview.companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
             </select></td>
             <td><select aria-label={`Processo da etiqueta ${label.name}`} value={mapping.labelProcessType[label.id] ?? ""} onChange={(event) => setEntry("labelProcessType", label.id, event.target.value)}>
-              <option value="">— padrão —</option>
+              <option value="">Padrão</option>
               {processTypes.map((type) => <option key={type}>{type}</option>)}
             </select></td>
           </tr>)}</tbody>
@@ -223,7 +223,7 @@ export function TrelloImportPanel({ busy, processTypes, onImport }: {
           <tbody>{preview.board.members.map((member) => <tr key={member.id}>
             <th scope="row">{member.name}</th>
             <td><select aria-label={`Pessoa para ${member.name}`} value={mapping.members[member.id] ?? ""} onChange={(event) => setEntry("members", member.id, event.target.value)}>
-              <option value="">— não atribuir —</option>
+              <option value="">Não atribuir</option>
               {preview.members.map((person) => <option key={person.userId} value={person.userId}>{person.name}</option>)}
             </select></td>
           </tr>)}</tbody>
@@ -247,7 +247,7 @@ export function TrelloImportPanel({ busy, processTypes, onImport }: {
           <article><small>Comentários</small><strong>{plan.summary.comments}</strong><span>{plan.summary.attachmentsAsLinks} anexo(s) como link</span></article>
         </div>
         {plan.warnings.length > 0 && <ul className={styles.warnings}>{plan.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
-        <p className={styles.hint}>As demandas entram sem disparar automações nem notificações: são histórico, não trabalho novo chegando. Demanda aberta sem responsável recebe quem responde pela empresa na carteira do DP, como na criação manual.</p>
+        <p className={styles.hint}>As demandas entram sem disparar automações nem notificações. Demanda aberta sem responsável recebe o titular da empresa na carteira do DP.</p>
       </div>}
     </>}
   </section>;

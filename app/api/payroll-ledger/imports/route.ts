@@ -69,7 +69,7 @@ export async function POST(request: Request) {
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, companyId);
     if (!isCompetence(entryCompetence)) {
       throw ApiError.badRequest(
-        "Informe a competência de entrada no formato AAAA-MM — é a partir dela que o Vinculato passa a controlar.",
+        "Informe a competência de entrada no formato AAAA-MM. É a partir dela que o Vinculato passa a controlar.",
         "INVALID_LEDGER_COMPETENCE",
       );
     }

@@ -108,7 +108,7 @@ function WorkerHealthCard({ worker, schedule }: {
       )}
 
       <small>
-        O worker só funciona com este computador ligado, conectado e com a sessão do Windows aberta.
+        Precisa do computador ligado e com a sessão do Windows aberta.
         Desligado ou suspenso, nenhuma admissão é consultada.
       </small>
     </section>
@@ -247,7 +247,7 @@ export function AgentsView({ initialRunId = "" }: { initialRunId?: string }) {
   return <section className={styles.workspace}>
     <PanelHeader
       eyebrow="Central de agentes"
-      title="Automação sob controle"
+      title="Agentes"
       description="Cada agente lê um sistema de origem e propõe. Nenhum deles escreve no domínio sozinho: o que eles produzem passa pelo motor determinístico e, quando não há certeza, pela triagem."
       action={<button type="button" className={styles.secondaryButton} onClick={() => void load(true)}>
         <RefreshCw aria-hidden="true" />Atualizar
@@ -282,7 +282,7 @@ export function AgentsView({ initialRunId = "" }: { initialRunId?: string }) {
               {agent.state.label}
             </span>
             {agent.kind === "channel"
-              ? <span className={styles.badge}>Recebe avisos — não entra em sistema nenhum</span>
+              ? <span className={styles.badge}>Só recebe avisos</span>
               : null}
           </header>
 
