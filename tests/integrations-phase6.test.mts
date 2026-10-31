@@ -115,7 +115,7 @@ test("phase 6 UI is modular, secret-safe, resource-driven and keyboard accessibl
     readFile(new URL("../app/painel/features/integrations/integrations.types.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8"),
   ]);
-  assert.match(view, /INTEGRAÇÕES DO WORKSPACE/ui);
+  assert.match(view, /<strong>Integrações<\/strong>/u);
   assert.match(view, /SankhyaConnectorPanel/u);
   assert.match(view, /IntegrationDrawer/u);
   assert.match(view, /Configurar[\s\S]+Credencial[\s\S]+Testar conexão/u);
