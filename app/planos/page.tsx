@@ -93,8 +93,8 @@ export default async function PlanosPage() {
     <SiteShell active="/planos">
       <SiteHero
         eyebrow="Planos"
-        title="Preço, limites e módulos de cada plano"
-        description="Esta página mostra o catálogo real do produto. Um plano só exibe contratação direta quando está ativo e com preço configurado no provedor de pagamento; fora disso, a condição é fechada com a equipe — preferimos combinar a anunciar algo que o sistema ainda não cobra."
+        title="Planos"
+        description="Preços, limites e módulos de cada plano, vindos do mesmo catálogo usado na cobrança. Quando um plano ainda não tem contratação direta, a condição é combinada com a equipe."
       />
 
       <section className={styles.section}>

@@ -14,12 +14,12 @@ export default function IntegracoesPage() {
     <SiteShell active="/integracoes">
       <SiteHero
         eyebrow="Integrações"
-        title="O estado real de cada integração, sem logo decorativo"
-        description="Uma integração só é chamada de disponível quando existe conexão, autenticação, teste, mapeamento, tratamento de erro, log e repetição. O restante aparece como preparado — arquitetura pronta, aguardando documentação, credencial e homologação."
+        title="Integrações"
+        description="Uma integração só aparece como disponível quando tem conexão, autenticação, teste, mapeamento, tratamento de erro, registro e nova tentativa. As demais aparecem como parciais ou preparadas: a estrutura existe, e falta documentação, credencial ou homologação."
       />
 
       <section className={styles.section}>
-        <div className={styles.tableWrap}>
+        <div className={styles.tableWrap} tabIndex={0} role="region" aria-label="Situação de cada integração">
           <table className={styles.table}>
             <caption className="sr-only">Catálogo de integrações e seu estado atual</caption>
             <thead>

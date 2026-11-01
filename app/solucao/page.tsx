@@ -21,7 +21,7 @@ export default function SolucaoPage() {
     <SiteShell active="/solucao">
       <SiteHero
         eyebrow="Solução"
-        title="Uma camada que coordena o Departamento Pessoal entre os sistemas que você já usa"
+        title="Como o Vinculato trabalha com os sistemas que você já usa"
         description={productPositioning.summary}
       >
         <div className={styles.heroActions}>

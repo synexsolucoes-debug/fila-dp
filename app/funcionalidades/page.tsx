@@ -14,8 +14,8 @@ export default function FuncionalidadesPage() {
     <SiteShell active="/funcionalidades">
       <SiteHero
         eyebrow="Funcionalidades"
-        title="O que já está implementado e em uso"
-        description="Esta página lista apenas recursos existentes no produto. O que ainda está em construção aparece na página de integrações com o estado real."
+        title="Funcionalidades"
+        description="Tudo o que está nesta página já existe no produto. O que ainda está em construção aparece na página de integrações, com a situação de cada conector."
       />
 
       <section className={styles.section}>

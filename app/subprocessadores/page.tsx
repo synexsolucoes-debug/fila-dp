@@ -34,7 +34,7 @@ export default function SubprocessadoresPage() {
         </p>
 
         <h2>1. Subprocessadores atuais</h2>
-        <div className={styles.tableWrap}>
+        <div className={styles.tableWrap} tabIndex={0} role="region" aria-label="Lista de subprocessadores">
           <table className={styles.table}>
             <caption className="sr-only">Lista de subprocessadores</caption>
             <thead>

@@ -21,7 +21,7 @@ export default function DemonstracaoPage() {
     <SiteShell>
       <SiteHero
         eyebrow="Demonstração"
-        title="Uma conversa sobre a sua operação, não um vídeo genérico"
+        title="Agende uma demonstração"
         description="A demonstração é conduzida sobre um ambiente de exemplo e focada nos processos que você precisa resolver. Não usamos dados reais do seu DP nessa etapa."
       />
 

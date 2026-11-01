@@ -17,9 +17,7 @@ export function SiteShell({ children, active }: { children: ReactNode; active?: 
       <header className={styles.header}>
         <div className={styles.headerInner}>
           <Link className={styles.brand} href="/" aria-label="Vinculato — início">
-            {/* Variante clara: o cabeçalho público virou superfície escura com a
-                Central de comando, e o logotipo azul-marinho não se lê nela —
-                é o que o próprio componente avisa. */}
+            {/* Variante clara: o cabeçalho é azul-marinho, como o da home. */}
             <VinculatoLogo size={28} tone="light" priority />
           </Link>
           <nav className={styles.nav} aria-label="Navegação do site">
@@ -50,10 +48,9 @@ export function SiteShell({ children, active }: { children: ReactNode; active?: 
 
       <footer className={styles.footer}>
         <div className={styles.footerInner}>
-          <div>
-            <strong>Vinculato</strong>
-            <p>Gestão, integração e conferência operacional para Departamento Pessoal.</p>
-          </div>
+          <Link className={styles.brand} href="/" aria-label="Vinculato — voltar ao início">
+            <VinculatoLogo size={24} tone="light" />
+          </Link>
           <nav aria-label="Páginas do produto">
             <span>Produto</span>
             {siteNavigation.map((item) => <Link key={item.href} href={item.href}>{item.label}</Link>)}
@@ -79,12 +76,18 @@ export function SiteShell({ children, active }: { children: ReactNode; active?: 
   );
 }
 
-export function SiteHero({ eyebrow, title, description, children }: {
-  eyebrow: string; title: string; description: string; children?: ReactNode;
+/**
+ * Abertura das páginas internas: faixa escura com título, descrição e ações.
+ *
+ * `eyebrow` continua aceito, mas não é desenhado: um rótulo acima de cada
+ * título é o que o DESIGN.md manda tirar. O nome da página já está marcado na
+ * navegação do cabeçalho.
+ */
+export function SiteHero({ title, description, children }: {
+  eyebrow?: string; title: string; description: string; children?: ReactNode;
 }) {
   return (
     <section className={styles.hero}>
-      <span className={styles.eyebrow}>{eyebrow}</span>
       <h1>{title}</h1>
       <p>{description}</p>
       {children}
