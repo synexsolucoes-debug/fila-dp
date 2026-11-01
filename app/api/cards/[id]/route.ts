@@ -107,7 +107,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
     requireWorkspaceRole(workspace.role, ["admin", "member"]);
     requireCapability(workspace, "cards.write");
     await requireCardCompanyAccess(d1, workspace.id, user.id, workspace.role, id);
-    const result = await d1.prepare("UPDATE fdp_cards SET archived = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND board_id = ? AND archived = 0").bind(id, board.id).run();
+    const result = await d1.prepare("UPDATE fdp_cards SET archived = 1, archived_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND board_id = ? AND archived = 0").bind(id, board.id).run();
     if (!result.meta.changes) throw ApiError.notFound("Demanda não encontrada.", "CARD_NOT_FOUND");
 
     /* Concluir a demanda agenda o expurgo da ficha, em vez de executá-lo.

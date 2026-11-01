@@ -318,6 +318,9 @@ export const cards = pgTable("fdp_cards", {
   position: doublePrecision("position").notNull(),
   sourceType: text("source_type").notNull().default("manual"),
   archived: integer("archived").notNull().default(0),
+  /* Quando a demanda saiu do quadro: pelo botão Arquivar ou pela regra de
+     arquivar concluídas depois de N dias (`completed_archive_days`). */
+  archivedAt: timestamp("archived_at", { withTimezone: true, mode: "string" }),
   createdBy: text("created_by").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
@@ -753,6 +756,9 @@ export const workspaceSettings = pgTable("fdp_workspace_settings", {
      de ambiente, porque parar uma automação problemática não pode depender de
      deploy. O padrão é pedir confirmação humana. */
   agentAutomation: text("agent_automation").notNull().default("suggest_only"),
+  /* Dias até a demanda concluída ou cancelada sair do quadro para o Arquivo.
+     0 desliga. Fica aqui porque é decisão de quem opera o grupo. */
+  completedArchiveDays: integer("completed_archive_days").notNull().default(7),
   /* Política de nota fiscal PJ. Fica aqui, e não em código, porque "pagamento
      só sai com nota aprovada" é decisão de quem opera o financeiro do grupo —
      e mudar de ideia não pode depender de deploy. O padrão exige aprovação. */
