@@ -61,22 +61,24 @@ div.counter { cursor: default; }
 /* --- Filtros -------------------------------------------------------------- */
 
 .filters {
-  display: flex; flex-wrap: wrap; align-items: end; gap: 10px;
-  margin-bottom: 12px; padding: 12px; border: 1px solid var(--work-border);
-  border-radius: 10px; background: var(--work-muted);
+  display: flex; flex-wrap: wrap; align-items: end; gap: 8px;
+  margin-bottom: 12px; padding: 10px; border: 1px solid var(--work-border);
+  border-radius: var(--ui-radius-sm, 6px); background: var(--work-muted);
 }
-.filters label { display: grid; gap: 5px; min-width: 0; }
+.filters label { display: grid; flex: 0 1 auto; gap: 5px; min-width: 0; }
+.filters select { width: 100%; max-width: 156px; }
 .filters label > span { color: var(--work-soft); font-size: .75rem; font-weight: 780; letter-spacing: normal; text-transform: none; }
 .filters select, .filters input {
-  min-width: 150px; min-height: 38px; padding: 0 10px; border: 1px solid var(--work-border);
+  min-width: 118px; min-height: 36px; padding: 0 8px; border: 1px solid var(--work-border);
   /* Token, e não 8px cravado: a conferência de interface mediu este controle
      fora da escala do produto — §97 pede que os módulos concordem. */
   border-radius: var(--ui-radius-sm); background: var(--work-surface); color: var(--work-text); font-size: .77rem;
 }
 .filterActions { display: flex; gap: 8px; margin-left: auto; }
+.filterActions button { min-height: 36px; font-size: .76rem; }
 .scopeToggle { display: inline-flex; padding: 3px; border: 1px solid var(--work-border); border-radius: 9px; background: var(--work-surface); }
 .scopeToggle button {
-  min-height: 32px; padding: 0 13px; border: 0; border-radius: 7px;
+  min-height: 30px; padding: 0 10px; border: 0; border-radius: 7px;
   background: transparent; font-size: .78rem; font-weight: 720; cursor: pointer;
 }
 .scopeToggle button[aria-pressed="true"] { background: var(--work-accent); color: var(--work-on-accent); }
