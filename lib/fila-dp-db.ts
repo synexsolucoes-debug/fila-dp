@@ -1,5 +1,6 @@
 import { isoTimestamp } from "./iso-timestamp.ts";
 import { log } from "./observability.ts";
+import { SNAPSHOT_ACTIVE_CARDS_SQL, SNAPSHOT_ARCHIVE_LIMIT, SNAPSHOT_ARCHIVED_TOTAL_SQL, SNAPSHOT_RECENT_ARCHIVED_SQL } from "./snapshot-queries.ts";
 import { archiveFinishedCards, normalizeCompletedArchiveDays } from "./card-auto-archive.ts";
 import { getD1, getScopedD1 } from "../db/index.ts";
 import type { SessionUser } from "./auth/session.ts";
@@ -60,6 +61,7 @@ export const SNAPSHOT_HISTORY_DAYS = 90;
 export const SNAPSHOT_COMMENT_LIMIT = 500;
 export const SNAPSHOT_INBOX_LIMIT = 200;
 export const SNAPSHOT_ACTIVITY_LIMIT = 150;
+export { SNAPSHOT_ARCHIVE_LIMIT } from "./snapshot-queries.ts";
 
 export type CompanyAccessScope = {
   unrestricted: boolean;
@@ -404,7 +406,7 @@ export async function getWorkspaceSnapshot(user: SessionUser): Promise<Workspace
     String((workspace as Record<string, unknown>).status ?? "active"),
     (workspace as { memberGrants?: ReadonlyMap<string, boolean> }).memberGrants,
     (workspace as { departmentModules?: ReadonlySet<string> }).departmentModules);
-  const [boardsResult, listsResult, allBoardListsResult, cardsResult, checklistResult, inboxResult,
+  const [boardsResult, listsResult, allBoardListsResult, activeCardsResult, archivedCardsResult, archivedTotalRow, checklistResult, inboxResult,
     rulesResult, commentsResult, activitiesResult, membersResult, labelsResult, cardLabelsResult,
     assigneesResult, customFieldsResult, customValuesResult, attachmentsResult, templatesResult,
     settingsRow, holidaysResult, policiesResult, integrationsResult, plannerResult, calendarsResult,
@@ -415,7 +417,13 @@ export async function getWorkspaceSnapshot(user: SessionUser): Promise<Workspace
     d1.prepare("SELECT id, name, description, board_type FROM fdp_boards WHERE workspace_id = ? ORDER BY created_at").bind(workspace.id).all(),
     d1.prepare("SELECT id, board_id, name, kind, position, sla_behavior FROM fdp_lists WHERE board_id = ? ORDER BY position").bind(board.id).all(),
     d1.prepare("SELECT l.id, l.board_id, l.name, l.kind, l.position, l.sla_behavior FROM fdp_lists l JOIN fdp_boards b ON b.id = l.board_id WHERE b.workspace_id = ? ORDER BY l.position").bind(workspace.id).all(),
-    d1.prepare("SELECT * FROM fdp_cards WHERE board_id = ? ORDER BY archived, list_id, position, created_at").bind(board.id).all(),
+    d1.prepare(SNAPSHOT_ACTIVE_CARDS_SQL).bind(board.id).all(),
+    // Arquivadas: as mais recentes (SNAPSHOT_ARCHIVE_LIMIT) e o total, os dois
+    // já recortados pelas empresas que a pessoa enxerga.
+    d1.prepare(SNAPSHOT_RECENT_ARCHIVED_SQL)
+      .bind(board.id, companyAccess.unrestricted, [...companyAccess.companyIds], SNAPSHOT_ARCHIVE_LIMIT).all(),
+    d1.prepare(SNAPSHOT_ARCHIVED_TOTAL_SQL)
+      .bind(board.id, companyAccess.unrestricted, [...companyAccess.companyIds]).first<{ total: number }>(),
     // `c.archived = 0` nas coleções por cartão.
     //
     // O arquivo é a maior parte de um quadro com um ano de operação, e nada
@@ -602,7 +610,8 @@ export async function getWorkspaceSnapshot(user: SessionUser): Promise<Workspace
   const commentRows = commentsResult.results as Array<Record<string, unknown>>;
   const companyRows = companiesResult.results as Array<Record<string, unknown>>;
   const isVisibleCompany = (companyId: unknown) => companyAccess.unrestricted || Boolean(companyId && companyAccess.companyIds.has(String(companyId)));
-  const cardRows = (cardsResult.results as Array<Record<string, unknown>>).filter((row) => isVisibleCompany(row.company_id));
+  const archivedCardRows = (archivedCardsResult.results as Array<Record<string, unknown>>).filter((row) => isVisibleCompany(row.company_id));
+  const cardRows = [...(activeCardsResult.results as Array<Record<string, unknown>>), ...archivedCardRows].filter((row) => isVisibleCompany(row.company_id));
   const visibleCardIds = new Set(cardRows.map((row) => String(row.id)));
   const activityRows = (activitiesResult.results as Array<Record<string, unknown>>).filter((row) => row.card_id && visibleCardIds.has(String(row.card_id)));
   const inboxRows = (inboxResult.results as Array<Record<string, unknown>>).filter((row) => companyAccess.unrestricted || Boolean(row.converted_card_id && visibleCardIds.has(String(row.converted_card_id))));
@@ -993,6 +1002,7 @@ export async function getWorkspaceSnapshot(user: SessionUser): Promise<Workspace
       comments: { loaded: commentRows.length, total: Number(historyTotals?.comments_total ?? commentRows.length) },
       inbox: { loaded: inboxRows.length, total: Number(historyTotals?.inbox_total ?? inboxRows.length) },
       activity: { loaded: Math.min(activityRows.length, 50), total: Number(historyTotals?.activity_total ?? activityRows.length) },
+      archived: { loaded: archivedCardRows.length, total: Number(archivedTotalRow?.total ?? archivedCardRows.length) },
     },
     payrollCycles: (cyclesResult.results as Array<Record<string, unknown>>).map((row) => ({
       id: String(row.id),

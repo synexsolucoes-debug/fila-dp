@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { signOutPath, requireSessionUser } from "@/lib/auth/session";
 import { FieldApp } from "./FieldApp";
 import { ServiceWorker } from "./ServiceWorker";
+import { ConfirmHost } from "./ConfirmSheet";
 
 export const dynamic = "force-dynamic";
 
@@ -38,5 +39,6 @@ export default async function FieldPage() {
       user={{ displayName: user.displayName, email: user.email }}
       signOutPath={signOutPath("/")}
     />
+    <ConfirmHost />
   </>;
 }

@@ -15,6 +15,7 @@ import {
   matchesTerm, pendingSanitization, type ActionableStatus, type DisposalItem, type DueEntry, type SanitizationItem,
 } from "./sesmt.logic";
 import styles from "./field.module.css";
+import { askConfirm } from "./ConfirmSheet";
 
 /**
  * Telas do SESMT no Vinculato Campo.
@@ -537,7 +538,12 @@ function SanitizationDecision({ item, online, allowed, onDone, onCancel }: {
 
   async function act(action: "start" | "complete" | "reject") {
     if (action !== "start" && !result.trim()) { setProblem("Escreva o resultado — é o registro do que foi feito com o equipamento."); return; }
-    if (action === "reject" && !window.confirm("Reprovar a higienização? O EPI não volta ao estoque.")) return;
+    if (action === "reject" && !(await askConfirm({
+      title: "Reprovar a higienização?",
+      message: "O EPI não volta ao estoque.",
+      confirmLabel: "Reprovar",
+      danger: true,
+    }))) return;
     setBusy(true); setProblem("");
     try {
       await requestJson(`/api/epi/returns/${encodeURIComponent(item.id)}/sanitization`, {
@@ -605,7 +611,12 @@ function DisposalDecision({ item, online, allowed, onDone, onCancel }: {
     if (action !== "confirm" && !notes.trim()) { setProblem("Escreva o motivo — cancelar ou reavaliar sem motivo deixa o histórico sem explicação."); return; }
     // Confirmar é definitivo: o banco recusa qualquer alteração depois. A
     // pergunta existe para isso, não por cerimônia.
-    if (action === "confirm" && !window.confirm(`Confirmar o descarte de ${item.quantity} un. de ${item.epiName}? Não dá para desfazer.`)) return;
+    if (action === "confirm" && !(await askConfirm({
+      title: "Confirmar o descarte?",
+      message: `${item.quantity} un. de ${item.epiName}. Depois de confirmado, não dá para desfazer.`,
+      confirmLabel: "Confirmar descarte",
+      danger: true,
+    }))) return;
     setBusy(true); setProblem("");
     try {
       await requestJson(`/api/epi/disposals/${encodeURIComponent(item.id)}`, {

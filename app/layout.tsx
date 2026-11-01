@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Mono, Inter, Manrope } from "next/font/google";
 import { headers } from "next/headers";
 import { publicOrigin } from "@/lib/site-map";
+import { ModalFocusGuard } from "./components/ModalFocusGuard";
 import "./globals.css";
 import "./access.css";
 import "./dashboard-modern.css";
@@ -131,7 +132,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="pt-BR" data-scroll-behavior="smooth" className={`${interface_.variable} ${titles.variable} ${data.variable}`}>
-      <body>{children}</body>
+      <body>{children}<ModalFocusGuard /></body>
     </html>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Image from "next/image";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
@@ -59,9 +60,6 @@ import { LayoutGrid, Settings,
   type LucideIcon,
 } from "lucide-react";
 import { VinculatoLogo } from "@/app/components/VinculatoLogo";
-import { HistoryView } from "./features/history/HistoryView";
-import { PortfolioView } from "./features/portfolio";
-import { DpOperationsView } from "./features/dp";
 import type { ActivityEvent, Card, CardAttachment, InboxItem, ProcessFlowSummary, WorkspaceMember, WorkspaceRole, WorkspaceSnapshot } from "@/lib/fila-dp-types";
 import type { ActionTarget } from "@/lib/action-center";
 import { RULE_TRIGGERS, RULE_TRIGGER_LABELS } from "@/lib/automation-rules";
@@ -77,30 +75,14 @@ import {
   type ResolvedTheme, type ThemePreference,
 } from "@/lib/theme";
 import { DENSITY_KEY, parseDensity, type Density } from "@/lib/density";
-import { RegistrationSheetPanel } from "./features/admission";
 import { chooseRegistrationFormAttachment } from "@/lib/registration-form-file";
 import { capabilitiesForRole, hasCapability, workspaceRoles } from "@/lib/authorization";
 import { capabilityAreas, capabilitiesOfArea, capabilityCatalog, roleSummaries, type CapabilityArea } from "@/lib/capability-catalog";
 import { formatWorkingMinutes } from "@/lib/fila-dp-sla";
 import { overviewPeriodLabel, overviewPeriods, periodWindowEnd, periodWindowStart, withinPeriod, type OverviewPeriod } from "@/lib/overview-period";
-import { AnimatedDrawer, AnimatedTabs, competenceLabel, ProcessTabsProvider, connectionStatusLabel, connectionTone, lastSyncLabel, MemberModules, PageTransition } from "./features/shared";
+import { AnimatedDrawer, AnimatedTabs, competenceLabel, ProcessTabsProvider, ViewPaneActiveContext, connectionStatusLabel, connectionTone, lastSyncLabel, MemberModules, PageTransition } from "./features/shared";
 import { RequestError, requestErrorFrom, supportReference } from "./request-error";
-import { AssistantPanel } from "./features/assistant/AssistantPanel";
-import { RegistrationsView } from "./features/registrations";
-import { OperationsView } from "./features/operations";
-import { ProcessManagementView } from "./features/processes";
-import { AuxiliaryModulesView } from "./features/auxiliary";
-import { IntegrationsView } from "./features/integrations";
-import { PaymentsView, contractorSections, isContractorSection, type ContractorSectionId } from "./features/payments";
-import { TimeTrackingView } from "./features/time";
-import { EpiControlView } from "./features/epi";
-import { LedgerView } from "./features/ledger";
-import { ErpDpView } from "./features/erp-dp";
-import { WorkAccidentDashboardView } from "./features/safety";
-import { AgentsView, CardProcessPanel, TriageView, WorkCenterView } from "./features/work";
-import { PayrollImportDialog } from "./features/payroll/PayrollImportDialog";
-import { TrelloImportPanel } from "./features/boards/TrelloImportPanel";
-import { PayrollMovementsPanel } from "./features/payroll/PayrollMovementsPanel";
+import { contractorSections, isContractorSection, type ContractorSectionId } from "./features/payments/contractor-sections";
 import { DemandDeadlineView } from "./features/work/DemandViews";
 import {
   BoardIndicators, BoardToolbar, BulkBar, QueueBoard, TeamBoard,
@@ -111,6 +93,37 @@ import {
   type BoardAlert, type BoardContext, type BulkAction, type DemandFilters, type DemandSort,
   type IndicatorId, type SavedBoardView,
 } from "./features/board";
+
+/* Cada módulo do painel é carregado quando é aberto (§ desempenho).
+   Antes, as vinte telas vinham no mesmo pacote: quem usava só EPI baixava
+   Pagamento PJ, Folha e Processos para abrir o painel. */
+function ModuleLoading() {
+  return <div className="module-loading" role="status" aria-live="polite">Abrindo módulo…</div>;
+}
+const HistoryView = dynamic(() => import("./features/history/HistoryView").then((module) => module.HistoryView), { loading: ModuleLoading });
+const PortfolioView = dynamic(() => import("./features/portfolio/PortfolioView").then((module) => module.PortfolioView), { loading: ModuleLoading });
+const DpOperationsView = dynamic(() => import("./features/dp/DpOperationsView").then((module) => module.DpOperationsView), { loading: ModuleLoading });
+const RegistrationSheetPanel = dynamic(() => import("./features/admission/RegistrationSheetPanel").then((module) => module.RegistrationSheetPanel), { loading: ModuleLoading });
+const AssistantPanel = dynamic(() => import("./features/assistant/AssistantPanel").then((module) => module.AssistantPanel), { loading: ModuleLoading });
+const RegistrationsView = dynamic(() => import("./features/registrations/RegistrationsView").then((module) => module.RegistrationsView), { loading: ModuleLoading });
+const OperationsView = dynamic(() => import("./features/operations/OperationsView").then((module) => module.OperationsView), { loading: ModuleLoading });
+const ProcessManagementView = dynamic(() => import("./features/processes/ProcessManagementView").then((module) => module.ProcessManagementView), { loading: ModuleLoading });
+const AuxiliaryModulesView = dynamic(() => import("./features/auxiliary/AuxiliaryModulesView").then((module) => module.AuxiliaryModulesView), { loading: ModuleLoading });
+const IntegrationsView = dynamic(() => import("./features/integrations/IntegrationsView").then((module) => module.IntegrationsView), { loading: ModuleLoading });
+const TimeTrackingView = dynamic(() => import("./features/time/TimeTrackingView").then((module) => module.TimeTrackingView), { loading: ModuleLoading });
+const EpiControlView = dynamic(() => import("./features/epi/EpiControlView").then((module) => module.EpiControlView), { loading: ModuleLoading });
+const LedgerView = dynamic(() => import("./features/ledger/LedgerView").then((module) => module.LedgerView), { loading: ModuleLoading });
+const ErpDpView = dynamic(() => import("./features/erp-dp/ErpDpView").then((module) => module.ErpDpView), { loading: ModuleLoading });
+const WorkAccidentDashboardView = dynamic(() => import("./features/safety/WorkAccidentDashboardView").then((module) => module.WorkAccidentDashboardView), { loading: ModuleLoading });
+const AgentsView = dynamic(() => import("./features/work/AgentsView").then((module) => module.AgentsView), { loading: ModuleLoading });
+const CardProcessPanel = dynamic(() => import("./features/work/CardProcessPanel").then((module) => module.CardProcessPanel), { loading: ModuleLoading });
+const TriageView = dynamic(() => import("./features/work/TriageView").then((module) => module.TriageView), { loading: ModuleLoading });
+const WorkCenterView = dynamic(() => import("./features/work/WorkCenterView").then((module) => module.WorkCenterView), { loading: ModuleLoading });
+const PayrollImportDialog = dynamic(() => import("./features/payroll/PayrollImportDialog").then((module) => module.PayrollImportDialog), { loading: ModuleLoading });
+const TrelloImportPanel = dynamic(() => import("./features/boards/TrelloImportPanel").then((module) => module.TrelloImportPanel), { loading: ModuleLoading });
+const PayrollMovementsPanel = dynamic(() => import("./features/payroll/PayrollMovementsPanel").then((module) => module.PayrollMovementsPanel), { loading: ModuleLoading });
+const PaymentsView = dynamic(() => import("./features/payments/PaymentsView").then((module) => module.PaymentsView), { loading: ModuleLoading });
+
 
 /* Os oito destinos do Pagamento PJ (§74) estão escritos aqui um a um, e não
    como `ContractorSectionId`: esta união é a lista de telas do painel, e é ela
@@ -1637,6 +1650,26 @@ export function WorkspaceApp({
     return () => window.clearTimeout(timeout);
   }, [searchOpen, searchQuery]);
 
+  /* O primeiro Tab da página começa no "Pular para o conteúdo".
+     Medido no Chrome: a tela "Preparando sua operação…" e partes da faixa do
+     topo são trocadas depois da carga, e o navegador guarda a posição do nó
+     removido como ponto de partida do Tab — o primeiro Tab caía na aba do
+     módulo, pulando o atalho. Com nada focado (foco no `<body>`), o Tab vai
+     direto para o atalho; depois disso a ordem é a natural. */
+  useEffect(() => {
+    if (loading) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Tab" || event.shiftKey || event.defaultPrevented) return;
+      if (document.activeElement && document.activeElement !== document.body) return;
+      const skip = document.querySelector<HTMLAnchorElement>(".skip-link");
+      if (!skip) return;
+      event.preventDefault();
+      skip.focus();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [loading]);
+
   useEffect(() => {
     if (!toast) return;
     const timeout = window.setTimeout(() => setToast(""), 3500);
@@ -1737,6 +1770,8 @@ export function WorkspaceApp({
     });
   }, [snapshot?.recentActivity, periodFilter]);
   const allCards = useMemo(() => [...activeCards, ...(snapshot?.archivedCards ?? [])], [activeCards, snapshot?.archivedCards]);
+  /* O snapshot traz só as arquivadas mais recentes; o total vem à parte. */
+  const archivedTotal = snapshot?.history?.archived?.total ?? snapshot?.archivedCards.length ?? 0;
   const filteredActiveCards = useMemo(
     () => filterDemands(activeCards, boardFilters, boardContext, boardNow),
     [activeCards, boardFilters, boardContext, boardNow],
@@ -2049,7 +2084,9 @@ export function WorkspaceApp({
     document.querySelector(".shell-tab[data-active]")?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [activeTabId, openTabs.length]);
   const keepAlive = (target: View, node: ReactNode) => aliveViews.has(target)
-    ? <div className="view-pane view-transition" hidden={target !== view}>{node}</div>
+    ? <div className="view-pane view-transition" hidden={target !== view}>
+      <ViewPaneActiveContext.Provider value={target === view && !erpMode}>{node}</ViewPaneActiveContext.Provider>
+    </div>
     : null;
 
   const stats = useMemo(() => {
@@ -2802,7 +2839,21 @@ export function WorkspaceApp({
       setSearchOpen(false);
       if (card.archived) setArchiveOpen(true);
       else openCard(card);
+      return;
     }
+    /* Arquivada antiga: o snapshot traz só as mais recentes, então ela não
+       está na tela. Antes o clique não fazia nada; agora oferece restaurar. */
+    if (result.archived) {
+      setSearchOpen(false);
+      requestConfirmation({
+        title: "Restaurar demanda arquivada?",
+        description: `“${result.title}” está no arquivo. Restaurar devolve a demanda ao quadro, onde ela pode ser aberta.`,
+        confirmLabel: "Restaurar para o quadro",
+        action: () => restoreCard(result.id),
+      });
+      return;
+    }
+    setToast("Esta demanda não está no quadro aberto. Troque de quadro para abri-la.");
   }
 
   function exportCsv() {
@@ -3297,7 +3348,7 @@ export function WorkspaceApp({
           {(snapshot.settings.completedArchiveDays ?? 7) > 0
             ? <>Vão para o Arquivo após {plural(snapshot.settings.completedArchiveDays ?? 7, "dia", "dias")}.</>
             : <>Ficam aqui até serem arquivadas.</>}
-          {" "}<button type="button" onClick={() => setArchiveOpen(true)}>Ver arquivo ({snapshot.archivedCards.length})</button>
+          {" "}<button type="button" onClick={() => setArchiveOpen(true)}>Ver arquivo ({archivedTotal})</button>
         </p>}
         <div className="dashboard-card-list">
           {cards.map(renderDemandCard)}
@@ -3330,6 +3381,7 @@ export function WorkspaceApp({
        barra lateral, contexto do topo — está fora do quadro, e é justamente
        isso que devolve a largura para as colunas. */
     <main className={`dashboard-shell operational-ui${theme === "dark" ? " theme-dark" : ""}${sidebarCollapsed ? " sidebar-collapsed" : ""}${erpMode ? " erp-mode" : ""}${pjMode ? " pj-mode" : ""}${administrationOpen ? " admin-mode" : ""}`} data-view={view} data-theme={theme} data-density={density} data-focus={focusMode && view === "board" ? "on" : undefined}>
+      <a className="skip-link" href="#conteudo-painel">Pular para o conteúdo</a>
       <section className="dashboard-main">
         {/* Faixa única do sistema: marca, janela de módulos, as abas abertas e,
             à direita, contexto e conta. A barra lateral saiu — com a janela de
@@ -3385,15 +3437,15 @@ export function WorkspaceApp({
           </div>
         </header>
 
-        <div className="dashboard-content">
-          {erpAlive && <div className="view-pane view-transition" hidden={!erpMode}><ErpDpView companyId={companyFilter === "all" ? "" : companyFilter} scopeLabel={erpScopeLabel}
+        <div className="dashboard-content" id="conteudo-painel" tabIndex={-1}>
+          {erpAlive && <div className="view-pane view-transition" hidden={!erpMode}><ViewPaneActiveContext.Provider value={erpMode}><ErpDpView companyId={companyFilter === "all" ? "" : companyFilter} scopeLabel={erpScopeLabel}
             canManageMovements={hasCapability(snapshot.workspace.role, "movements.manage")}
             canManageEmployees={hasCapability(snapshot.workspace.role, "employees.manage")}
             canReadMovements={hasCapability(snapshot.workspace.role, "movements.read")}
             canReadCycles={hasCapability(snapshot.workspace.role, "competences.read")}
             canCheckEsocial={hasCapability(snapshot.workspace.role, "obligations.manage")}
             canReadPayroll={hasCapability(snapshot.workspace.role, "payroll.read")}
-            canManagePayroll={hasCapability(snapshot.workspace.role, "payroll.manage")} /></div>}
+            canManagePayroll={hasCapability(snapshot.workspace.role, "payroll.manage")} /></ViewPaneActiveContext.Provider></div>}
           <div className="view-stack" hidden={erpMode}>
           <ProcessTabsProvider>{(tabsTarget) => <>
           {/* O contexto pode ter mudado sozinho porque o grupo anterior saiu do
@@ -3573,7 +3625,7 @@ export function WorkspaceApp({
                 onDensity={setBoardDensity}
                 groupBy={boardGroupBy}
                 onGroupBy={setBoardGroupBy}
-                archivedCount={snapshot.archivedCards.length}
+                archivedCount={archivedTotal}
                 onOpenArchive={() => setArchiveOpen(true)}
               />
 
@@ -3730,6 +3782,7 @@ export function WorkspaceApp({
           <section className="workspace-modal archive-modal" role="dialog" aria-modal="true" aria-labelledby="archive-title">
             <header><div><span>Histórico recuperável</span><h2 id="archive-title">Demandas arquivadas</h2></div><button onClick={() => setArchiveOpen(false)} aria-label="Fechar">×</button></header>
             <div className="archive-list">
+              {archivedTotal > snapshot.archivedCards.length && <p className="archive-window-note" role="note">Mostrando as {snapshot.archivedCards.length} arquivadas mais recentes de {archivedTotal}. Para achar uma mais antiga, use a busca (⌘K): ela inclui as arquivadas.</p>}
               {snapshot.archivedCards.length === 0 && <div className="empty-view"><span>□</span><strong>Arquivo vazio</strong><p>Demandas arquivadas poderão ser restauradas por aqui.</p></div>}
               {[...snapshot.archivedCards].sort((a, b) => String(b.archivedAt ?? b.updatedAt).localeCompare(String(a.archivedAt ?? a.updatedAt))).map((card) => <article key={card.id}><i className={processColors[card.processType] ?? "gray"} /><div><span>{card.processType}</span><strong>{card.title}</strong><small>{card.company || "Sem empresa"} • arquivada em {formatDate(card.archivedAt ?? card.updatedAt)}</small></div><button disabled={busy || !canEdit} onClick={() => void restoreCard(card.id)}>Restaurar</button>{isAdmin && <button className="danger" disabled={busy} onClick={() => void deleteCardPermanently(card.id, card.title)}>Excluir</button>}</article>)}
             </div>

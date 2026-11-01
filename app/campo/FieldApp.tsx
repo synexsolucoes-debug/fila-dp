@@ -24,6 +24,7 @@ import {
   type QueuedOperation,
 } from "./field.api";
 import styles from "./field.module.css";
+import { askConfirm } from "./ConfirmSheet";
 
 /**
  * Vinculato Campo.
@@ -367,9 +368,12 @@ function Header({ title, user, signOutPath, online, pending, onBack, onQueue }: 
    */
   async function signOut(event: React.MouseEvent<HTMLAnchorElement>) {
     event.preventDefault();
-    if (pending > 0 && !window.confirm(
-      `Há ${pending} registro(s) aguardando envio. Se sair agora, eles subirão no nome de quem entrar depois. Sair mesmo assim?`,
-    )) return;
+    if (pending > 0 && !(await askConfirm({
+      title: "Sair com registros pendentes?",
+      message: `${pending === 1 ? "Há 1 registro aguardando envio" : `Há ${pending} registros aguardando envio`}. Se sair agora, ${pending === 1 ? "ele subirá" : "eles subirão"} no nome de quem entrar depois.`,
+      confirmLabel: "Sair mesmo assim",
+      danger: true,
+    }))) return;
     // Um limite de tempo para a limpeza: sem rede ou com armazenamento travado,
     // ninguém pode ficar preso dentro do aplicativo.
     await Promise.race([clearShellCache(), new Promise((resolve) => window.setTimeout(resolve, 1500))]);

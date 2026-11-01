@@ -58,8 +58,11 @@ export function SankhyaConnectorPanel({ connector, runs, companies, permissions,
 
   useEffect(() => {
     if (!activeRun) return;
-    const timer = window.setInterval(() => void refresh(), 4_000);
-    return () => window.clearInterval(timer);
+    // Aba escondida não consulta: ninguém está olhando. Ao voltar, atualiza na hora.
+    const timer = window.setInterval(() => { if (document.visibilityState === "visible") void refresh(); }, 4_000);
+    const onVisible = () => { if (document.visibilityState === "visible") void refresh(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", onVisible); };
   }, [activeRun, refresh]);
 
   const act = async (kind: typeof pending, action: () => Promise<void>, success: string) => {

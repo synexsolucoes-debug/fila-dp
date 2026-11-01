@@ -743,3 +743,47 @@
 .dashboard-shell.operational-ui .card-archive-settings form { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; padding: 14px; }
 .dashboard-shell.operational-ui .card-archive-settings label { display: grid; gap: 5px; color: var(--ui-text); font-size: 12px; font-weight: 600; }
 .dashboard-shell.operational-ui .card-archive-settings select { min-width: 160px; height: 36px; padding: 0 8px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); background: var(--ui-surface); color: var(--ui-text); font-size: 13px; }
+
+/* Link "pular para o conteúdo" (WCAG 2.4.1). Fica fora da tela até receber
+   foco pelo teclado; aí aparece no canto, acima de tudo. */
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 1000;
+  padding: 10px 14px;
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+  font-weight: 600;
+  text-decoration: none;
+  transform: translateY(-200%);
+}
+.skip-link:focus-visible {
+  transform: none;
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 2px;
+}
+.dashboard-content:focus { outline: none; }
+
+/* Aviso da janela do arquivo: o snapshot traz só as arquivadas mais recentes. */
+.archive-window-note {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-surface-muted, var(--ui-surface));
+  color: var(--ui-text-muted, var(--ui-text));
+  font-size: .82rem;
+  line-height: 1.45;
+}
+
+/* Enquanto o código de um módulo chega (carregamento sob demanda). Aparece só
+   na primeira abertura do módulo na sessão. */
+.module-loading {
+  display: grid;
+  place-items: center;
+  min-height: 240px;
+  color: var(--ui-text-muted, var(--ui-text));
+  font-size: .9rem;
+}

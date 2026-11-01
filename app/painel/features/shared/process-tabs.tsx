@@ -30,6 +30,17 @@ import { createPortal } from "react-dom";
  */
 const ProcessTabsContext = createContext<HTMLElement | null>(null);
 
+/**
+ * Se a tela que contém o módulo é a visível.
+ *
+ * O painel mantém vivas, escondidas, as telas já visitadas (`keepAlive`), para
+ * não perder o estado ao trocar de módulo. Mas o portal ignora o `hidden` do
+ * pai: o Controle de EPI escondido continuava pintando as dez abas dele no
+ * cabeçalho — e elas apareciam em cima de Processos, de Cadastros, de qualquer
+ * módulo aberto depois. Só a tela visível desenha abas.
+ */
+export const ViewPaneActiveContext = createContext(true);
+
 export function ProcessTabsProvider({ children }: { children: (target: (node: HTMLDivElement | null) => void) => ReactNode }) {
   const [node, setNode] = useState<HTMLDivElement | null>(null);
   const value = useMemo(() => node, [node]);
@@ -46,7 +57,8 @@ export function ProcessTabsProvider({ children }: { children: (target: (node: HT
  */
 export function ProcessTabsSlot({ children }: { children: ReactNode }) {
   const node = useContext(ProcessTabsContext);
-  return node ? createPortal(children, node) : null;
+  const active = useContext(ViewPaneActiveContext);
+  return node && active ? createPortal(children, node) : null;
 }
 
 /** Para o módulo saber se há cabeçalho de processo para preencher. */

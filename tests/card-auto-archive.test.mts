@@ -61,7 +61,8 @@ test("concluída é quem tem closed_at, ou as antigas com sla_status concluído"
 test("o quadro roda a regra antes de ler as demandas, e uma falha não impede de abrir", async () => {
   const db = await read("lib/fila-dp-db.ts");
   const regra = db.indexOf("await archiveFinishedCards(d1, workspace.id");
-  const leitura = db.indexOf("SELECT * FROM fdp_cards WHERE board_id = ?");
+  // A leitura das demandas usa as consultas de lib/snapshot-queries.ts.
+  const leitura = db.indexOf("d1.prepare(SNAPSHOT_ACTIVE_CARDS_SQL)");
   assert.ok(regra > 0 && regra < leitura, "a regra precisa rodar antes da leitura do quadro");
   assert.match(db.slice(regra - 400, regra + 300), /try \{[\s\S]*\} catch \(cause\)/u);
 });
