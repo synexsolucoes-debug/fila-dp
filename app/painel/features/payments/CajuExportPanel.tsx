@@ -6,6 +6,7 @@ import { cajuNetCents, formatFeePercent } from "@/lib/caju-fee";
 import { requestJson } from "./payments.api";
 import { ErrorBanner } from "../shared";
 import styles from "./payments.module.css";
+import { contagem } from "../shared/plural";
 
 /**
  * Exportação da diferença PJ para o cartão de benefício.
@@ -132,7 +133,7 @@ export function CajuExportPanel({ competenceId, canExport }: { competenceId: str
       // O total sai no cabeçalho para conferir contra a tela sem reabrir o arquivo.
       const rows = response.headers.get("X-Caju-Rows") ?? "?";
       const total = Number(response.headers.get("X-Caju-Total-Cents") ?? 0);
-      setNotice(`Arquivo gerado: ${rows} linha(s), total ${money(total)}.`);
+      setNotice(`Arquivo gerado: ${contagem(Number(rows), "linha", "linhas")}, total ${money(total)}.`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível gerar o arquivo.");
     } finally {
@@ -158,7 +159,7 @@ export function CajuExportPanel({ competenceId, canExport }: { competenceId: str
       anchor.download = suggested;
       anchor.click();
       URL.revokeObjectURL(url);
-      setNotice(`Planilha gerada: ${response.headers.get("X-Caju-Rows") ?? "?"} linha(s), total ${money(Number(response.headers.get("X-Caju-Total-Cents") ?? 0))}${applyFee ? " líquido" : ""}.`);
+      setNotice(`Planilha gerada: ${contagem(Number(response.headers.get("X-Caju-Rows") ?? 0), "linha", "linhas")}, total ${money(Number(response.headers.get("X-Caju-Total-Cents") ?? 0))}${applyFee ? " líquido" : ""}.`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível gerar a planilha.");
     } finally {
@@ -210,7 +211,7 @@ export function CajuExportPanel({ competenceId, canExport }: { competenceId: str
         <div className={`${styles.warningState} ${styles.cajuBlocked}`} role="alert">
           <AlertOctagon aria-hidden="true" />
           <div>
-            <strong>{preview.blocked.length} registro(s) impedem o arquivo.</strong>
+            <strong>{contagem(preview.blocked.length, "registro impede", "registros impedem")} o arquivo.</strong>
             <p className={styles.cajuBlockedIntro}>
               {preview.blocked.every((row) => row.category === "workflow")
                 ? "Não foi encontrada inconsistência automática nos valores abaixo. O bloqueio é a etapa de aprovação ainda não concluída."

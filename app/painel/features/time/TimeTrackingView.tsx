@@ -10,6 +10,7 @@ import { duration, normalizeCompany, normalizeOverview, requestJson, type Row } 
 import type { CompanyOption, TimeDialog, TimeOverview } from "./time.types";
 import { ErrorBanner } from "../shared";
 import styles from "./time.module.css";
+import { contagem } from "../shared/plural";
 
 const statusLabels: Record<string, string> = {
   draft: "Rascunho", review: "Conferência", approved: "Aprovado", rejected: "Devolvido",
@@ -367,7 +368,7 @@ export function TimeTrackingView({ role }: { role: WorkspaceRole }) {
                           <span>
                             {eventLabels[event.eventCode] ?? event.eventCode}
                             <small>
-                              {duration(event.minutes)} em {event.sheets} folha(s)
+                              {duration(event.minutes)} em {contagem(event.sheets, "folha", "folhas")}
                               {mapping ? ` · rubrica ${mapping.rubricCode} → ${targetLabels[mapping.targetField] ?? mapping.targetField} (${unitLabels[mapping.unit] ?? mapping.unit})` : ""}
                             </small>
                           </span>
@@ -423,7 +424,7 @@ export function TimeTrackingView({ role }: { role: WorkspaceRole }) {
                       <li key={item.id}>
                         <span>
                           {item.destination}
-                          <small>{item.sheetsCount} folha(s) · {item.linesCount} linha(s) · verificação {item.checksum.slice(0, 12)}</small>
+                          <small>{contagem(item.sheetsCount, "folha", "folhas")} · {contagem(item.linesCount, "linha", "linhas")} · verificação {item.checksum.slice(0, 12)}</small>
                         </span>
                         <span className={styles.badge} data-tone={item.status}>{statusLabels[item.status] ?? item.status}</span>
                       </li>

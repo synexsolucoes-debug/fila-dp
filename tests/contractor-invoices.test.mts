@@ -565,7 +565,7 @@ test("a tela traz visualizador interno, filtros, estados vazios e exportação",
   assert.match(tela, /Nenhuma Nota Fiscal necessária nesta competência/u);
   assert.match(tela, /Nenhuma Nota Fiscal recebida/u);
   // §27: alertas, sem excesso.
-  assert.match(tela, /prestador\(es\) ainda não enviaram nota fiscal/u);
+  assert.match(tela, /contagem\(summary\.pendingCount, "prestador ainda não enviou", "prestadores ainda não enviaram"\)\} nota fiscal/u);
   // §20: exportação, atrás da permissão.
   assert.match(tela, /permissions\?\.export/u);
   assert.match(tela, /contractor-invoices/u);

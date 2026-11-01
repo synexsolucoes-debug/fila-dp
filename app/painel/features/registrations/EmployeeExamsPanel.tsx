@@ -5,6 +5,7 @@ import { AlertTriangle, Check, ClipboardCheck, LoaderCircle, Plus, RefreshCw, XC
 import { examResultLabels, examTypeLabels, type ExamResult, type ExamType } from "@/lib/occupational-exams";
 import { EmptyState, ErrorBanner, LoadingState, StatusPill } from "../shared";
 import styles from "./registrations.module.css";
+import { contagem } from "../shared/plural";
 
 type ExamRecord = {
   id: string;
@@ -98,7 +99,7 @@ export function EmployeeExamsPanel({ employeeId, companyId, canManage }: { emplo
   }
 
   return <div className={styles.employeePanel}>
-    <header className={styles.sectionTitle}><h3>Exames ocupacionais (ASO)</h3><span>{exams.length} registro(s)</span></header>
+    <header className={styles.sectionTitle}><h3>Exames ocupacionais (ASO)</h3><span>{contagem(exams.length, "registro", "registros")}</span></header>
     {canManage && (creating
       ? <ExamEditor employeeId={employeeId} companyId={companyId} onCancel={() => setCreating(false)}
           onSaved={async () => { setCreating(false); await load(); }} />

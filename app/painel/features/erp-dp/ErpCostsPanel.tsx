@@ -6,6 +6,7 @@ import { EmptyState, ErrorBanner, LoadingState } from "../shared";
 import { brl } from "@/lib/payroll-calc";
 import type { CostGroup, EmployeeCost } from "@/lib/payroll-costs";
 import styles from "./erp-record.module.css";
+import { contagem } from "../shared/plural";
 
 /**
  * Custo de pessoal do ERP DP (§4.42): o que a folha custa à empresa além do
@@ -66,7 +67,7 @@ export function ErpCostsPanel({ companyId }: { companyId: string }) {
       <a className={styles.secondaryButton} href={csv} download><FileDown aria-hidden="true" /> Planilha por pessoa (CSV)</a>
     </div>
     <div className={styles.historySnapshot} aria-label="Custo total">
-      <article><small>Custo total</small><strong>{brl(data.totals.total)}</strong><span>{data.costs.length} pessoa(s)</span></article>
+      <article><small>Custo total</small><strong>{brl(data.totals.total)}</strong><span>{contagem(data.costs.length, "pessoa", "pessoas")}</span></article>
       <article><small>Proventos</small><strong>{brl(data.totals.earnings)}</strong><span>Sem o salário-família</span></article>
       <article><small>Encargos e FGTS</small><strong>{brl(data.totals.charges)}</strong><span>Patronal, FGTS e encargos das provisões</span></article>
       <article><small>Provisões</small><strong>{brl(data.totals.provisions)}</strong><span>Férias + 1/3 e 13º do mês</span></article>

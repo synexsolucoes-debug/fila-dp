@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { ErrorBanner, LoadingState } from "../shared";
 import { dpRequest, errorText, weekdayShort } from "./dp.api";
 import styles from "./dp.module.css";
+import { contagem } from "../shared/plural";
 
 type Template = {
   id: string; code: string; name: string; frequency: "monthly" | "weekly"; dayStart: number; dayEnd: number; weekday: number | null;
@@ -71,7 +72,7 @@ export function SettingsTab({ canManage }: { canManage: boolean }) {
           <td>{template.name}{template.listWeekMovements ? " · lista admissões e desligamentos da semana" : ""}</td>
           <td>{template.frequency === "weekly" ? `Toda ${weekdayShort[template.weekday ?? 5]}` : `Dia ${template.dayStart} a ${template.dayEnd === 31 ? "último" : template.dayEnd}`}</td>
           <td>{scopeLabels[template.scope]}</td>
-          <td>{template.companyIds ? `${template.companyIds.length} selecionada(s)` : "Todas internas"}</td>
+          <td>{template.companyIds ? `${contagem(template.companyIds.length, "selecionada", "selecionadas")}` : "Todas internas"}</td>
           <td>{template.processType}</td>
           <td>{canManage
             ? <input type="checkbox" className={styles.checkbox} aria-label={`Rotina ${template.name} ativa`} checked={template.active} disabled={busy}

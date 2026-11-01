@@ -16,6 +16,7 @@ import {
 } from "./sesmt.logic";
 import styles from "./field.module.css";
 import { askConfirm } from "./ConfirmSheet";
+import { contagem } from "../painel/features/shared/plural";
 
 /**
  * Telas do SESMT no Vinculato Campo.
@@ -133,7 +134,7 @@ export function DueFlow({ companyId, canDeliver, onDeliver }: {
       <Check aria-hidden="true" />
       <strong>Nenhuma pendência nesta empresa</strong>
       <p>{data?.summary?.unconfiguredEmployees
-        ? `${data.summary.unconfiguredEmployees} colaborador(es) ainda não têm EPI obrigatório definido para o cargo. As regras são cadastradas no painel, em Controle de EPI.`
+        ? `${contagem(data.summary.unconfiguredEmployees, "colaborador", "colaboradores")} ainda não têm EPI obrigatório definido para o cargo. As regras são cadastradas no painel, em Controle de EPI.`
         : "Todos os colaboradores ativos estão com o EPI obrigatório em dia."}</p>
     </div>}
 

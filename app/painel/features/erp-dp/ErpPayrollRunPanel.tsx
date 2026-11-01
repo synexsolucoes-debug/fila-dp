@@ -6,6 +6,7 @@ import { EmptyState, ErrorBanner, LoadingState, StatusPill } from "../shared";
 import { brl, type PayrollLine } from "@/lib/payroll-calc";
 import { ErpObligationsPanel, ErpPayrollSettingsForm } from "./ErpObligationsPanel";
 import styles from "./erp-record.module.css";
+import { contagem } from "../shared/plural";
 
 /**
  * Folha da competência do ERP DP — o PC00 do SAP: calcula a empresa inteira
@@ -115,7 +116,7 @@ function RunDetail({ cycle, canManage, onBack }: { cycle: CycleRow; canManage: b
     setBusy(true); setFeedback("");
     try {
       const payload = await requestJson<{ retroactivePosted: number }>(`/api/erp-dp/payroll-runs/${encodeURIComponent(data.run.id)}/close`, { method: "POST" });
-      setFeedback(payload.retroactivePosted ? `Folha fechada. ${payload.retroactivePosted} retroativo(s) marcado(s) como lançado(s).` : "Folha fechada.");
+      setFeedback(payload.retroactivePosted ? `Folha fechada. ${contagem(payload.retroactivePosted, "retroativo marcado", "retroativos marcados")} como lançado(s).` : "Folha fechada.");
       setConfirmClose(false);
       setError("");
       await load();
@@ -136,7 +137,7 @@ function RunDetail({ cycle, canManage, onBack }: { cycle: CycleRow; canManage: b
     {!data ? <LoadingState size="compact" title="Carregando a folha" /> : <>
       {run ? <div className={styles.historySnapshot} aria-label="Totais da folha">
         <article><small>Situação</small><strong>{run.status === "closed" ? "Fechada" : "Calculada"}</strong>
-          <span>{run.calculationCount} cálculo(s){run.closedAt ? " · não muda mais" : ""}</span></article>
+          <span>{contagem(run.calculationCount, "cálculo", "cálculos")}{run.closedAt ? " · não muda mais" : ""}</span></article>
         <article><small>Pessoas</small><strong>{run.employeesCount}</strong><span>{run.skipped.length} fora da folha</span></article>
         <article><small>Proventos</small><strong>{brl(run.earningsCents)}</strong><span>Descontos {brl(run.deductionsCents)}</span></article>
         <article><small>Líquido</small><strong>{brl(run.netCents)}</strong><span>FGTS {brl(run.fgtsCents)}</span></article>

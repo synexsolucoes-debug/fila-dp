@@ -5,6 +5,7 @@ import { BellRing, RefreshCw } from "lucide-react";
 import { EmptyState, ErrorBanner, LoadingState } from "../shared";
 import { brDate, dpRequest, errorText } from "./dp.api";
 import styles from "./dp.module.css";
+import { contagem } from "../shared/plural";
 
 type Alert = {
   id: string; type: string; typeLabel: string; severity: string; severityLabel: string; title: string; detail: string;
@@ -53,7 +54,7 @@ export function AlertsTab({ canManage }: { canManage: boolean }) {
     setBusy(true);
     try {
       const result = await dpRequest<{ open: number }>("/api/dp/alerts/refresh", { method: "POST" });
-      setNotice(`Alertas recalculados: ${result.open} aberto(s).`);
+      setNotice(`Alertas recalculados: ${contagem(result.open, "aberto", "abertos")}.`);
       await load();
     } catch (cause) { setError(errorText(cause, "Não foi possível recalcular.")); }
     finally { setBusy(false); }

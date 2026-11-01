@@ -32,6 +32,7 @@ import type {
   EpiTab, ReportDefinition, ReportResult,
 } from "./epi.types";
 import styles from "./epi.module.css";
+import { contagem } from "../shared/plural";
 
 /**
  * Controle de EPI.
@@ -425,7 +426,7 @@ export function EpiControlView({ role }: { role: WorkspaceRole }) {
       <SummaryCard icon={Scale} label="Descontos em análise" value={summary.discountsInAnalysis} note="Demandas abertas no DP"
         tone={summary.discountsInAnalysis ? "danger" : "neutral"} onClick={() => { setTab("discounts"); setFilters({ open: "true" }); }} />
       <SummaryCard icon={AlertTriangle} label="CA vencido ou vencendo" value={summary.caExpired + summary.caExpiring}
-        note={`${summary.caExpired} vencido(s) · ${summary.caExpiring} em ${overview.caWindowDays} dias`}
+        note={`${contagem(summary.caExpired, "vencido", "vencidos")} · ${summary.caExpiring} em ${overview.caWindowDays} dias`}
         tone={summary.caExpired ? "danger" : summary.caExpiring ? "warning" : "safe"} onClick={() => setTab("stock")} />
     </div>}
 
@@ -802,7 +803,7 @@ function DisposalsPanel({ disposals, disposable, filters, onFilters, permissions
     {disposable.length > 0 && <div className={styles.noticeBar}>
       <AlertTriangle aria-hidden="true" />
       <span>
-        <strong>{disposable.length} EPI(s) em estado que pede descarte e sem registro aberto</strong>
+        <strong>{contagem(disposable.length, "EPI", "EPIs")} em estado que pede descarte e sem registro aberto</strong>
         {disposable.slice(0, 3).map((item) => `${item.name} (${epiProductStatusLabels[item.status] ?? item.status})`).join(", ")}
         {disposable.length > 3 ? ` e mais ${disposable.length - 3}.` : "."}
         {permissions?.dispose && <> <button type="button" className={styles.ghostButton} onClick={() => onCreate(disposable[0])}>Abrir descarte</button></>}

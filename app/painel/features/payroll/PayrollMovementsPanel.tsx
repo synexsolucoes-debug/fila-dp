@@ -6,6 +6,7 @@ import type { Company } from "@/lib/fila-dp-types";
 import { pastedMovementCells } from "@/lib/payroll-movements";
 import { EmptyState, ErrorBanner, LoadingState, StatusPill } from "../shared";
 import styles from "./payroll.module.css";
+import { contagem } from "../shared/plural";
 
 /**
  * Movimentos para o Sankhya: lança os eventos variáveis da folha por
@@ -192,7 +193,7 @@ export function PayrollMovementsPanel({ companies, canEdit }: { companies: Compa
       link.remove();
       window.setTimeout(() => URL.revokeObjectURL(link.href), 4000);
       setError("");
-      setFeedback(`${response.headers.get("X-Fila-Dp-Rows") ?? ""} linha(s) exportada(s) em ${name}. Importe no Sankhya pela tela de importação de movimentos.`);
+      setFeedback(`${contagem(Number(response.headers.get("X-Fila-Dp-Rows") ?? 0), "linha exportada", "linhas exportadas")} em ${name}. Importe no Sankhya pela tela de importação de movimentos.`);
       await load();
     } catch (cause) { fail(cause, "Não foi possível gerar a planilha."); }
     finally { setBusy(false); }
@@ -271,12 +272,12 @@ export function PayrollMovementsPanel({ companies, canEdit }: { companies: Compa
 
       <div className={styles.summary} aria-label="Resumo da competência">
         <article><small>Lançamentos</small><strong>{totals.count}</strong><span>{totals.lastExport?.exportedAt
-          ? `${totals.exported} exportado(s) · última em ${dateLabel(totals.lastExport.exportedAt)}${totals.lastExport.exportedByName ? ` por ${totals.lastExport.exportedByName}` : ""}`
+          ? `${contagem(totals.exported, "exportado", "exportados")} · última em ${dateLabel(totals.lastExport.exportedAt)}${totals.lastExport.exportedByName ? ` por ${totals.lastExport.exportedByName}` : ""}`
           : "nenhum exportado"}</span></article>
         <article><small>Colaboradores</small><strong>{totals.people}</strong><span>com movimento na competência</span></article>
         <article><small>Proventos em R$</small><strong>{money(totals.earnings)}</strong><span>eventos de valor</span></article>
         <article><small>Descontos em R$</small><strong>{money(totals.deductions)}</strong><span>eventos de valor</span></article>
-        <article><small>Para conferir</small><strong>{totals.blocked + totals.warned}</strong><span>{totals.blocked} bloqueado(s) · {totals.warned} aviso(s)</span></article>
+        <article><small>Para conferir</small><strong>{totals.blocked + totals.warned}</strong><span>{contagem(totals.blocked, "bloqueado", "bloqueados")} · {contagem(totals.warned, "aviso", "avisos")}</span></article>
       </div>
 
       {data.movements.length ? <div className={styles.tableWrap}><table className={styles.table}>

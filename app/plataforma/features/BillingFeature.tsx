@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { Pencil } from "lucide-react";
 import styles from "../platform.module.css";
 import { Empty, ErrorState, FeatureHeader, FeatureProps, Loading, MetricCard, Notice, Panel, Row, Status, date, money, number, platformRequest, text, usePlatformResource } from "./core";
+import { contagem } from "../../painel/features/shared/plural";
 
 export function BillingFeature({ params, updateQuery }: FeatureProps) {
   const resource = usePlatformResource<Row>("/api/platform/billing"); const overview = usePlatformResource<{ plans: Row[] }>("/api/platform/overview");
@@ -51,8 +52,8 @@ function PrivacyRequestsNotice({ data, onOpen }: {
     <Panel title="Pedidos de titular (LGPD)"
       subtitle={`A política publicada promete resposta em até ${data.deadlineDays} dias.`}>
       <div className={styles.filterBar} role={vencido ? "alert" : undefined}>
-        <strong>{data.open} pedido(s) em aberto</strong>
-        <span>mais antigo há {dias} dia(s)</span>
+        <strong>{contagem(data.open, "pedido", "pedidos")} em aberto</strong>
+        <span>mais antigo há {contagem(dias, "dia", "dias")}</span>
         <Status value={vencido ? "overdue" : dias >= data.deadlineDays - 5 ? "warning" : "ready"} />
         <button type="button" className={styles.smallAction} onClick={onOpen}>Ver na fila</button>
       </div>

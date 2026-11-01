@@ -36,6 +36,7 @@ import type {
   LedgerAdvanceDraft, LedgerEntry, LedgerEntryDetail, LedgerEntryDraft, LedgerInstallment,
   LedgerOverview, LedgerPersonOption,
 } from "./ledger.types";
+import { contagem } from "../shared/plural";
 
 type Aba = "competence" | "entries" | "installments" | "advances" | "import";
 
@@ -534,13 +535,13 @@ export function LedgerView({ members, currentUserId }: { members: Member[]; curr
           onMove={(status, reason) => void run(async () => {
             const resultado = await moveBatch(batch!.id, status, reason);
             if (resultado.projectedToContractorPayment) {
-              setScheduleNote(`${resultado.projectedToContractorPayment} desconto(s) de prestador projetado(s) no fechamento PJ da competência.`);
+              setScheduleNote(`${contagem(resultado.projectedToContractorPayment, "desconto", "descontos")} de prestador projetado(s) no fechamento PJ da competência.`);
             }
             await Promise.all([refreshCompetence(), refresh()]);
           })}
           onExport={() => void run(async () => {
             const resultado = await downloadBatchExport(batch!.id);
-            setScheduleNote(`${resultado.rows} linha(s) exportada(s) em ${resultado.filename}. Exportar não confirma desconto.`);
+            setScheduleNote(`${contagem(resultado.rows, "linha exportada", "linhas exportadas")} em ${resultado.filename}. Exportar não confirma desconto.`);
           })}
           onImportReturn={(file) => void run(async () => {
             setReturnResult(await importBatchReturn(batch!.id, file, file.name));
@@ -562,7 +563,7 @@ export function LedgerView({ members, currentUserId }: { members: Member[]; curr
               void scheduleAdvances(companyId, competence, "")
                 .then(async (resultado) => {
                   setScheduleNote(resultado.message
-                    ?? `${resultado.scheduled} adiantamento(s) na competência${resultado.pending ? `, ${resultado.pending} com pendência de valor` : ""}. Gerar não paga nada.`);
+                    ?? `${contagem(resultado.scheduled, "adiantamento", "adiantamentos")} na competência${resultado.pending ? `, ${resultado.pending} com pendência de valor` : ""}. Gerar não paga nada.`);
                   await refreshAdvances();
                 })
                 .catch((issue: unknown) => setError(issue instanceof Error ? issue.message : "Não foi possível gerar a programação."))
@@ -580,7 +581,7 @@ export function LedgerView({ members, currentUserId }: { members: Member[]; curr
       ) : (
         <>
       <div className={styles.tableTools}>
-        <span>{visible.length} lançamento(s)</span>
+        <span>{contagem(visible.length, "lançamento", "lançamentos")}</span>
         {truncated && <span>A consulta atingiu o limite. Reduza o recorte para ver tudo.</span>}
       </div>
 

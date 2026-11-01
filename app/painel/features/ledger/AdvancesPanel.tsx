@@ -8,6 +8,7 @@ import type { PanelTone } from "../shared/status-tone";
 import styles from "./ledger.module.css";
 import type { LedgerAdvancePayment } from "./ledger.api";
 import type { LedgerPermissions } from "./ledger.types";
+import { contagem } from "../shared/plural";
 
 const statusLabels: Record<LedgerAdvancePayment["status"], string> = {
   scheduled: "Programado",
@@ -93,7 +94,7 @@ export function AdvancesPanel({
         <p className={styles.notice} data-tone="warning">
           <TriangleAlert aria-hidden="true" />
           <span>
-            {totals.pendentes} adiantamento(s) sem valor calculado. São regras percentuais sem base salarial
+            {contagem(totals.pendentes, "adiantamento", "adiantamentos")} sem valor calculado. São regras percentuais sem base salarial
             informada — o produto prefere apontar a pendência a pagar R$ 0,00 sem ninguém perceber.
           </span>
         </p>
@@ -106,7 +107,7 @@ export function AdvancesPanel({
               <Wallet aria-hidden="true" />
               <span>Previsto na competência</span>
               <strong>{formatBRL(totals.previsto)}</strong>
-              <small>{visible.length} adiantamento(s)</small>
+              <small>{contagem(visible.length, "adiantamento", "adiantamentos")}</small>
             </article>
             <article>
               <span>Pago ao colaborador</span>
