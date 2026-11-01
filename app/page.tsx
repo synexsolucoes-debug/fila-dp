@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Check, Clock3, FileCheck2, LockKeyhole, Plug, Plus, ShieldCheck } from "lucide-react";
+import { ArrowRight, Check, Plus } from "lucide-react";
 import { VinculatoLogo } from "@/app/components/VinculatoLogo";
 import { getD1 } from "@/db";
 import { selfSignupEnabled } from "@/lib/saas";
@@ -55,19 +55,24 @@ const monthMilestones = [
 ];
 const days = Array.from({ length: 30 }, (_, index) => index + 1);
 
-/** Cada passo do fluxo real: demanda → competência → conferência → fechamento. */
-const workflowSteps = [
-  { title: "Receba o pedido", text: "Solicitações chegam por e-mail, Teams, WhatsApp ou registro manual e viram demanda com responsável, prazo e histórico." },
-  { title: "Trabalhe por competência", text: "Cada empresa tem seu ciclo mensal, com movimentações, obrigações e pendências no mesmo lugar." },
-  { title: "Confira antes de fechar", text: "O que foi enviado é comparado com o que voltou do ERP, e cada divergência vira item com dono." },
-  { title: "Feche com trilha", text: "O fechamento só avança sem bloqueio aberto, e toda aprovação ou reabertura fica registrada." },
+/**
+ * Os recursos, agrupados pelo momento do mês em que a equipe os usa.
+ *
+ * É a mesma lista de `featureHighlights`; o que muda é a ordem de leitura, que
+ * acompanha a régua do topo em vez de virar uma grade de cartões.
+ */
+const monthMoments = [
+  { when: "Dias 1 a 20", title: "Ao longo do mês", features: ["Demandas com prazo e SLA", "Movimentações para a folha", "Central de ação"] },
+  { when: "Dias 20 a 28", title: "Antes de fechar", features: ["Conferência e conciliação", "Pagamentos PJ", "Pagamento de psicólogos"] },
+  { when: "Dia 30", title: "No fechamento", features: ["Competências e fechamento", "Auditoria e permissões"] },
 ];
 
 const securityItems = [
-  { icon: LockKeyhole, title: "Isolamento imposto no banco", text: "Cada registro pertence a um workspace, e a separação é aplicada por Row Level Security, com teste automatizado que tenta o acesso cruzado e exige a recusa." },
-  { icon: FileCheck2, title: "Trilha com antes e depois", text: "Mudanças administrativas, fechamentos, pagamentos e exportações registram quem fez, o quê, e o estado anterior e posterior." },
-  { icon: ShieldCheck, title: "Permissão por papel e por empresa", text: "O acesso é dado por capacidade e pode ser restrito às empresas que a pessoa atende." },
-  { icon: Clock3, title: "Suporte só com autorização", text: "O acesso da nossa equipe aos seus dados é temporário, justificado e auditado. Ele não existe por padrão." },
+  { title: "Isolamento entre clientes no banco", text: "Cada registro pertence a um workspace e a separação é aplicada por Row Level Security. Um teste automatizado tenta o acesso cruzado e exige a recusa." },
+  { title: "Histórico com antes e depois", text: "Fechamentos, pagamentos, exportações e mudanças administrativas guardam quem fez, quando, e o estado anterior e posterior." },
+  { title: "Permissão por papel e por empresa", text: "Cada pessoa vê só as empresas que atende e só faz o que o papel dela permite." },
+  { title: "Seus dados saem quando você quiser", text: "O administrador exporta o workspace inteiro em um arquivo, em qualquer plano." },
+  { title: "Suporte só com autorização", text: "Nossa equipe só acessa os seus dados com autorização, por tempo limitado e com registro." },
 ];
 
 function MonthRuler() {
@@ -152,11 +157,10 @@ export default async function Home() {
 
       <section className={s.hero} id="conteudo">
         <div className={s.heroCopy}>
-          <p className={s.eyebrow}>Para escritórios de contabilidade e DP de empresas</p>
-          <h1>Sua operação, conectada.</h1>
+                    <h1>Sua operação, conectada.</h1>
           <p className={s.lead}>
             Centralize processos, demandas, documentos e integrações em uma plataforma criada para organizar a operação
-            do seu Departamento Pessoal — e chegue ao fim do mês sabendo o que falta para fechar.
+            do seu Departamento Pessoal. Para escritórios de contabilidade e para o DP de empresas.
           </p>
           <div className={s.actions}>
             {freeSignup
@@ -174,112 +178,105 @@ export default async function Home() {
         <MonthRuler />
       </section>
 
-      <section className={s.audience} aria-labelledby="audience-title">
-        <div className={s.sectionHead}>
-          <p className={s.kicker}>Para quem é</p>
-          <h2 id="audience-title">O mesmo fechamento, visto de dois lados.</h2>
-        </div>
-        <div className={s.audienceGrid}>
-          {audienceSegments.map((segment) => (
-            <article key={segment.id} id={segment.id} className={s.audienceCard} data-segment={segment.id}>
-              <p className={s.audienceLabel}>{segment.label}</p>
-              <h3>{segment.title}</h3>
-              <p>{segment.text}</p>
-              <ul>
-                {segment.points.map((point) => (
-                  <li key={point}><Check className={s.icon} aria-hidden="true" /> {point}</li>
-                ))}
+      <section className={s.section} aria-labelledby="audience-title">
+        <h2 id="audience-title" className={s.title}>Para quem é</h2>
+        <div className={s.compare}>
+          <div className={s.compareRow} role="presentation">
+            <span className={s.compareLabel} aria-hidden="true" />
+            {audienceSegments.map((segment) => (
+              <h3 key={segment.id} id={segment.id} className={s.compareHead}>{segment.label}</h3>
+            ))}
+          </div>
+          <div className={s.compareRow}>
+            <span className={s.compareLabel}>Como costuma ser</span>
+            {audienceSegments.map((segment) => (
+              <div key={segment.id} className={s.compareCell}>
+                <span className={s.compareMobileHead}>{segment.label}</span>
+                <strong>{segment.title}</strong>
+                <p>{segment.text}</p>
+              </div>
+            ))}
+          </div>
+          <div className={s.compareRow}>
+            <span className={s.compareLabel}>No Vinculato</span>
+            {audienceSegments.map((segment) => (
+              <ul key={segment.id} className={s.compareCell}>
+                {segment.points.map((point) => <li key={point}>{point}</li>)}
               </ul>
-              <Link className={s.textLink} href="/demonstracao">Ver na demonstração <Chevron /></Link>
-            </article>
-          ))}
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* As três garantias desta faixa valem em qualquer plano, inclusive no
-          gratuito — é o que as separa de recurso comercial. */}
-      <section className={s.proof} aria-label="Garantias válidas em qualquer plano">
-        <p><LockKeyhole className={s.icon} aria-hidden="true" /> Isolamento entre clientes aplicado no banco</p>
-        <p><FileCheck2 className={s.icon} aria-hidden="true" /> Trilha de auditoria com antes e depois</p>
-        <p><Plug className={s.icon} aria-hidden="true" /> Exportação dos seus dados a qualquer momento</p>
-      </section>
-
-      <section className={s.section} id="como-funciona" aria-labelledby="flow-title">
-        <div className={s.sectionHead}>
-          <p className={s.kicker}>Como funciona</p>
-          <h2 id="flow-title">Do pedido recebido à competência fechada.</h2>
-          <p>Um caminho só, com responsável e prazo em cada etapa, e um fechamento que não avança com pendência aberta.</p>
-        </div>
-        <ol className={s.flow}>
-          {workflowSteps.map((item, index) => (
-            <li key={item.title}>
-              <span className={s.flowStep}>Etapa {index + 1}</span>
-              <h3>{item.title}</h3>
-              <p>{item.text}</p>
+      <section className={`${s.section} ${s.month}`} id="como-funciona" aria-labelledby="month-title">
+        <h2 id="month-title" className={s.title}>O mês dentro do Vinculato</h2>
+        <p className={s.intro}>
+          Pedido vira demanda com dono e prazo, a movimentação é aprovada antes de ir para a folha, o retorno do ERP é
+          conferido, e o fechamento só sai quando não sobra pendência.
+        </p>
+        <ol className={s.moments}>
+          {monthMoments.map((moment) => (
+            <li key={moment.title}>
+              <span className={s.when}>{moment.when}</span>
+              <h3>{moment.title}</h3>
+              <dl>
+                {featureHighlights.filter((item) => (moment.features as string[]).includes(item.title)).map((item) => (
+                  <div key={item.title}>
+                    <dt>{item.title}</dt>
+                    <dd>{item.text}</dd>
+                  </div>
+                ))}
+              </dl>
             </li>
           ))}
         </ol>
-      </section>
-
-      <section className={`${s.section} ${s.sectionTinted}`} id="recursos" aria-labelledby="features-title">
-        <div className={s.sectionHead}>
-          <p className={s.kicker}>O que já está no produto</p>
-          <h2 id="features-title">Recursos disponíveis hoje, não roteiro de futuro.</h2>
-          <p>Cada item corresponde a um módulo entregue. O que ainda não existe aparece como preparado, nunca como pronto.</p>
-        </div>
-        <div className={s.features}>
-          {featureHighlights.map((item) => (
-            <article key={item.title}>
-              <h3>{item.title}</h3>
-              <p>{item.text}</p>
-            </article>
-          ))}
-        </div>
         <Link className={s.textLink} href="/funcionalidades">Ver todas as funcionalidades <Chevron /></Link>
       </section>
 
       <section className={s.section} id="integracoes" aria-labelledby="integrations-title">
-        <div className={s.sectionHead}>
-          <p className={s.kicker}>Integrações</p>
-          <h2 id="integrations-title">Conectado ao que sua operação já usa.</h2>
-          <p>Cada conector aparece com o estado real. Nada é anunciado como pronto antes de funcionar de ponta a ponta.</p>
+        <div className={s.split}>
+          <div>
+            <h2 id="integrations-title" className={s.title}>Integrações</h2>
+            <p className={s.intro}>
+              O Vinculato não substitui o ERP de folha, o ponto nem a Sólides. Ele conversa com eles, e cada conector
+              aparece aqui no estado em que está hoje.
+            </p>
+            <Link className={s.textLink} href="/integracoes">Detalhes de cada integração <Chevron /></Link>
+          </div>
+          <table className={s.table}>
+            <thead>
+              <tr><th scope="col">Sistema</th><th scope="col">Tipo</th><th scope="col">Situação</th></tr>
+            </thead>
+            <tbody>
+              {integrationCatalog.map((item) => (
+                <tr key={item.name}>
+                  <th scope="row">{item.name}</th>
+                  <td>{item.category}</td>
+                  <td><span className={s.state} data-state={item.state}>{integrationStateLabels[item.state]}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-        <ul className={s.integrations}>
-          {integrationCatalog.map((item) => (
-            <li key={item.name}>
-              <div>
-                <strong>{item.name}</strong>
-                <span className={s.integrationCategory}>{item.category}</span>
-              </div>
-              <span className={s.state} data-state={item.state}>{integrationStateLabels[item.state]}</span>
-            </li>
-          ))}
-        </ul>
-        <Link className={s.textLink} href="/integracoes">Ver detalhes das integrações <Chevron /></Link>
       </section>
 
-      <section className={s.security} aria-labelledby="security-title">
-        <div className={s.sectionHead}>
-          <p className={s.kicker}>Segurança e rastreabilidade</p>
-          <h2 id="security-title">Dado de cliente não se mistura.</h2>
-        </div>
-        <div className={s.securityGrid}>
-          {securityItems.map((item) => (
-            <article key={item.title}>
-              <item.icon className={s.securityIcon} aria-hidden="true" />
-              <h3>{item.title}</h3>
-              <p>{item.text}</p>
-            </article>
-          ))}
+      <section className={`${s.section} ${s.security}`} aria-labelledby="security-title">
+        <div className={s.split}>
+          <h2 id="security-title" className={s.title}>Segurança</h2>
+          <dl className={s.securityList}>
+            {securityItems.map((item) => (
+              <div key={item.title}>
+                <dt>{item.title}</dt>
+                <dd>{item.text}</dd>
+              </div>
+            ))}
+          </dl>
         </div>
       </section>
 
       <section className={s.section} id="planos" aria-labelledby="plans-title">
-        <div className={s.sectionHead}>
-          <p className={s.kicker}>Planos</p>
-          <h2 id="plans-title">Comece pequeno, cresça com a carteira.</h2>
-          <p>Os planos vêm do mesmo catálogo que a cobrança usa. Contratação direta só aparece quando o plano está ativo e com preço configurado.</p>
-        </div>
+        <h2 id="plans-title" className={s.title}>Planos</h2>
+        <p className={s.intro}>Os preços vêm do mesmo catálogo usado na cobrança. Sem fidelidade e sem multa para sair.</p>
 
         {!catalog.available ? (
           <div className={s.plansEmpty} role="status">
@@ -298,14 +295,14 @@ export default async function Home() {
             {offers.map((offer) => (
               <article key={offer.code} className={s.plan} data-recommended={offer.recommended ? "true" : undefined}>
                 <div className={s.planHead}>
-                  <span className={s.planName}>{offer.name}</span>
+                  <h3 className={s.planName}>{offer.name}</h3>
                   {offer.recommended && <span className={s.planFlag}>Mais escolhido</span>}
                 </div>
                 <strong className={s.planPrice}>{offer.price}<small>{offer.priceNote}</small></strong>
                 {offer.description && <p className={s.planDescription}>{offer.description}</p>}
                 <ul>
                   {offer.limits.map((limit) => (
-                    <li key={limit.label}><Check className={s.icon} aria-hidden="true" /> {limit.value} — {limit.label.toLowerCase()}</li>
+                    <li key={limit.label}><span>{limit.label}</span><strong>{limit.value}</strong></li>
                   ))}
                 </ul>
                 <Link className={`${s.button} ${offer.recommended ? "" : s.buttonOutline}`} href={offer.ctaHref}>{offer.ctaLabel} <Chevron /></Link>
@@ -314,38 +311,38 @@ export default async function Home() {
           </div>
         )}
 
-        <div className={s.commitments}>
+        <dl className={s.commitments}>
           {commercialCommitments.map((item) => (
-            <article key={item.title}>
-              <h3>{item.title}</h3>
-              <p>{item.text}</p>
-            </article>
-          ))}
-        </div>
-        <Link className={s.textLink} href="/planos">Ver limites, módulos por plano e condições <Chevron /></Link>
-      </section>
-
-      <section className={`${s.section} ${s.sectionTinted}`} aria-labelledby="boundaries-title">
-        <div className={s.sectionHead}>
-          <p className={s.kicker}>Limites do produto</p>
-          <h2 id="boundaries-title">O que o Vinculato não faz.</h2>
-          <p>Dizer o limite antes da contratação evita a frustração depois.</p>
-        </div>
-        <dl className={s.boundaries}>
-          {productBoundaries.map((item) => (
             <div key={item.title}>
               <dt>{item.title}</dt>
               <dd>{item.text}</dd>
             </div>
           ))}
         </dl>
+        <Link className={s.textLink} href="/planos">Limites e módulos de cada plano <Chevron /></Link>
+      </section>
+
+      <section className={`${s.section} ${s.boundariesSection}`} aria-labelledby="boundaries-title">
+        <div className={s.split}>
+          <div>
+            <h2 id="boundaries-title" className={s.title}>O que fica fora</h2>
+            <p className={s.intro}>Melhor saber antes de contratar.</p>
+          </div>
+          <dl className={s.securityList}>
+            {productBoundaries.map((item) => (
+              <div key={item.title}>
+                <dt>{item.title}</dt>
+                <dd>{item.text}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
       </section>
 
       <section className={`${s.section} ${s.faq}`} aria-labelledby="faq-title">
-        <div className={s.sectionHead}>
-          <p className={s.kicker}>Perguntas frequentes</p>
-          <h2 id="faq-title">Antes de contratar.</h2>
-          <p>Se a sua dúvida não estiver aqui, <Link href="/contato">fale com a equipe</Link>.</p>
+        <div>
+          <h2 id="faq-title" className={s.title}>Perguntas frequentes</h2>
+          <p className={s.intro}>Não achou a sua? <Link href="/contato">Fale com a equipe</Link>.</p>
         </div>
         <div className={s.faqList}>
           {faqEntries.map((item, index) => (
@@ -358,14 +355,15 @@ export default async function Home() {
       </section>
 
       <section className={s.finalCta} aria-labelledby="final-title">
+        <p className={s.finalDay}>Dia 30</p>
         <h2 id="final-title">Feche o próximo mês com tudo no mesmo lugar.</h2>
-        <p>Teste com a sua operação ou veja o produto aberto com a nossa equipe, sem usar dados reais do seu DP.</p>
+        <p className={s.finalText}>Teste com a sua operação ou veja o produto com a nossa equipe, sem usar dados reais do seu DP.</p>
         <div className={s.actions}>
           {freeSignup
-            ? <Link className={`${s.button} ${s.buttonLight}`} href={SIGNUP_PATH}>Começar grátis <Chevron /></Link>
-            : <Link className={`${s.button} ${s.buttonLight}`} href="/demonstracao">Agendar demonstração <Chevron /></Link>}
+            ? <Link className={s.button} href={SIGNUP_PATH}>Começar grátis <Chevron /></Link>
+            : <Link className={s.button} href="/demonstracao">Agendar demonstração <Chevron /></Link>}
           {freeSignup && <Link className={`${s.button} ${s.buttonGhost}`} href="/demonstracao">Agendar demonstração</Link>}
-          <Link className={s.textLinkLight} href="/login">Já sou cliente — entrar</Link>
+          <Link className={s.textLinkLight} href="/login">Já sou cliente, entrar</Link>
         </div>
       </section>
 
