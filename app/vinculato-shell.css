@@ -594,3 +594,143 @@
 .dashboard-shell.operational-ui .inbox-table .inbox-subject span { display: -webkit-box; overflow: hidden; margin-top: 2px; color: var(--ui-text-soft); font-size: .75rem; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .dashboard-shell.operational-ui .inbox-table td:last-child { text-align: right; white-space: nowrap; }
 .dashboard-shell.operational-ui .inbox-list-panel .empty-view .secondary-button { margin-top: 10px; }
+
+/* ========================================================================== */
+/* 7. Administração como área separada                                         */
+/* ========================================================================== */
+/* Configurar o grupo e operar o dia a dia são trabalhos diferentes. Na
+   Administração a faixa muda de cor, perde as abas dos módulos e o seletor de
+   empresa, e mostra onde a pessoa está e o caminho de volta. */
+.dashboard-shell.operational-ui.admin-mode .shell-bar {
+  border-top: 3px solid var(--ui-primary);
+  background: var(--ui-surface-muted);
+}
+.shell-admin-context {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.shell-admin-badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-primary);
+  color: var(--ui-on-primary, #fff);
+  font-size: 13px;
+  font-weight: 650;
+}
+.shell-admin-badge svg { width: 15px; height: 15px; }
+.shell-admin-workspace {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ui-text-soft);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.shell-admin-back {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  margin-left: 4px;
+  padding: 0 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.shell-admin-back:hover { border-color: var(--ui-border-strong); }
+.shell-admin-back svg { width: 15px; height: 15px; }
+@media (max-width: 760px) {
+  .shell-admin-workspace { display: none; }
+}
+
+/* Usuários e acessos: barra de ações, tabela e painel lateral. */
+.dashboard-shell.operational-ui .admin-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.dashboard-shell.operational-ui .admin-counters { display: flex; flex-wrap: wrap; gap: 2px; padding: 3px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface); }
+.dashboard-shell.operational-ui .admin-counters button { display: inline-flex; align-items: baseline; gap: 6px; min-height: 30px; padding: 0 10px; border: 0; border-radius: var(--ui-radius-sm); background: transparent; color: var(--ui-text-soft); font-size: 13px; cursor: pointer; }
+.dashboard-shell.operational-ui .admin-counters button b { color: var(--ui-text); font-variant-numeric: tabular-nums; }
+.dashboard-shell.operational-ui .admin-counters button[data-tone="warning"] b { color: var(--ui-state-warn-text, var(--ui-warning)); }
+.dashboard-shell.operational-ui .admin-counters button[aria-pressed="true"] { background: var(--ui-primary-soft); color: var(--ui-text); }
+.dashboard-shell.operational-ui .admin-toolbar .primary-button { display: inline-flex; align-items: center; gap: 6px; }
+.dashboard-shell.operational-ui .admin-toolbar .primary-button svg { width: 16px; height: 16px; }
+
+.dashboard-shell.operational-ui .admin-users { border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface); }
+.dashboard-shell.operational-ui .admin-users > header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--ui-border); }
+.dashboard-shell.operational-ui .admin-users > header > strong { margin-right: auto; font-size: 14px; }
+.dashboard-shell.operational-ui .admin-search { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 10px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); background: var(--ui-surface); }
+.dashboard-shell.operational-ui .admin-search svg { width: 15px; height: 15px; color: var(--ui-text-soft); }
+.dashboard-shell.operational-ui .admin-search input { width: 200px; border: 0; outline: 0; background: transparent; color: var(--ui-text); font: inherit; font-size: 13px; }
+.dashboard-shell.operational-ui .admin-filter select { height: 34px; padding: 0 8px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); background: var(--ui-surface); color: var(--ui-text); font-size: 13px; }
+.dashboard-shell.operational-ui .admin-users-table td { vertical-align: middle; }
+.dashboard-shell.operational-ui .admin-users-table .numeric { text-align: right; font-variant-numeric: tabular-nums; }
+.dashboard-shell.operational-ui .admin-user-cell { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.dashboard-shell.operational-ui .admin-user-cell > i { flex-shrink: 0; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--ui-surface-muted); color: var(--ui-text); font-size: 11px; font-style: normal; font-weight: 700; }
+.dashboard-shell.operational-ui .admin-user-cell > span { display: grid; min-width: 0; }
+.dashboard-shell.operational-ui .admin-user-cell strong { font-weight: 600; }
+.dashboard-shell.operational-ui .admin-user-cell small { overflow: hidden; color: var(--ui-text-soft); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.dashboard-shell.operational-ui .admin-owner-tag { margin-left: 6px; padding: 1px 6px; border-radius: var(--ui-radius-sm); background: var(--ui-surface-muted); color: var(--ui-text-soft); font-size: 11px; font-style: normal; font-weight: 600; }
+.dashboard-shell.operational-ui .admin-missing { color: var(--ui-state-warn-text, var(--ui-warning)); }
+.dashboard-shell.operational-ui .admin-status { display: inline-flex; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.dashboard-shell.operational-ui .admin-status.active { background: var(--ui-state-ok-bg, var(--ui-surface-muted)); color: var(--ui-state-ok-text, var(--ui-success)); }
+.dashboard-shell.operational-ui .admin-status.pending { background: var(--ui-state-warn-bg); color: var(--ui-state-warn-text); }
+.dashboard-shell.operational-ui .admin-row-actions { width: 1%; text-align: right; white-space: nowrap; }
+.dashboard-shell.operational-ui .admin-row-actions .secondary-button { min-height: 30px; padding: 0 12px; font-size: 13px; }
+.dashboard-shell.operational-ui .admin-empty { padding: 24px; color: var(--ui-text-soft); text-align: center; }
+.dashboard-shell.operational-ui .admin-hint { padding: 10px 12px; border-top: 1px solid var(--ui-border); color: var(--ui-text-soft); font-size: 12px; }
+.dashboard-shell.operational-ui .link-button { padding: 0; border: 0; background: none; color: var(--ui-accent-text, var(--ui-primary)); font: inherit; font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+
+.dashboard-shell .admin-drawer { display: flex; flex-direction: column; }
+.dashboard-shell .admin-drawer > form { display: flex; flex-direction: column; min-height: 100%; }
+.dashboard-shell .admin-drawer-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--ui-border); background: var(--ui-surface-elevated); }
+.dashboard-shell .admin-drawer-head > div { display: grid; gap: 2px; min-width: 0; }
+.dashboard-shell .admin-drawer-head span { color: var(--ui-text-soft); font-size: 12px; font-weight: 600; }
+.dashboard-shell .admin-drawer-head h2 { margin: 0; color: var(--ui-text); font-size: 18px; font-weight: 650; }
+.dashboard-shell .admin-drawer-head small { color: var(--ui-text-soft); font-size: 12px; }
+.dashboard-shell .admin-drawer-close { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); background: var(--ui-surface); color: var(--ui-text); cursor: pointer; }
+.dashboard-shell .admin-drawer-close svg { width: 16px; height: 16px; }
+.dashboard-shell .admin-drawer-body { flex: 1; display: grid; align-content: start; gap: 0; padding: 4px 20px 20px; }
+.dashboard-shell .admin-drawer-body > section { display: grid; gap: 8px; padding: 14px 0; border-bottom: 1px solid var(--ui-border); }
+.dashboard-shell .admin-drawer-body > section:last-child { border-bottom: 0; }
+.dashboard-shell .admin-drawer-body h3 { margin: 0; color: var(--ui-text); font-size: 13px; font-weight: 650; }
+.dashboard-shell .admin-drawer-body p { margin: 0; color: var(--ui-text-soft); font-size: 12px; line-height: 1.45; }
+.dashboard-shell .admin-drawer-body select { height: 36px; padding: 0 8px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); background: var(--ui-surface); color: var(--ui-text); font-size: 13px; }
+.dashboard-shell .admin-drawer-access > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.dashboard-shell .admin-invite-form .admin-drawer-body { gap: 12px; padding-top: 16px; }
+.dashboard-shell .admin-invite-form .admin-drawer-body > label { display: grid; gap: 5px; color: var(--ui-text); font-size: 12px; font-weight: 600; }
+.dashboard-shell .admin-invite-form .admin-drawer-body > label :is(input, select) { height: 36px; padding: 0 10px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); background: var(--ui-surface); color: var(--ui-text); font-size: 13px; font-weight: 400; }
+.dashboard-shell .admin-drawer-foot { position: sticky; bottom: 0; display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--ui-border); background: var(--ui-surface-elevated); }
+
+/* Papéis e permissões */
+.dashboard-shell.operational-ui .admin-role-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.dashboard-shell.operational-ui .admin-role-cards article { display: grid; align-content: start; gap: 6px; padding: 12px 14px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface); }
+.dashboard-shell.operational-ui .admin-role-cards header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.dashboard-shell.operational-ui .admin-role-cards strong { font-size: 14px; }
+.dashboard-shell.operational-ui .admin-role-cards span { color: var(--ui-text-soft); font-size: 12px; font-variant-numeric: tabular-nums; }
+.dashboard-shell.operational-ui .admin-role-cards p { margin: 0; color: var(--ui-text-soft); font-size: 12px; line-height: 1.45; }
+.dashboard-shell .admin-invite-form :is(.invite-module-scope, .invite-company-scope) { display: grid; gap: 8px; min-width: 0; margin: 0; padding: 12px 0 0; border: 0; border-top: 1px solid var(--ui-border); border-radius: 0; background: none; }
+.dashboard-shell .admin-invite-form :is(.invite-module-scope, .invite-company-scope) legend { padding: 0; color: var(--ui-text); font-size: 13px; font-weight: 650; }
+.dashboard-shell .admin-invite-form :is(.invite-module-scope, .invite-company-scope) p { margin: 0; color: var(--ui-text-soft); font-size: 12px; }
+.dashboard-shell .admin-invite-form .invite-company-scope > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.dashboard-shell .admin-invite-form .invite-company-scope label { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 10px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); background: var(--ui-surface); color: var(--ui-text); font-size: 13px; font-weight: 500; }
+.dashboard-shell .admin-invite-form .invite-company-scope label em { color: var(--ui-text-soft); font-size: 11px; font-style: normal; }
+.dashboard-shell .admin-invite-form .invite-module-scope > div { display: grid; gap: 6px; }
+.dashboard-shell .admin-invite-form .invite-module-scope label { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); font-weight: 400; }
+.dashboard-shell .admin-invite-form .invite-module-scope label span { display: grid; gap: 2px; }
+.dashboard-shell .admin-invite-form .invite-module-scope label small { color: var(--ui-text-soft); font-size: 12px; }
+.dashboard-shell .admin-invite-form input[type="checkbox"] { width: 16px; height: 16px; margin: 2px 0 0; flex-shrink: 0; }
+.dashboard-shell .admin-invite-form .primary-button:disabled { opacity: .55; }
+/* O conteúdo da Administração começa no topo e não estica os blocos para
+   igualar a altura do menu ao lado. */
+.dashboard-shell.operational-ui .workspace-settings-content { align-content: start; }

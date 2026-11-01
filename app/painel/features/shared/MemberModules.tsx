@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Building2, LoaderCircle, Lock, MinusCircle, PlusCircle, RotateCcw } from "lucide-react";
+import { roleLabels } from "@/lib/capability-catalog";
 import { ErrorBanner } from "./panel-ui";
 import styles from "./member-modules.module.css";
 
@@ -113,7 +114,7 @@ export function MemberModules({ memberId, memberName, canManage }: {
           <Building2 aria-hidden="true" /> O departamento <b>{payload.member.department.name}</b> dá {departmentModules} módulo(s) por
           padrão, e {approved} estão liberados para {memberName}.
         </> : <>
-          O papel <b>{payload.member.role}</b> decide o acesso porque não há departamento principal cadastrado.
+          O papel <b>{roleLabels[payload.member.role as keyof typeof roleLabels] ?? payload.member.role}</b> decide o acesso porque não há departamento principal cadastrado.
         </>}
         {" "}Aqui você abre exceção para esta pessoa, inclusive em módulo que o departamento dela não tem.
         {" "}A liberação concede a <b>leitura</b>; as ações de escrita continuam vindo do papel.
