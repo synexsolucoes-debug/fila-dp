@@ -389,7 +389,7 @@ function InvoiceReviewContent(
         <label className={styles.invoiceNoteField}>
           Anotação da conferência
           <input value={note} maxLength={500} onChange={(event) => setNote(event.target.value)}
-            placeholder="Opcional — fica no histórico da nota" />
+            placeholder="Opcional. Fica no histórico da nota" />
         </label>
   </footer>
     </>

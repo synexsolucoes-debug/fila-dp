@@ -320,7 +320,7 @@ export function LedgerView({ members, currentUserId }: { members: Member[]; curr
 
   return (
     <section className={styles.workspace}>
-      <PanelHeader
+      <PanelHeader page
         eyebrow="Operação do DP"
         title="Adiantamentos e Descontos"
         description="Um registro por obrigação, com parcelas, saldo e histórico. O produto organiza o desconto; quem calcula o salário continua sendo a folha."

@@ -233,7 +233,7 @@ function demandDescription(input: {
     `Processo na origem: ${input.externalAdmissionId}.`,
     `Etapa confirmada pelo agente: ${input.stage}.`,
     "",
-    "Esta pessoa ainda NÃO existe no ERP — é por isso que a demanda existe.",
+    "Esta pessoa ainda NÃO existe no ERP. É por isso que a demanda existe.",
     "A ficha de contratação e os documentos são trazidos da Sólides pela aba Anexos,",
     "após autorização específica nesta demanda, e é de lá que se copia para o ERP.",
   ].filter(Boolean).join("\n").slice(0, 4000);

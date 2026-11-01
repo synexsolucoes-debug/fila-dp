@@ -123,7 +123,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         .bind(workspace.id, id).first<{ total: number }>();
       throw ApiError.badRequest(
         Number(pendentes?.total ?? 0) > 0
-          ? `Nenhuma linha foi resolvida ainda. ${pendentes?.total} continuam pendentes — resolva-as ou marque-as como ignoradas.`
+          ? `Nenhuma linha foi resolvida ainda. ${pendentes?.total} continuam pendentes. Resolva-as ou marque-as como ignoradas.`
           : "Não há linhas resolvidas a gravar.",
         "LEDGER_IMPORT_NOTHING_TO_COMMIT",
       );
@@ -225,7 +225,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     if (problemas.length) {
       throw new ApiError(409, "LEDGER_IMPORT_INCOMPLETE",
-        `${problemas.length} linha(s) resolvida(s) estão incompletas. Nada foi gravado — corrija e tente novamente.`,
+        `${problemas.length} linha(s) resolvida(s) estão incompletas. Nada foi gravado. Corrija e tente novamente.`,
         { problems: problemas.slice(0, 50) });
     }
 

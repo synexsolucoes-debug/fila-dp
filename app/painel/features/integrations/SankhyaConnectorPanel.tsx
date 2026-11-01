@@ -2,12 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  Bot, CalendarClock, CheckCircle2, Clock3, Eye, KeyRound, LoaderCircle, Play, RefreshCw, Server,
+  CheckCircle2, Eye, KeyRound, LoaderCircle, Play, RefreshCw,
   ShieldCheck, X,
 } from "lucide-react";
 import { requestJson } from "./integrations.api";
 import type { Connector, IntegrationPermissions, IntegrationRun, IntegrationsOverview, SankhyaConfig } from "./integrations.types";
-import { ErrorBanner, StatusPill } from "../shared";
+import { connectionStatusLabel, ErrorBanner, StatusPill } from "../shared";
 import styles from "./integrations.module.css";
 
 type Props = {
@@ -80,22 +80,21 @@ export function SankhyaConnectorPanel({ connector, runs, companies, permissions,
   const openLogs = (runId: string) => void act("logs", async () => {
     const payload = await requestJson<{ logs?: LogEntry[] }>(`/api/integrations/${connector.id}/logs?runId=${encodeURIComponent(runId)}`);
     setLogs(Array.isArray(payload.logs) ? payload.logs : []); setLogRunId(runId);
-  }, "Logs técnicos carregados sem conteúdo sensível.");
+  }, "Registro técnico carregado, sem dados sensíveis.");
 
   return <section className={styles.sankhyaPanel} aria-labelledby="sankhya-title">
     <header className={styles.sankhyaHero}>
-      <span className={styles.sankhyaMark}><Bot /></span>
-      <div><h3 id="sankhya-title">Sankhya Browser Connector</h3><p>Consulta isolada por workspace, executada por navegador seguro e sem uso da API Sankhya.</p></div>
-      <StatusPill status={connector.status} tone={connector.status === "connected" ? "safe" : connector.status === "error" ? "danger" : "warning"} label={phaseLabel(connector.status)} />
+      <div><h3 id="sankhya-title">Conector Sankhya</h3><p>Consulta pelo navegador, sem a API do Sankhya. Cada grupo tem a sua sessão.</p></div>
+      <StatusPill status={connector.status} tone={connector.status === "connected" ? "safe" : connector.status === "error" ? "danger" : "warning"} label={connectionStatusLabel(connector.status)} />
     </header>
 
     {(failure || connector.lastError) && <ErrorBanner title="O conector requer atenção" message={failure || connector.lastError} />}
     {notice && <div className={styles.successBanner}><CheckCircle2 /><span>{notice}</span></div>}
-    <div className={styles.securityNotice}><ShieldCheck /><div><strong>Use um usuário dedicado de consulta</strong><span>Recomendamos utilizar um usuário exclusivo para integração, com acesso somente às rotinas necessárias. CAPTCHA e MFA nunca serão contornados.</span></div></div>
+    <div className={styles.securityNotice}><ShieldCheck /><div><strong>Use um usuário dedicado de consulta</strong><span>Crie um usuário só para a integração, com acesso apenas às rotinas necessárias. CAPTCHA e MFA não são contornados.</span></div></div>
 
     <div className={styles.sankhyaGrid}>
       <article className={styles.sankhyaCard}>
-        <header><Server /><div><strong>Conexão</strong><span>Ambiente e credenciais do workspace</span></div></header>
+        <header><div><strong>Conexão</strong><span>Ambiente e credenciais do grupo</span></div></header>
         <dl>
           <div><dt>URL</dt><dd>{config.endpoint || "Não configurada"}</dd></div>
           <div><dt>Usuário</dt><dd>{connector.publicHint || "Não configurado"}</dd></div>
@@ -113,7 +112,7 @@ export function SankhyaConnectorPanel({ connector, runs, companies, permissions,
       </article>
 
       <article className={styles.sankhyaCard}>
-        <header><Play /><div><strong>Sincronização</strong><span>Consulta de colaboradores no DP Explorer</span></div></header>
+        <header><div><strong>Sincronização</strong><span>Consulta de colaboradores no DP Explorer</span></div></header>
         <dl>
           <div><dt>Estado</dt><dd>{activeRun ? phaseLabel(activeRun.status) : "Disponível"}</dd></div>
           <div><dt>Última sincronização</dt><dd>{date(connector.lastSuccessfulSyncAt || connector.lastSyncAt)}</dd></div>
@@ -125,7 +124,7 @@ export function SankhyaConnectorPanel({ connector, runs, companies, permissions,
     </div>
 
     <section className={styles.sankhyaConfig}>
-      <header><CalendarClock /><div><strong>Configuração e automação</strong><span>Somente leitura no workspace; alterações são feitas pela Plataforma Global.</span></div></header>
+      <header><div><strong>Configuração e automação</strong><span>Somente leitura. Quem altera é a Plataforma Global.</span></div></header>
       <div className={styles.formGrid}>
         <label className={styles.fieldWide}><span>URL HTTPS do ambiente Sankhya</span><input type="url" value={config.endpoint} disabled placeholder="https://cliente.sankhya.com.br/" /></label>
         <label><span>Empresa Vinculato de destino</span><select value={config.companyId} disabled><option value="">Selecione</option>{companies.map((company) => <option key={company.id} value={company.id}>{company.tradeName || company.legalName}</option>)}</select></label>
@@ -149,7 +148,7 @@ export function SankhyaConnectorPanel({ connector, runs, companies, permissions,
     </section>
 
     <section className={styles.sankhyaHistory}>
-      <header><Clock3 /><div><strong>Histórico</strong><span>Execuções e resultados segregados deste workspace</span></div></header>
+      <header><div><strong>Histórico</strong><span>Execuções deste grupo</span></div></header>
       <div className={styles.tableWrap}><table className={styles.dataTable}><thead><tr><th>Data</th><th>Tipo</th><th>Resultado</th><th>Duração</th><th>Registros</th><th>Detalhes</th></tr></thead><tbody>
         {sankhyaRuns.length ? sankhyaRuns.map((run) => <tr key={run.id}><td><time>{date(run.createdAt)}</time></td><td>{run.triggerType === "health_check" ? "Teste" : run.triggerType === "scheduled" ? "Automática" : "Manual"}</td><td><StatusPill status={run.status} tone={terminalSuccess.has(run.status) ? "safe" : run.status === "failed" ? "danger" : "warning"} label={phaseLabel(run.status)} /></td><td>{duration(run.durationMs)}</td><td>{run.processedCount} processados · {run.failedCount} erros</td><td><button className={styles.detailButton} disabled={!permissions.logsView || pending === "logs"} onClick={() => openLogs(run.id)}><Eye />Logs</button></td></tr>) : <tr><td colSpan={6}>Nenhuma execução registrada.</td></tr>}
       </tbody></table></div>

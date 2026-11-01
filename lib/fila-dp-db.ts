@@ -1,3 +1,4 @@
+import { isoTimestamp } from "./iso-timestamp";
 import { getD1, getScopedD1 } from "../db";
 import type { ChatGPTUser } from "../app/chatgpt-auth";
 import type { WorkspaceRole, WorkspaceSnapshot } from "./fila-dp-types";
@@ -10,6 +11,7 @@ import { safeIntegrationError } from "./integrations";
 import { listAccessibleWorkspaces, noAccessibleWorkspaceError, resolveActiveWorkspace } from "./workspace-access";
 import { parseBpmnGraph, stepLabel, type BpmnGraph } from "./bpmn-graph";
 import { stepChecklist, stepConfigOf } from "./process-instances";
+
 
 
 function safeJson(value: string) {
@@ -613,7 +615,7 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
   for (const row of cardRows) {
     if (Boolean(row.archived)) continue;
     const behavior = listBehavior.get(String(row.list_id)) ?? "running";
-    const dueAt = row.due_at ? String(row.due_at) : null;
+    const dueAt = row.due_at ? isoTimestamp(row.due_at) : null;
     let status = "safe";
     if (activePauseByCard.has(String(row.id)) || behavior === "paused") status = "paused";
     else if (behavior === "completed") status = "completed";
@@ -659,7 +661,7 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     /* Número da demanda (#DM-2471). `null` só vem de banco anterior à 0070 —
        a tela omite o número nesse caso, em vez de exibir zero ou inventar. */
     referenceNumber: row.reference_number == null ? null : Number(row.reference_number),
-    cancelledAt: row.cancelled_at ? String(row.cancelled_at) : null,
+    cancelledAt: row.cancelled_at ? isoTimestamp(row.cancelled_at) : null,
     cancellationReason: String(row.cancellation_reason ?? ""),
     nextStep: String(row.next_step ?? ""),
     /* Corte (DP Operacional, Fase 3): decidido na criação. */
@@ -676,13 +678,13 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     processType: String(row.process_type ?? "OUTROS"),
     priority: String(row.priority ?? "normal") as "low" | "normal" | "high" | "urgent",
     assigneeName: String(row.assignee_name ?? ""),
-    dueAt: row.due_at ? String(row.due_at) : null,
+    dueAt: row.due_at ? isoTimestamp(row.due_at) : null,
     slaStatus: String(row.sla_status ?? "safe") as "safe" | "warning" | "overdue" | "paused" | "completed",
     position: Number(row.position),
     sourceType: String(row.source_type ?? "manual"),
     archived: Boolean(row.archived),
-    createdAt: String(row.created_at),
-    updatedAt: String(row.updated_at),
+    createdAt: isoTimestamp(row.created_at),
+    updatedAt: isoTimestamp(row.updated_at),
     checklist: checklistRows.filter((item) => item.card_id === row.id).map((item) => ({
       id: String(item.id),
       cardId: String(item.card_id),
@@ -739,9 +741,9 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     slaPausedMinutes: Number(row.sla_paused_minutes ?? 0),
     slaEscalationLevel: Number(row.sla_escalation_level ?? 0),
     competence: String(row.competence ?? ""),
-    legalDueAt: row.legal_due_at ? String(row.legal_due_at) : null,
+    legalDueAt: row.legal_due_at ? isoTimestamp(row.legal_due_at) : null,
     processTemplateId: row.process_template_id ? String(row.process_template_id) : null,
-    closedAt: row.closed_at ? String(row.closed_at) : null,
+    closedAt: row.closed_at ? isoTimestamp(row.closed_at) : null,
   }));
 
   const mapActivity = (row: Record<string, unknown>) => ({
@@ -830,7 +832,7 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
            executou. */
         progress: tasksTotal > 0 ? Math.round((tasksDone / tasksTotal) * 100) : 0,
         slaStatus: String(row.sla_status ?? "safe") as "safe" | "warning" | "overdue" | "paused" | "completed",
-        dueAt: row.due_at ? String(row.due_at) : null,
+        dueAt: row.due_at ? isoTimestamp(row.due_at) : null,
         updatedAt: String(row.updated_at ?? ""),
       };
     });
@@ -881,7 +883,7 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
       subject: String(row.subject),
       body: String(row.body ?? ""),
       status: String(row.status),
-      receivedAt: String(row.received_at),
+      receivedAt: isoTimestamp(row.received_at),
       convertedCardId: row.converted_card_id ? String(row.converted_card_id) : null,
     })),
     rules: (rulesResult.results as Array<Record<string, unknown>>).map((row) => ({
@@ -951,7 +953,7 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
         createdAt: String(row.created_at),
       })),
     integrations: (integrationsResult.results as Array<Record<string, unknown>>).map((row) => ({ id: String(row.id), channel: String(row.channel), displayName: String(row.display_name), status: String(row.status) as "connected" | "needs_credentials" | "paused" | "error", config: canManageIntegrations ? publicIntegrationConfig(String(row.config_json)) : {}, lastSyncAt: row.last_sync_at ? String(row.last_sync_at) : null, lastError: canManageIntegrations && row.last_error ? safeIntegrationError(new Error(String(row.last_error))).message : null })),
-    plannerBlocks: (plannerResult.results as Array<Record<string, unknown>>).map((row) => ({ id: String(row.id), userId: String(row.user_id), cardId: row.card_id ? String(row.card_id) : null, title: String(row.title), startAt: String(row.start_at), endAt: String(row.end_at), blockType: String(row.block_type), notes: String(row.notes ?? "") })),
+    plannerBlocks: (plannerResult.results as Array<Record<string, unknown>>).map((row) => ({ id: String(row.id), userId: String(row.user_id), cardId: row.card_id ? String(row.card_id) : null, title: String(row.title), startAt: isoTimestamp(row.start_at), endAt: isoTimestamp(row.end_at), blockType: String(row.block_type), notes: String(row.notes ?? "") })),
     calendarConnections: (calendarsResult.results as Array<Record<string, unknown>>).map((row) => ({
       id: String(row.id),
       provider: String(row.provider),
@@ -984,7 +986,7 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
       companyId: String(row.company_id),
       competence: String(row.competence),
       status: String(row.status),
-      closedAt: row.closed_at ? String(row.closed_at) : null,
+      closedAt: row.closed_at ? isoTimestamp(row.closed_at) : null,
     })),
     processFlows,
     upcomingObligations,

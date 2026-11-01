@@ -61,7 +61,7 @@ export function assertContractCoherent(input: ContractInput) {
     }
     if (input.contractTotalCents === null || input.contractTotalCents <= 0) {
       throw ApiError.badRequest(
-        "Contrato por prazo determinado precisa do valor global — é ele que dá o saldo a acompanhar.",
+        "Contrato por prazo determinado precisa do valor global. É ele que dá o saldo a acompanhar.",
         "CONTRACT_TOTAL_REQUIRED",
       );
     }

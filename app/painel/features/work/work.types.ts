@@ -26,6 +26,7 @@ export type WorkItem = {
   updatedAt: string;
   processId: string;
   processStep: string;
+  reference: string;
   origin: string;
   originLabel: string;
   blockedReason: string;

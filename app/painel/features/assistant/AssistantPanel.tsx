@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bot, LoaderCircle, Send, ShieldCheck, X } from "lucide-react";
+import { LoaderCircle, Send, ShieldCheck, X } from "lucide-react";
 import styles from "./assistant.module.css";
 
 /**
@@ -111,13 +111,10 @@ export function AssistantPanel({ screen, openSignal = 0 }: { screen: string; ope
     }
   }
 
-  if (!open) {
-    return (
-      <button type="button" className={styles.launcher} onClick={() => setOpen(true)} aria-expanded={false}>
-        <Bot aria-hidden="true" /> Assistente
-      </button>
-    );
-  }
+  /* Fechado, o assistente não ocupa a tela: a porta é o "?" da faixa
+     superior. A pílula flutuante "Assistente" em todas as telas cobria
+     conteúdo no canto e era a marca mais visível de produto "com IA". */
+  if (!open) return null;
 
   return (
     <aside className={styles.panel} aria-label="Assistente do Vinculato">

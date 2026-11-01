@@ -40,7 +40,7 @@ const copy: Record<InstallmentAction["kind"], {
   },
   override: {
     title: "Ajuste autorizado acima do saldo",
-    consequence: "Este é o único caminho para descontar mais do que a parcela prevê. Só use com autorização registrada — o que você escrever aqui fica no histórico como a razão da cobrança a mais.",
+    consequence: "Único caminho para descontar mais do que a parcela prevê. Use só com autorização registrada: o motivo fica no histórico.",
     needsAmount: true, needsJustification: true, needsCompetence: true, submit: "Registrar ajuste",
   },
   reverse: {

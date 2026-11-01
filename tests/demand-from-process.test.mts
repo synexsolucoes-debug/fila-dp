@@ -77,7 +77,7 @@ test("a lista é agrupada por área, que é quem responde pelo trabalho", () => 
 test("demanda avulsa continua possível", () => {
   /* Nem todo trabalho tem processo modelado, e exigir um transformaria a
      modelagem em pedágio para registrar o que chegou. O caminho antigo fica. */
-  assert.match(painel, /<option value="">Demanda avulsa — sem processo<\/option>/u);
+  assert.match(painel, /<option value="">Demanda avulsa \(sem processo\)<\/option>/u);
   assert.match(painel, /const next = await mutate\("\/api\/cards", \{ method: "POST", body: JSON\.stringify\(cardForm\) \}/u);
 });
 

@@ -318,7 +318,7 @@ function ReturnForm({ delivery, condition, onCondition, preview }: {
       <strong>Destino desta devolução</strong>
       <ul>
         <li>{preview.backToStock ? "Volta ao estoque e fica disponível para nova entrega." : "Não volta ao estoque."}</li>
-        {preview.needsSanitizing && <li>Segue para higienização — o EPI fica com o status “Em higienização”.</li>}
+        {preview.needsSanitizing && <li>Segue para higienização. O EPI fica com o status “Em higienização”.</li>}
         {preview.sendToDisposal && <li data-alert="true">Entra na janela de descarte como “Aguardando descarte”.</li>}
         {preview.generateDpDemand && <li data-alert="true">
           Abre demanda automática para o DP analisar possível desconto. Nenhum valor é descontado aqui.
@@ -395,7 +395,7 @@ function DamageForm({ products, employees, deliveries, delivery, decision, onDec
     <div className={styles.consequence}>
       <strong>O que esta decisão provoca</strong>
       <ul>
-        {preview.settleOldDelivery && <li>Baixa do equipamento antigo na entrega — ele deixa de constar com o colaborador.</li>}
+        {preview.settleOldDelivery && <li>Baixa do equipamento antigo: ele deixa de constar com o colaborador.</li>}
         {preview.createDisposal && <li data-alert="true">Abre registro na janela de descarte.</li>}
         {preview.productStatus === "sanitizing" && <li>O EPI passa para “Em higienização”.</li>}
         {preview.deliverReplacement && <li>Permite entregar o substituto na mesma operação, com novo termo pendente de assinatura.</li>}

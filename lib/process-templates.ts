@@ -293,7 +293,7 @@ export const processTemplates: readonly ProcessTemplate[] = [
         note: "Volta para a revisão depois do acerto; a competência não avança com pendência." },
       { id: "Etapa_Aprovar", type: "userTask", name: "Aprovar", x: at(7), y: taskY(),
         stepType: "APPROVAL",
-        note: "Decisão registrada com autor e data — é ela que libera o encerramento." },
+        note: "Decisão registrada com autor e data. É ela que libera o encerramento." },
       { id: "Etapa_Fechar", type: "serviceTask", name: "Fechar competência", x: at(8), y: taskY(),
         note: "Trava lançamentos e congela os valores apurados." },
       { id: "Evento_Fim", type: "end", name: "Competência encerrada", x: at(9), y: eventY() },

@@ -104,7 +104,7 @@ const PATH_VIEWS = (Object.entries(VIEW_PATHS) as Array<[PanelView, string]>)
   .sort(([, left], [, right]) => right.length - left.length);
 
 export const settingsSections = [
-  "general", "companies", "columns", "team", "security", "fields", "templates", "sla", "automations",
+  "general", "companies", "columns", "team", "matrix", "security", "fields", "templates", "sla", "automations",
 ] as const;
 export type PanelSettingsSection = typeof settingsSections[number];
 
@@ -113,6 +113,7 @@ const SETTINGS_PATHS: Record<PanelSettingsSection, string> = {
   companies: "empresas",
   columns: "colunas",
   team: "acessos",
+  matrix: "papeis",
   security: "seguranca",
   fields: "campos",
   templates: "modelos",

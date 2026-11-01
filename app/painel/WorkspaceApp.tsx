@@ -7,6 +7,7 @@ import {
   type PanelLocation, type PanelSettingsSection, type PanelView,
 } from "@/lib/panel-routes";
 import { LayoutGrid, Settings,
+  ArrowLeft,
   ArrowRight,
   BarChart3,
   Bell,
@@ -34,15 +35,14 @@ import { LayoutGrid, Settings,
   Inbox,
   LayoutDashboard,
   ListChecks,
-  Mail,
   MessageCircle,
-  MessageSquareMore,
 
   MoreHorizontal,
   Paperclip,
   Plus,
   RefreshCw,
   Search,
+  ShieldCheck,
   ShieldQuestion,
   Siren,
   AlertTriangle,
@@ -62,7 +62,7 @@ import { VinculatoLogo } from "@/app/components/VinculatoLogo";
 import { HistoryView } from "./features/history/HistoryView";
 import { PortfolioView } from "./features/portfolio";
 import { DpOperationsView } from "./features/dp";
-import type { ActivityEvent, Card, CardAttachment, InboxItem, ProcessFlowSummary, WorkspaceRole, WorkspaceSnapshot } from "@/lib/fila-dp-types";
+import type { ActivityEvent, Card, CardAttachment, InboxItem, ProcessFlowSummary, WorkspaceMember, WorkspaceRole, WorkspaceSnapshot } from "@/lib/fila-dp-types";
 import type { ActionTarget } from "@/lib/action-center";
 import { RULE_TRIGGERS, RULE_TRIGGER_LABELS } from "@/lib/automation-rules";
 import { hasSubNavigation, isContractorOnly, visibleProcessGroups } from "@/lib/process-navigation";
@@ -80,10 +80,10 @@ import { DENSITY_KEY, parseDensity, type Density } from "@/lib/density";
 import { RegistrationSheetPanel } from "./features/admission";
 import { chooseRegistrationFormAttachment } from "@/lib/registration-form-file";
 import { capabilitiesForRole, hasCapability, workspaceRoles } from "@/lib/authorization";
-import { capabilityAreas, capabilitiesOfArea, capabilityCatalog, type CapabilityArea } from "@/lib/capability-catalog";
+import { capabilityAreas, capabilitiesOfArea, capabilityCatalog, roleSummaries, type CapabilityArea } from "@/lib/capability-catalog";
 import { formatWorkingMinutes } from "@/lib/fila-dp-sla";
 import { overviewPeriodLabel, overviewPeriods, periodWindowEnd, periodWindowStart, withinPeriod, type OverviewPeriod } from "@/lib/overview-period";
-import { AnimatedTabs, competenceLabel, ProcessTabsProvider, connectionStatusLabel, connectionTone, lastSyncLabel, MemberModules, PageTransition } from "./features/shared";
+import { AnimatedDrawer, AnimatedTabs, competenceLabel, ProcessTabsProvider, connectionStatusLabel, connectionTone, lastSyncLabel, MemberModules, PageTransition } from "./features/shared";
 import { RequestError, requestErrorFrom, supportReference } from "./request-error";
 import { AssistantPanel } from "./features/assistant/AssistantPanel";
 import { RegistrationsView } from "./features/registrations";
@@ -134,7 +134,7 @@ type BoardSort = DemandSort;
 type OverviewFocusTarget = "board" | "processManagement" | "processes" | "integrations" | "history";
 
 type CardTab = "details" | "process" | "checklist" | "attachments" | "sheet" | "activity";
-type SettingsSection = "general" | "companies" | "columns" | "team" | "security" | "fields" | "templates" | "sla" | "automations";
+type SettingsSection = "general" | "companies" | "columns" | "team" | "matrix" | "security" | "fields" | "templates" | "sla" | "automations";
 
 /**
  * Cada seção de configuração precisa de um cabeçalho próprio.
@@ -154,6 +154,7 @@ const settingsSectionMeta: Record<SettingsSection, { group: string; title: strin
   general: { group: "Workspace", title: "Geral", description: "Nome do workspace, quadros disponíveis e a conta com que você está entrando." },
   companies: { group: "Workspace", title: "Empresas", description: "Cadastre, edite e organize os CNPJs do grupo." },
   team: { group: "Pessoas e acesso", title: "Usuários e acessos", description: "Defina o departamento e os módulos disponíveis para cada usuário." },
+  matrix: { group: "Pessoas e acesso", title: "Papéis e permissões", description: "O que cada papel pode fazer no grupo." },
   columns: { group: "Operação", title: "Colunas", description: "Nome, ordem e efeito de cada coluna sobre o SLA." },
   fields: { group: "Operação", title: "Campos e etiquetas", description: "Etiquetas e campos personalizados que aparecem nas demandas." },
   /* "Modelos", e não "Templates": a tela vizinha chama a mesma coisa de modelo
@@ -187,6 +188,7 @@ const settingsNavGroups: Array<{ label: string; sections: Array<{ section: Setti
   ] },
   { label: "Pessoas e acesso", sections: [
     { section: "team", icon: Users, hint: "Departamento e módulos", adminOnly: true },
+    { section: "matrix", icon: ShieldCheck, hint: "O que cada papel pode fazer", adminOnly: true },
   ] },
   { label: "Operação", sections: [
     { section: "columns", icon: ListChecks, hint: "Etapas e SLA", adminOnly: true },
@@ -362,7 +364,7 @@ const viewCatalog: Record<View, ViewEntry> = {
   },
   work: {
     label: "Meu trabalho", icon: ClipboardList,
-    eyebrow: "Central de trabalho", title: "O que está comigo hoje",
+    eyebrow: "Central de trabalho", title: "Meu trabalho",
     description: "Demandas, aprovações, movimentações, entregas, pendências, triagem e falhas que exigem ação — em uma lista só.",
     ownHeader: true,
   },
@@ -412,7 +414,7 @@ const viewCatalog: Record<View, ViewEntry> = {
   },
   agents: {
     label: "Agentes", icon: Bot, module: "integrations", hiddenFor: ["guest", "observer"], ownHeader: true,
-    eyebrow: "Central de agentes", title: "Automação sob controle",
+    eyebrow: "Central de agentes", title: "Agentes",
     description: "Estado, cadência, execução e histórico dos agentes que leem os sistemas de origem.",
   },
   triage: {
@@ -1107,6 +1109,13 @@ export function WorkspaceApp({
    */
   const [boardQuery, setBoardQuery] = useState("");
   const [memberEmail, setMemberEmail] = useState("");
+  /* Usuários e acessos: busca, filtros e os dois painéis laterais (editar e
+     criar). A lista vira tabela; cada linha abre o próprio painel. */
+  const [memberQuery, setMemberQuery] = useState("");
+  const [memberRoleFilter, setMemberRoleFilter] = useState<WorkspaceRole | "">("");
+  const [memberStatusFilter, setMemberStatusFilter] = useState<"" | "active" | "pending" | "no-department">("");
+  const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
+  const [inviteOpen, setInviteOpen] = useState(false);
   const [memberName, setMemberName] = useState("");
   const [memberRole, setMemberRole] = useState<WorkspaceRole>("member");
   const [memberCompanyIds, setMemberCompanyIds] = useState<string[]>([]);
@@ -1964,11 +1973,14 @@ export function WorkspaceApp({
      a última tela do módulo, e a tela continua montada enquanto a aba existir:
      trocar de aba não perde filtro, rolagem nem o que estava preenchido. O
      teto existe porque cada aba aberta é uma tela viva consumindo memória. */
-  const activeTabId = administrationOpen ? "admin"
-    : erpMode ? "erp-dp"
+  /* A aba do sistema operacional que está por trás da Administração. A
+     Administração não é aba: é uma área à parte, com faixa própria, e "Voltar
+     ao sistema" devolve a pessoa exatamente aqui. */
+  const operationalTabId = erpMode ? "erp-dp"
     : pjMode ? "pagamento-pj"
     : view === "overview" ? "inicio"
     : activeGroup?.id ?? "inicio";
+  const activeTabId = administrationOpen ? "admin" : operationalTabId;
   const [openTabs, setOpenTabs] = useState<string[]>([]);
   const [tabViews, setTabViews] = useState<Record<string, View>>({});
   /* Ajustes feitos durante a renderização, e não em efeito, pelo mesmo motivo
@@ -1978,10 +1990,10 @@ export function WorkspaceApp({
     setTabsLoadedFor(snapshot.workspace.id);
     let stored: { tabs?: unknown; views?: unknown } | null = null;
     try { stored = JSON.parse(window.localStorage.getItem(`${SHELL_TABS_KEY}:${snapshot.workspace.id}`) ?? "null"); } catch { /* sem armazenamento */ }
-    setOpenTabs(Array.isArray(stored?.tabs) ? stored.tabs.filter((id): id is string => typeof id === "string").slice(0, MAX_SHELL_TABS) : []);
+    setOpenTabs(Array.isArray(stored?.tabs) ? stored.tabs.filter((id): id is string => typeof id === "string" && id !== "admin").slice(0, MAX_SHELL_TABS) : []);
     setTabViews(stored?.views && typeof stored.views === "object" ? stored.views as Record<string, View> : {});
   }
-  if (tabsLoadedFor && !openTabs.includes(activeTabId)) {
+  if (tabsLoadedFor && activeTabId !== "admin" && !openTabs.includes(activeTabId)) {
     const next = [...openTabs, activeTabId];
     setOpenTabs(next.length > MAX_SHELL_TABS ? next.slice(next.length - MAX_SHELL_TABS) : next);
   }
@@ -2579,6 +2591,7 @@ export function WorkspaceApp({
       if (!response.ok || !payload.snapshot) throw new Error(payload.error || "Não foi possível criar o usuário.");
       applySnapshot(normalizeWorkspaceSnapshot(payload.snapshot), payload.activation ? "Usuário criado. Compartilhe o link de ativação somente com a pessoa indicada." : "Acesso da equipe atualizado.");
       if (payload.activation) setRecoveryLink(payload.activation);
+      setInviteOpen(false);
       setMemberEmail("");
       setMemberName("");
       setMemberRole("member");
@@ -2953,54 +2966,143 @@ export function WorkspaceApp({
             </>}
             {settingsSection === "columns" && <ListsSettings snapshot={snapshot} busy={busy} isAdmin={isAdmin} onMutate={mutate} onConfirm={requestConfirmation} />}
             {settingsSection === "companies" && isAdmin && <CompanySettings companies={snapshot.companies} members={snapshot.members} busy={busy} onCreateCompany={createCompany} onUpdateCompany={updateCompany} onDeleteCompany={deleteCompany} onOpenAccess={() => setSettingsSection("team")} />}
-            {settingsSection === "team" && <>
-              <section className="workspace-team">
-                <header>
-                  <div><strong>Usuários liberados</strong><span>{plural(snapshot.members.length, "pessoa com acesso ao grupo", "pessoas com acesso ao grupo")}</span></div>
-                  <p>O papel define as ações; o departamento dá os módulos padrão; a exceção individual vence o departamento; a empresa limita os CNPJs.</p>
-                </header>
-                <div className="workspace-member-list">{snapshot.members.map((member) => (
-                  <article key={member.userId}>
-                    <i>{initials(member.name)}</i>
-                    <div>
-                      <strong>{member.name}{member.isOwner && <em>Administrador principal</em>}</strong>
-                      <small>{member.email}</small>
-                      <span className={`member-activation-status ${member.isActivated ? "active" : "pending"}`}>{member.isActivated ? "Acesso ativo" : "Ativação pendente"}</span>
-                      <span className={`member-department-status ${member.departmentId ? "assigned" : "missing"}`}>
-                        <Building2 aria-hidden="true" /> {member.departmentName || (member.isOwner ? "Proprietário do Workspace" : "Sem departamento")}
-                      </span>
-                    </div>
-                    {isAdmin && !member.isOwner ? (
-                      <select aria-label={`Papel de ${member.name}`} value={member.role} disabled={busy} onChange={(event) => void updateMemberRole(member.userId, event.target.value as WorkspaceRole)}>
+            {settingsSection === "team" && (() => {
+              const term = memberQuery.trim().toLocaleLowerCase("pt-BR");
+              const members = snapshot.members.filter((member) =>
+                (!term || `${member.name} ${member.email}`.toLocaleLowerCase("pt-BR").includes(term))
+                && (!memberRoleFilter || member.role === memberRoleFilter)
+                && (memberStatusFilter === "" ? true
+                  : memberStatusFilter === "active" ? member.isActivated
+                  : memberStatusFilter === "pending" ? !member.isActivated
+                  : !member.isOwner && !member.departmentId));
+              const total = snapshot.members.length;
+              const ativos = snapshot.members.filter((member) => member.isActivated).length;
+              const pendentes = total - ativos;
+              const semDepartamento = snapshot.members.filter((member) => !member.isOwner && !member.departmentId).length;
+              const admins = snapshot.members.filter((member) => member.role === "admin").length;
+              const editing = snapshot.members.find((member) => member.userId === editingMemberId) ?? null;
+              const companyCount = (member: WorkspaceMember) => member.role === "admin" || member.isOwner ? "Todas"
+                : member.companyIds.length === 0 ? "Nenhuma" : String(member.companyIds.length);
+              return <>
+                {/* Barra de ações da tela: o que se faz aqui primeiro é liberar
+                    alguém, então o botão fica no topo, e não no pé da página. */}
+                {isAdmin && <div className="admin-toolbar">
+                  <div className="admin-counters" role="group" aria-label="Resumo dos usuários">
+                    <button type="button" aria-pressed={memberStatusFilter === "" && !memberRoleFilter} onClick={() => { setMemberStatusFilter(""); setMemberRoleFilter(""); }}><span>Usuários</span><b>{total}</b></button>
+                    <button type="button" aria-pressed={memberStatusFilter === "active"} onClick={() => setMemberStatusFilter(memberStatusFilter === "active" ? "" : "active")}><span>Ativos</span><b>{ativos}</b></button>
+                    <button type="button" data-tone={pendentes ? "warning" : undefined} aria-pressed={memberStatusFilter === "pending"} onClick={() => setMemberStatusFilter(memberStatusFilter === "pending" ? "" : "pending")}><span>Ativação pendente</span><b>{pendentes}</b></button>
+                    <button type="button" data-tone={semDepartamento ? "warning" : undefined} aria-pressed={memberStatusFilter === "no-department"} onClick={() => setMemberStatusFilter(memberStatusFilter === "no-department" ? "" : "no-department")}><span>Sem departamento</span><b>{semDepartamento}</b></button>
+                    <button type="button" aria-pressed={memberRoleFilter === "admin"} onClick={() => setMemberRoleFilter(memberRoleFilter === "admin" ? "" : "admin")}><span>Administradores</span><b>{admins}</b></button>
+                  </div>
+                  <button type="button" className="primary-button" onClick={() => setInviteOpen(true)}><Plus aria-hidden="true" />Novo usuário</button>
+                </div>}
+
+                <section className="admin-users" aria-labelledby="admin-users-title">
+                  <header>
+                    <strong id="admin-users-title">Usuários do grupo</strong>
+                    <label className="admin-search"><Search aria-hidden="true" /><span className="sr-only">Buscar usuário</span>
+                      <input type="search" value={memberQuery} onChange={(event) => setMemberQuery(event.target.value)} placeholder="Nome ou e-mail" /></label>
+                    <label className="admin-filter"><span className="sr-only">Papel</span>
+                      <select value={memberRoleFilter} onChange={(event) => setMemberRoleFilter(event.target.value as WorkspaceRole | "")}>
+                        <option value="">Todos os papéis</option>
                         <option value="admin">Administrador</option><option value="member">Membro</option><option value="observer">Observador</option><option value="guest">Convidado</option>
-                      </select>
-                    ) : <b>{roleLabels[member.role]}</b>}
-                    {isAdmin && !member.isOwner && (
-                      <select className="member-department-select" aria-label={`Departamento de ${member.name}`} value={member.departmentId ?? ""} disabled={busy}
-                        onChange={(event) => updateMemberDepartment(member.userId, member.name, event.target.value)}>
-                        {!member.departmentId && <option value="">Selecione o departamento</option>}
-                        {activeDepartments.map((department) => <option value={department.id} key={department.id}>{department.name}</option>)}
-                      </select>
-                    )}
-                    {isAdmin && !member.isOwner && <MemberCompanyAccess key={`${member.userId}:${member.companyIds.join(",")}`} member={member} companies={snapshot.companies} busy={busy} onSave={updateMemberCompanies} />}
-                    {isAdmin && !member.isOwner && <MemberEmployeeLink key={`${member.userId}:${member.employeeId ?? "none"}`} member={member} busy={busy} onSave={updateMemberEmployeeLink} />}
-                    {isAdmin && !member.isOwner && <button className="member-recovery-button" disabled={busy} onClick={() => void generateRecoveryLink(member.userId, member.name)}>{member.isActivated ? "Gerar novo link" : "Gerar link de ativação"}</button>}
-                    {isAdmin && !member.isOwner && <button aria-label={`Remover ${member.name}`} disabled={busy} onClick={() => void removeMember(member.userId, member.name)}>×</button>}
-                    {isAdmin && !member.isOwner && <details className="member-modules-details"><summary>Módulos deste usuário</summary><MemberModules memberId={member.userId} key={`${member.userId}:${member.departmentId ?? "none"}`} memberName={member.name} canManage={isAdmin} /></details>}
-                  </article>
-                ))}</div>
-              </section>
+                      </select></label>
+                  </header>
+                  <div className="overview-table-scroll">
+                    <table className="overview-table admin-table admin-users-table">
+                      <thead><tr>
+                        <th scope="col">Usuário</th>
+                        <th scope="col">Papel</th>
+                        <th scope="col">Departamento</th>
+                        <th scope="col">Empresas</th>
+                        <th scope="col">Situação</th>
+                        <th scope="col"><span className="sr-only">Ações</span></th>
+                      </tr></thead>
+                      <tbody>
+                        {members.map((member) => <tr key={member.userId}>
+                          <td>
+                            <div className="admin-user-cell">
+                              <i aria-hidden="true">{initials(member.name)}</i>
+                              <span><strong>{member.name}</strong><small>{member.email}</small></span>
+                            </div>
+                          </td>
+                          <td>{roleLabels[member.role]}{member.isOwner && <em className="admin-owner-tag">Principal</em>}</td>
+                          <td>{member.departmentName || (member.isOwner ? "—" : <span className="admin-missing">Sem departamento</span>)}</td>
+                          <td className="numeric">{companyCount(member)}</td>
+                          <td><span className={`admin-status ${member.isActivated ? "active" : "pending"}`}>{member.isActivated ? "Ativo" : "Ativação pendente"}</span></td>
+                          <td className="admin-row-actions">
+                            {isAdmin && !member.isOwner
+                              ? <button type="button" className="secondary-button" onClick={() => setEditingMemberId(member.userId)} aria-label={`Editar ${member.name}`}>Editar</button>
+                              : null}
+                          </td>
+                        </tr>)}
+                        {members.length === 0 && <tr><td colSpan={6} className="admin-empty">Nenhum usuário com esses filtros.</td></tr>}
+                      </tbody>
+                    </table>
+                  </div>
+                  <footer className="admin-hint">
+                    O papel define as ações; o departamento dá os módulos padrão; a exceção individual vence o departamento; a empresa limita os CNPJs.{" "}
+                    <button type="button" className="link-button" onClick={() => setSettingsSection("matrix")}>Ver o que cada papel permite</button>
+                  </footer>
+                </section>
 
-              {/* A matriz fica logo abaixo da lista, e antes do formulário
-                  que cria usuário: os dois lugares em que se escolhe um
-                  papel são o seletor de cada linha acima e o `<select>` do
-                  formulário abaixo. Ela precisa estar entre os dois, e não
-                  numa seção que ninguém abre no momento de decidir. */}
-              <PermissionMatrix />
+                {/* Editar usuário: tudo o que se ajusta numa pessoa, num lugar
+                    só e em ordem — papel, lotação, alcance e acesso. Antes eram
+                    seis controles soltos em cada linha da lista. */}
+                <AnimatedDrawer open={Boolean(editing)} onClose={() => setEditingMemberId(null)} label={editing ? `Editar ${editing.name}` : "Editar usuário"} width={720} className="admin-drawer">
+                  {editing && <>
+                    <header className="admin-drawer-head">
+                      <div><span>Editar usuário</span><h2>{editing.name}</h2><small>{editing.email}</small></div>
+                      <button type="button" className="admin-drawer-close" aria-label="Fechar" onClick={() => setEditingMemberId(null)}><X aria-hidden="true" /></button>
+                    </header>
+                    <div className="admin-drawer-body">
+                      <section>
+                        <h3>Papel</h3>
+                        <select aria-label={`Papel de ${editing.name}`} value={editing.role} disabled={busy} onChange={(event) => void updateMemberRole(editing.userId, event.target.value as WorkspaceRole)}>
+                          <option value="admin">Administrador</option><option value="member">Membro</option><option value="observer">Observador</option><option value="guest">Convidado</option>
+                        </select>
+                        <p>{roleSummaries[editing.role]}</p>
+                      </section>
+                      <section>
+                        <h3>Departamento</h3>
+                        <select className="member-department-select" aria-label={`Departamento de ${editing.name}`} value={editing.departmentId ?? ""} disabled={busy}
+                          onChange={(event) => updateMemberDepartment(editing.userId, editing.name, event.target.value)}>
+                          {!editing.departmentId && <option value="">Selecione o departamento</option>}
+                          {activeDepartments.map((department) => <option value={department.id} key={department.id}>{department.name}</option>)}
+                        </select>
+                        <p>O departamento define os módulos padrão desta pessoa.</p>
+                      </section>
+                      <section>
+                        <h3>Empresas</h3>
+                        <MemberCompanyAccess key={`${editing.userId}:${editing.companyIds.join(",")}`} member={editing} companies={snapshot.companies} busy={busy} onSave={updateMemberCompanies} />
+                      </section>
+                      <section>
+                        <h3>Módulos</h3>
+                        <MemberModules memberId={editing.userId} key={`${editing.userId}:${editing.departmentId ?? "none"}`} memberName={editing.name} canManage={isAdmin} />
+                      </section>
+                      <section>
+                        <h3>Colaborador vinculado</h3>
+                        <MemberEmployeeLink key={`${editing.userId}:${editing.employeeId ?? "none"}`} member={editing} busy={busy} onSave={updateMemberEmployeeLink} />
+                      </section>
+                      <section className="admin-drawer-access">
+                        <h3>Acesso</h3>
+                        <p>{editing.isActivated ? "Conta ativa. Um link novo serve para redefinir a senha." : "A pessoa ainda não ativou a conta."}</p>
+                        <div>
+                          <button type="button" className="secondary-button member-recovery-button" disabled={busy} onClick={() => void generateRecoveryLink(editing.userId, editing.name)}>{editing.isActivated ? "Gerar link de nova senha" : "Gerar link de ativação"}</button>
+                          <button type="button" className="danger-button" disabled={busy} onClick={() => { const id = editing.userId; const name = editing.name; setEditingMemberId(null); void removeMember(id, name); }}>Remover do grupo</button>
+                        </div>
+                      </section>
+                    </div>
+                  </>}
+                </AnimatedDrawer>
 
-              {isAdmin && <form className="workspace-invite-form" onSubmit={addMember}>
-                <header><div><strong>Criar e liberar usuário</strong><span>Defina a lotação e os módulos antes de gerar o acesso.</span></div><b>1. Identidade · 2. Departamento · 3. Módulos · 4. Ativação</b></header>
-                <div>
+                {isAdmin && <AnimatedDrawer open={inviteOpen} onClose={() => setInviteOpen(false)} label="Novo usuário" width={560} className="admin-drawer">
+                  <form className="admin-invite-form" onSubmit={addMember}>
+                    <header className="admin-drawer-head">
+                      <div><span>Novo usuário</span><h2>Criar e liberar acesso</h2><small>Identidade, departamento, módulos e empresas. O link de ativação sai no fim.</small></div>
+                      <button type="button" className="admin-drawer-close" aria-label="Fechar" onClick={() => setInviteOpen(false)}><X aria-hidden="true" /></button>
+                    </header>
+                    <div className="admin-drawer-body">
                   <label>Nome<input value={memberName} onChange={(event) => setMemberName(event.target.value)} placeholder="Nome da pessoa" maxLength={120} /></label>
                   <label>E-mail<input type="email" value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} placeholder="nome@empresa.com" required /></label>
                   <label>Papel<select value={memberRole} onChange={(event) => setMemberRole(event.target.value as WorkspaceRole)}><option value="member">Membro</option><option value="observer">Observador</option><option value="guest">Convidado</option><option value="admin">Administrador</option></select></label>
@@ -3021,9 +3123,28 @@ export function WorkspaceApp({
                     })}</div>
                   </fieldset>
                   <fieldset className="invite-company-scope" disabled={busy || memberRole === "admin"}><legend>{memberRole === "admin" ? "Administrador acessa todas as empresas" : "Empresas autorizadas"}</legend><div>{snapshot.companies.map((company) => <label key={company.id}><input type="checkbox" checked={memberCompanyIds.includes(company.id)} onChange={(event) => setMemberCompanyIds((current) => event.target.checked ? [...current, company.id] : current.filter((id) => id !== company.id))} />{company.tradeName || company.legalName}{company.isPrincipal && <em>Matriz</em>}</label>)}</div></fieldset>
-                  <button className="primary-button" disabled={busy || !memberEmail.trim() || !memberDepartmentId || memberModuleKeys.length === 0}>Criar usuário e gerar link</button>
-                </div>
-              </form>}
+                    </div>
+                    <footer className="admin-drawer-foot">
+                      <button type="button" className="secondary-button" onClick={() => setInviteOpen(false)}>Cancelar</button>
+                      <button className="primary-button" disabled={busy || !memberEmail.trim() || !memberDepartmentId || memberModuleKeys.length === 0}>Criar usuário e gerar link</button>
+                    </footer>
+                  </form>
+                </AnimatedDrawer>}
+              </>;
+            })()}
+            {settingsSection === "matrix" && <>
+              {/* Os quatro papéis lado a lado, com quantas pessoas estão em
+                  cada um: é a pergunta que vem antes de abrir a matriz. */}
+              <div className="admin-role-cards">
+                {(["admin", "member", "observer", "guest"] as const).map((papel) => {
+                  const quantos = snapshot.members.filter((member) => member.role === papel).length;
+                  return <article key={papel}>
+                    <header><strong>{roleLabels[papel]}</strong><span>{plural(quantos, "pessoa", "pessoas")}</span></header>
+                    <p>{roleSummaries[papel]}</p>
+                  </article>;
+                })}
+              </div>
+              <PermissionMatrix />
             </>}
             {settingsSection === "team" && recoveryLink && <section className="access-recovery-link"><header><div><span>Link único de recuperação</span><strong>{recoveryLink.name}</strong><small>Válido até {new Date(recoveryLink.expiresAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}. O link deixa de funcionar após o primeiro uso.</small></div><button onClick={() => { void navigator.clipboard.writeText(recoveryLink.url).then(() => setToast("Link de recuperação copiado.")); }}>Copiar link</button></header><input value={recoveryLink.url} readOnly aria-label="Link de recuperação" /></section>}
             {settingsSection === "security" && <section className="security-sessions">
@@ -3199,7 +3320,7 @@ export function WorkspaceApp({
     /* `data-focus` no invólucro, e não no quadro: o que o modo foco esconde —
        barra lateral, contexto do topo — está fora do quadro, e é justamente
        isso que devolve a largura para as colunas. */
-    <main className={`dashboard-shell operational-ui${theme === "dark" ? " theme-dark" : ""}${sidebarCollapsed ? " sidebar-collapsed" : ""}${erpMode ? " erp-mode" : ""}${pjMode ? " pj-mode" : ""}`} data-view={view} data-theme={theme} data-density={density} data-focus={focusMode && view === "board" ? "on" : undefined}>
+    <main className={`dashboard-shell operational-ui${theme === "dark" ? " theme-dark" : ""}${sidebarCollapsed ? " sidebar-collapsed" : ""}${erpMode ? " erp-mode" : ""}${pjMode ? " pj-mode" : ""}${administrationOpen ? " admin-mode" : ""}`} data-view={view} data-theme={theme} data-density={density} data-focus={focusMode && view === "board" ? "on" : undefined}>
       <section className="dashboard-main">
         {/* Faixa única do sistema: marca, janela de módulos, as abas abertas e,
             à direita, contexto e conta. A barra lateral saiu — com a janela de
@@ -3208,11 +3329,21 @@ export function WorkspaceApp({
           <button type="button" className="shell-brand" onClick={() => openShellTab("inicio")} aria-label="Vinculato — início">
             <VinculatoLogo size={22} compact tone={theme === "dark" ? "light" : "color"} />
           </button>
-          {launcherModules.length > 1 && <button type="button" className="shell-modules" onClick={() => setModuleLauncher("switch")}
+          {/* Na Administração a faixa troca de função: em vez das abas dos
+              módulos, diz em que área a pessoa está e oferece a volta. É a
+              separação entre configurar o grupo e operar o dia a dia. */}
+          {administrationOpen && <div className="shell-admin-context">
+            <span className="shell-admin-badge"><Settings aria-hidden="true" />Administração</span>
+            <span className="shell-admin-workspace" title={snapshot.workspace.name}>{snapshot.workspace.name}</span>
+            <button type="button" className="shell-admin-back" onClick={() => {
+              if (operationalTabId === "erp-dp") setAdministrationOpen(false); else openShellTab(operationalTabId);
+            }}><ArrowLeft aria-hidden="true" />Voltar ao sistema</button>
+          </div>}
+          {!administrationOpen && launcherModules.length > 1 && <button type="button" className="shell-modules" onClick={() => setModuleLauncher("switch")}
             aria-label="Abrir janela de módulos" title="Módulos">
             <LayoutGrid aria-hidden="true" /><span>Módulos</span>
           </button>}
-          <nav className="shell-tabs" aria-label="Módulos abertos">
+          {!administrationOpen && <nav className="shell-tabs" aria-label="Módulos abertos">
             <ul>
               {openTabs.map((id) => <li key={id} className="shell-tab" data-active={id === activeTabId ? "" : undefined}>
                 <button type="button" onClick={() => openShellTab(id)} aria-current={id === activeTabId ? "page" : undefined}
@@ -3221,10 +3352,12 @@ export function WorkspaceApp({
                   aria-label={`Fechar ${tabLabel(id)}`}><X aria-hidden="true" /></button>}
               </li>)}
             </ul>
-          </nav>
+          </nav>}
           <div className="shell-actions">
             {view === "overview" && !erpMode && !administrationOpen && <label className="header-period-select"><CalendarClock aria-hidden="true" /><select aria-label="Selecionar período" value={periodFilter} onChange={(event) => setPeriodFilter(event.target.value as OverviewPeriod)}>{overviewPeriods.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label>}
-            <CompanyPicker companies={snapshot.companies} value={companyFilter} allLabel={companyScopeLabel} onChange={setCompanyFilter} />
+            {/* A Administração vale para o grupo inteiro: o seletor de empresa
+                só confundiria, sugerindo um recorte que estas telas não fazem. */}
+            {!administrationOpen && <CompanyPicker companies={snapshot.companies} value={companyFilter} allLabel={companyScopeLabel} onChange={setCompanyFilter} />}
             <button className="global-search-trigger" aria-label="Busca global" title="Busca global (⌘K)" onClick={() => setSearchOpen(true)}><Search aria-hidden="true" /><span>Buscar</span><kbd>⌘K</kbd></button>
             <button className="shell-icon" aria-label="Notificações" title="Notificações" onClick={() => setNotificationsOpen(true)}><Bell aria-hidden="true" />{snapshot.notifications.some((item) => !item.readAt) && <i />}</button>
             <button className="shell-icon help-button" aria-label="Abrir o assistente" title="Ajuda" onClick={() => setAssistantSignal((current) => current + 1)}><CircleHelp aria-hidden="true" /></button>
@@ -3724,7 +3857,7 @@ export function WorkspaceApp({
                   <label className="full">Processo
                     <select value={cardForm.processVersionId} disabled={!canEdit}
                       onChange={(event) => setCardForm({ ...cardForm, processVersionId: event.target.value })}>
-                      <option value="">Demanda avulsa — sem processo</option>
+                      <option value="">Demanda avulsa (sem processo)</option>
                       {[...new Set(startableProcesses.map((item) => item.areaName))].sort().map((area) => (
                         <optgroup label={area} key={area}>
                           {startableProcesses.filter((item) => item.areaName === area).map((item) => (
@@ -4686,7 +4819,7 @@ function PayrollView({ companies, metrics, busy, canEdit, onSaveMetric, onImport
     {/* Movimentos para o Sankhya: lança os eventos variáveis por colaborador e
         gera a planilha do Importador de Movimentos (docs/movimentos-para-o-sankhya.md). */}
     <PayrollMovementsPanel companies={companies} canEdit={canEdit} />
-    {canEdit && <section className="payroll-entry-panel"><header><div><span>Novo lançamento</span><h2>Registrar dados da folha</h2><p>Informe os valores já apurados na folha ou ERP. O sistema consolida custos e indicadores, sem aplicar alíquotas legais por conta própria.</p></div><b>Total calculado: {money(formTotal)}</b></header><form onSubmit={(event) => void submit(event)}>
+    {canEdit && <section className="payroll-entry-panel"><header><div><span>Novo lançamento</span><h2>Registrar dados da folha</h2><p>Informe os valores já apurados na folha ou no ERP.</p></div><b>Total calculado: {money(formTotal)}</b></header><form onSubmit={(event) => void submit(event)}>
       <label>Empresa<select value={form.companyId} required disabled={busy} onChange={(event) => setForm({ ...form, companyId: event.target.value })}><option value="" disabled>Selecione</option>{companies.filter((company) => company.status === "active").map((company) => <option value={company.id} key={company.id}>{company.tradeName || company.legalName}</option>)}</select></label>
       <label>Competência<input type="month" value={form.period} required disabled={busy} onChange={(event) => setForm({ ...form, period: event.target.value })} /></label>
       <fieldset className="payroll-form-section"><legend>Pessoas e movimentação</legend>{numericField("Headcount no início", "headcountStart")}{numericField("Headcount no fim", "headcountEnd")}{numericField("Afastados no período", "leavesCount")}{numericField("Admissões", "admissions")}{numericField("Desligamentos voluntários", "voluntaryTerminations")}{numericField("Desligamentos involuntários", "involuntaryTerminations")}<p>Headcount médio: <strong>{formHeadcount.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</strong> · encerramento esperado: <strong>{expectedHeadcount.toLocaleString("pt-BR")}</strong></p></fieldset>
@@ -4841,7 +4974,7 @@ function PermissionMatrix() {
     <header>
       <div>
         <strong id="permission-matrix-title">O que cada papel permite</strong>
-        <span>Lista completa, direto do modelo de autorização — não é um resumo escrito à mão.</span>
+        <span>Permissões de cada papel.</span>
       </div>
     </header>
     {capabilityAreas.map((area) => {
@@ -5089,15 +5222,25 @@ function RulesSettings({ snapshot, busy, isAdmin, onCatalog, onConfirm }: { snap
 function InboxView({ items, busy, canEdit, onConvert, onNew }: { items: InboxItem[]; busy: boolean; canEdit: boolean; onConvert: (item: InboxItem) => Promise<void>; onNew: () => void }) {
   const pending = items.filter((item) => item.status === "new");
   const converted = items.filter((item) => item.status === "converted");
-  const channelIcon = (channel: string) => channel === "whatsapp" ? <Smartphone aria-hidden="true" /> : channel === "email" ? <Mail aria-hidden="true" /> : channel === "teams" ? <MessageSquareMore aria-hidden="true" /> : <Plus aria-hidden="true" />;
+  const channelLabels: Record<string, string> = { whatsapp: "WhatsApp", email: "E-mail", teams: "Teams", manual: "Registro manual" };
   return (
     <div className="inbox-layout">
       <section className="inbox-list-panel">
-        <header><div><strong>Aguardando triagem</strong><span>{pending.length} nova(s) • {converted.length} convertida(s)</span></div>{canEdit && <button onClick={onNew}><Plus aria-hidden="true" /> Registrar solicitação</button>}</header>
-        <div className="inbox-items">
-          {pending.length === 0 && <div className="empty-view"><span><CheckCircle2 aria-hidden="true" /></span><strong>Inbox organizada</strong><p>Não há solicitações aguardando triagem.</p></div>}
-          {pending.map((item) => <article className="inbox-item" key={item.id}><span className={`channel-icon ${item.channel}`}>{channelIcon(item.channel)}</span><div><div><strong>{item.subject}</strong><time>{formatReceived(item.receivedAt)}</time></div><span>{item.senderName} • {item.channel}</span><p>{item.body}</p>{canEdit && <button disabled={busy} onClick={() => void onConvert(item)}>Transformar em demanda <ArrowRight aria-hidden="true" /></button>}</div></article>)}
-        </div>
+        {/* O botão de criar fica só no cabeçalho da tela ("Nova solicitação"):
+            o segundo, aqui dentro, fazia a mesma coisa com outro nome. */}
+        <header><div><strong>Aguardando triagem</strong><span>{pending.length} nova(s) • {converted.length} convertida(s)</span></div></header>
+        {pending.length === 0
+          ? <div className="inbox-items"><div className="empty-view"><span><CheckCircle2 aria-hidden="true" /></span><strong>Nada aguardando triagem</strong><p>Solicitações recebidas por e-mail, Teams ou registro manual aparecem aqui.</p>{canEdit && <button className="secondary-button" onClick={onNew}><Plus aria-hidden="true" /> Registrar solicitação</button>}</div></div>
+          : <div className="inbox-table-wrap"><table className="inbox-table">
+            <thead><tr><th scope="col">Recebida</th><th scope="col">Canal</th><th scope="col">Remetente</th><th scope="col">Assunto</th>{canEdit && <th scope="col"><span className="sr-only">Ação</span></th>}</tr></thead>
+            <tbody>{pending.map((item) => <tr key={item.id}>
+              <td className="numeric">{formatReceived(item.receivedAt)}</td>
+              <td>{channelLabels[item.channel] ?? item.channel}</td>
+              <td>{item.senderName}</td>
+              <td className="inbox-subject"><strong>{item.subject}</strong>{item.body && <span>{item.body}</span>}</td>
+              {canEdit && <td><button className="secondary-button" disabled={busy} onClick={() => void onConvert(item)}>Transformar em demanda</button></td>}
+            </tr>)}</tbody>
+          </table></div>}
       </section>
     </div>
   );

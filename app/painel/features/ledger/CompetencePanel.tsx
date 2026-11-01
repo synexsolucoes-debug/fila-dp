@@ -74,7 +74,7 @@ export function CompetencePanel({
       <EmptyState
         icon={CalendarCheck}
         title={`Conferência de ${formatCompetence(competence)} ainda não aberta`}
-        text="Abrir a conferência traz a programação do mês para revisão. Ela acontece dentro da competência da Operação DP — o módulo não abre competência própria."
+        text="Abrir a conferência traz a programação do mês para revisão, dentro da competência da Operação DP."
         action={permissions?.manage ? (
           <button type="button" className={styles.primaryButton} disabled={busy} onClick={onOpen}>
             {busy ? <Loader2 aria-hidden="true" className={styles.spin} /> : <CalendarCheck aria-hidden="true" />}

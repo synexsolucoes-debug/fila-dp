@@ -36,7 +36,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     }
     if (config.approvalCount <= 1) {
       throw ApiError.badRequest(
-        "Esta etapa exige um só aprovador — avance a etapa para aprovar.",
+        "Esta etapa exige um só aprovador. Avance a etapa para aprovar.",
         "PROCESS_STEP_APPROVAL_SINGLE",
       );
     }

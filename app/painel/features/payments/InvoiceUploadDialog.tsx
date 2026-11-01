@@ -141,7 +141,7 @@ export function InvoiceUploadDialog({ open, row, competenceLabel, money, busy, e
           </p>
 
           <label>Observação
-            <textarea name="notes" maxLength={500} placeholder="Opcional — visível na conferência" />
+            <textarea name="notes" maxLength={500} placeholder="Opcional. Visível na conferência" />
           </label>
 
           {error && <p className={styles.invoiceFormError} role="alert">{error}</p>}

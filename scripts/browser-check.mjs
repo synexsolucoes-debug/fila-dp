@@ -272,9 +272,9 @@ if (password && await emailField.count()) {
      abrir vazia por erro de consulta, ou se o filtro não recortar, isso só
      aparece no navegador — a rota devolveria 200 nos dois casos. */
   for (const [rota, titulo] of [
-    ["/painel/trabalho", /está comigo hoje/iu],
-    ["/painel/triagem", /não teve certeza/iu],
-    ["/painel/agentes", /Automação sob controle/iu],
+    ["/painel/trabalho", /^Meu trabalho$/u],
+    ["/painel/triagem", /^Triagem$/u],
+    ["/painel/agentes", /^Agentes$/u],
   ]) {
     await page.goto(`${base}${rota}`, { waitUntil: "networkidle" });
     await page.waitForTimeout(1500);

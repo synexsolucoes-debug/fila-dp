@@ -56,7 +56,7 @@ export const SANKHYA_HOST_HINT = "Por padrão só endereços em *.sankhya.com.br
  * e não tem variável de ambiente que a contorne — o remédio está do lado do
  * ambiente Sankhya.
  */
-export const SANKHYA_HTTPS_HINT = "O endereço precisa começar com https:// — o robô faz login com o usuário e a "
+export const SANKHYA_HTTPS_HINT = "O endereço precisa começar com https://. O robô faz login com o usuário e a "
   + "senha dedicados, que em HTTP trafegariam em texto claro. Publique o Sankhya com certificado "
   + "(ou atrás de um túnel HTTPS) e informe o endereço seguro; endereços de rede interna também são recusados, "
   + "porque o robô roda fora da rede do cliente.";

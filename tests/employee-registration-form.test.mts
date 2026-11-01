@@ -64,7 +64,7 @@ test("campo reprovado na conferência não vira valor copiável", () => {
   const taxId = sheet.blocks.flatMap((block) => block.fields).find((field) => field.key === "taxId");
   assert.equal(taxId?.status, "invalid");
   assert.equal(taxId?.value, "", "um CPF que não fecha nunca pode ser oferecido para cópia");
-  assert.match(taxId?.note ?? "", /confira no arquivo/u);
+  assert.match(taxId?.note ?? "", /confira no arquivo/iu);
   assert.equal(sheet.warnings.length, 1);
 });
 

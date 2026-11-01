@@ -264,7 +264,7 @@ export function PayrollMovementsPanel({ companies, canEdit }: { companies: Compa
 
       {canEdit && data.catalog.count > 0 && <details className={styles.paste}>
         <summary><ClipboardPaste aria-hidden="true" /> Colar vários lançamentos do Excel</summary>
-        <p className={styles.hint}>Uma linha por lançamento: CODFUNC, CODEVENTO, ÍNDICE, VALOR — ou com o CODEMP na frente (cinco colunas), que precisa ser o da empresa selecionada. Separados por tabulação ou ponto e vírgula. Se alguma linha tiver problema, nada é gravado e a lista mostra o que corrigir.</p>
+        <p className={styles.hint}>Uma linha por lançamento: CODFUNC, CODEVENTO, ÍNDICE, VALOR (ou CODEMP na frente, da empresa selecionada), separados por tabulação ou ponto e vírgula. Com erro em alguma linha, nada é gravado.</p>
         <textarea id="payroll-movements-paste" rows={5} value={paste} disabled={busy} onChange={(event) => setPaste(event.target.value)} placeholder={"17\t9\t12:30\t0\n23\t37\t0\t312,50"} />
         <button type="button" className={styles.secondaryButton} disabled={busy || !paste.trim()} onClick={() => void addPasted()}>Importar linhas</button>
       </details>}

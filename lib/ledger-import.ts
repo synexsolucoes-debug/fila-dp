@@ -254,7 +254,7 @@ export function interpretCell(raw: string): ImportCandidate[] {
   if (/LAN[ÇC]AD|DOM[ÍI]NIO/iu.test(texto)) {
     ambiguidadesComuns.push({
       code: "mentions_launched",
-      message: "O texto diz que algo foi lançado em outro sistema. Isso é anotação, não comprovação de desconto — confirme se já foi descontado antes de marcar qualquer parcela.",
+      message: "O texto diz que algo foi lançado em outro sistema. Isso é anotação, não comprovação de desconto. Confirme se já foi descontado antes de marcar qualquer parcela.",
     });
   }
 
@@ -332,7 +332,7 @@ export function interpretCell(raw: string): ImportCandidate[] {
     if (modality !== "recurring" && totalAmount === null) {
       ambiguities.push({
         code: "missing_amount",
-        message: "Não encontrei um valor neste texto. Informe o valor antes de gravar — nada é deduzido.",
+        message: "Não encontrei um valor neste texto. Informe o valor antes de gravar. Nada é deduzido.",
       });
     }
     if (modality !== "recurring" && !competencia) {
@@ -344,7 +344,7 @@ export function interpretCell(raw: string): ImportCandidate[] {
     if (categorias.length > 1) {
       ambiguities.push({
         code: "multiple_in_cell",
-        message: "A mesma célula descreve mais de um desconto. Cada um virou uma proposta separada — confira os valores de cada.",
+        message: "A mesma célula descreve mais de um desconto. Cada um virou uma proposta separada. Confira os valores de cada.",
       });
     }
     /* Arredondamento que não fecha: 3 × 333,33 = 999,99, não 1.000,00. Apontar
@@ -437,7 +437,7 @@ export function readSheet(sheet: ExcelJS.Worksheet, hashOf: (parts: string) => s
            coluna do adiantamento. Apontar é melhor do que ler dinheiro ali. */
         ambiguities.push({
           code: "shifted_column",
-          message: "A coluna do adiantamento contém um CPF — as colunas deste bloco parecem deslocadas. Reveja o mapeamento antes de gravar.",
+          message: "A coluna do adiantamento contém um CPF. As colunas deste bloco parecem deslocadas. Reveja o mapeamento antes de gravar.",
         });
       } else if (/^-+$/u.test(adiantamentoBruto)) {
         // Um traço é "nada", e não zero.
@@ -499,7 +499,7 @@ export function readSheet(sheet: ExcelJS.Worksheet, hashOf: (parts: string) => s
     if (!taxId) {
       ambiguities.push({
         code: "no_tax_id",
-        message: "Esta linha não traz CPF. A pessoa precisa ser confirmada à mão — nome sozinho não identifica alguém numa base com homônimos.",
+        message: "Esta linha não traz CPF. A pessoa precisa ser confirmada à mão. Nome sozinho não identifica alguém numa base com homônimos.",
       });
     }
 

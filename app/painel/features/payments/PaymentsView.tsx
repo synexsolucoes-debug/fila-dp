@@ -675,18 +675,19 @@ export function PaymentsView({ role, module, section = "contractorPayments", foc
 
   return (
     <section className={styles.workspace} data-module={module} aria-busy={loading}>
+      {/* Barra de ações no padrão do painel: título à esquerda, ações à
+          direita; seletores de empresa e competência logo abaixo. */}
       <header className={styles.commandBar}>
-        <div className={styles.commandSelectors}>
-          <label>
-            <select value={companyId} onChange={(event) => setCompanyId(event.target.value)} disabled={!companies.length}>
-              {companies.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-            </select>
-          </label>
-          <label>
-            <select value={competence} onChange={(event) => setCompetence(event.target.value)}>
-              {competenceOptions.map((item) => <option key={item.competence} value={item.competence}>{competenceLabel(item.competence)}{!item.open ? " · não aberta" : cycleStatusByCompetence.get(item.competence) === "closed" ? " · fechada" : ""}</option>)}
-            </select>
-          </label>
+        <div className={styles.moduleHeadline}>
+          <h1>{headline.title}</h1>
+          {cycle && (
+            <span className={styles.cycleBadge} data-locked={cycle.status === "closed" ? "true" : "false"}>
+              {cycle.status === "closed" ? <LockKeyhole aria-hidden="true" /> : <CircleDot aria-hidden="true" />}
+              Competência {statusLabels[cycle.status] ?? cycle.status}
+              {module === "contractors" && cycle.status !== "closed" && lockedProviderIds.length > 0
+                && ` · ${lockedProviderIds.length} pagamento(s) fechado(s)`}
+            </span>
+          )}
         </div>
         <div className={styles.commandActions}>
           <button className={styles.secondaryButton} type="button" onClick={() => void loadOverview(companyId, competence, true)} disabled={refreshing || !companyId}>
@@ -728,19 +729,17 @@ export function PaymentsView({ role, module, section = "contractorPayments", foc
           )}
         </div>
       </header>
-
-      <div className={styles.moduleHeadline}>
-        <div>
-          <h2>{headline.title}</h2>
-        </div>
-        {cycle && (
-          <span className={styles.cycleBadge} data-locked={cycle.status === "closed" ? "true" : "false"}>
-            {cycle.status === "closed" ? <LockKeyhole aria-hidden="true" /> : <CircleDot aria-hidden="true" />}
-            Competência {statusLabels[cycle.status] ?? cycle.status}
-            {module === "contractors" && cycle.status !== "closed" && lockedProviderIds.length > 0
-              && ` · ${lockedProviderIds.length} pagamento(s) fechado(s)`}
-          </span>
-        )}
+      <div className={styles.commandSelectors}>
+        <label>
+          <select aria-label="Empresa" value={companyId} onChange={(event) => setCompanyId(event.target.value)} disabled={!companies.length}>
+            {companies.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
+        </label>
+        <label>
+          <select aria-label="Competência" value={competence} onChange={(event) => setCompetence(event.target.value)}>
+            {competenceOptions.map((item) => <option key={item.competence} value={item.competence}>{competenceLabel(item.competence)}{!item.open ? " · não aberta" : cycleStatusByCompetence.get(item.competence) === "closed" ? " · fechada" : ""}</option>)}
+          </select>
+        </label>
       </div>
 
       {module === "psychology" && psychology?.privacyBoundary && (

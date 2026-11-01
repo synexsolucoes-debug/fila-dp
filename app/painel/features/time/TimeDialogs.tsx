@@ -162,7 +162,7 @@ export function TimeDialog({ dialog, busy, hourEvents, onClose, onSubmit }: Prop
                   </select>
                 </label>
                 <label>Nota da conferência<textarea name="note" minLength={5} maxLength={500} required /></label>
-                <p className={styles.hint}>A nota fica registrada com seu nome e a data — é ela que sustenta a aprovação do ponto.</p>
+                <p className={styles.hint}>A nota fica registrada com seu nome e a data.</p>
               </>
             )}
 

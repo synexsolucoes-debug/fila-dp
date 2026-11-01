@@ -60,7 +60,7 @@ export async function POST(request: Request, { params }: Params) {
       if (workspace.status !== "archived" && workspace.status !== "canceled") {
         throw new ApiError(409, "WORKSPACE_NOT_ARCHIVED",
           `"${workspace.name}" ainda está ${workspace.status === "active" ? "ativo" : "suspenso"}. `
-          + "Arquive ou cancele antes de excluir — a exclusão não tem volta.");
+          + "Arquive ou cancele antes de excluir. A exclusão não tem volta.");
       }
 
       const confirmation = cleanText(body.confirmation, 120);

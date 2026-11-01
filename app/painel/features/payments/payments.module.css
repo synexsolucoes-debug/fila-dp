@@ -58,8 +58,8 @@
 .secondaryButton:hover { border-color: var(--pay-accent-text); color: var(--pay-accent-text); }
 .primaryButton:disabled, .secondaryButton:disabled { cursor: not-allowed; opacity: .48; transform: none; }
 
-.commandBar { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
-.commandSelectors { display: flex; align-items: flex-end; gap: 10px; min-width: 0; }
+.commandBar { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
+.commandSelectors { display: flex; align-items: flex-end; gap: 10px; min-width: 0; margin-bottom: 14px; }
 .commandSelectors > label { display: grid; gap: 5px; }
 .commandSelectors select {
   min-height: 38px; min-width: 190px; padding: 0 10px; border: 1px solid var(--pay-border);
@@ -70,9 +70,9 @@
 /* No Sistema PJ esta linha é o título da tela: sem caixa, no tamanho do
    título das outras telas, com o estado da competência à direita. */
 .moduleHeadline {
-  display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 4px 0 14px;
+  display: flex; align-items: center; gap: 12px; min-width: 0; margin: 0;
 }
-.moduleHeadline h2 { margin: 0; font-size: 20px; font-weight: 650; letter-spacing: -.01em; }
+.moduleHeadline h1 { margin: 0; font-size: 20px; font-weight: 650; letter-spacing: -.01em; }
 .moduleHeadline p { margin: 0; color: var(--pay-soft); font-size: .78rem; }
 .moduleIcon {
   display: grid; place-items: center; width: 40px; height: 40px; flex: none;
@@ -107,7 +107,7 @@
 .approvalPanel {
   display: grid; gap: 12px; margin-bottom: 12px; padding: 15px 16px;
   border: 1px solid color-mix(in srgb, var(--pay-accent) 34%, var(--pay-border));
-  border-radius: 12px; background: linear-gradient(135deg, var(--pay-surface), color-mix(in srgb, var(--pay-accent-soft) 38%, var(--pay-surface)));
+  border-radius: 12px; background: var(--pay-surface);
 }
 .approvalPanel > header { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .approvalPanel h3 { margin: 3px 0; font-size: .96rem; }

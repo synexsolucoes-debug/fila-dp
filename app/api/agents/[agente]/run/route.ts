@@ -58,7 +58,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     }
     if (integration.status === "paused") {
       throw new ApiError(409, "AGENT_PAUSED",
-        "Este agente está pausado. Reative-o antes de executar — pausa é decisão de alguém, e um clique aqui não a desfaz.");
+        "Este agente está pausado. Reative-o antes de executar. Pausa é decisão de alguém, e um clique aqui não a desfaz.");
     }
     if (integration.status !== "connected") {
       throw new ApiError(409, "AGENT_NOT_CONNECTED",

@@ -834,7 +834,7 @@ function LimitsSection({ overview, money, limitSourceLabels, permissions, onDial
       <EmptyState
         icon={ShieldCheck}
         title="Nenhuma política de limite configurada"
-        text="Sem política, a nota esperada é o líquido inteiro. Uma política define até quanto o prestador emite nota — o que passar disso vira complemento."
+        text="Sem política, a nota esperada é o líquido inteiro. Com política, o que passar do limite vira complemento."
         action={permissions?.manageLimits ? (
           <button className={styles.primaryButton} type="button" onClick={() => onDialog({ kind: "limit", contractors })}>
             <ShieldCheck aria-hidden="true" /> Definir limite da nota

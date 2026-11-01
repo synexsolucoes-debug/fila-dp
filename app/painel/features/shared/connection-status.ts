@@ -46,3 +46,15 @@ export function lastSyncLabel(lastSyncAt: string | null) {
   if (horas < 24) return `há ${horas} h`;
   return `há ${Math.round(horas / 24)} d`;
 }
+
+/** Estado de uma execução de integração, em português. O código cru
+ *  ("dead_letter", "needs_credentials") aparecia no selo da tela. */
+export const runStatusLabels: Record<string, string> = {
+  queued: "Na fila", running: "Executando", processing: "Processando", processed: "Processada",
+  completed: "Concluída", succeeded: "Concluída", partial: "Parcial", failed: "Falhou",
+  dead_letter: "Sem nova tentativa", conflict: "Conflito", canceled: "Cancelada", pending: "Pendente",
+  skipped: "Ignorada", requires_user_action: "Ação necessária",
+};
+export function runStatusLabel(status: string) {
+  return runStatusLabels[status] ?? connectionStatusLabels[status] ?? status.replaceAll("_", " ");
+}
