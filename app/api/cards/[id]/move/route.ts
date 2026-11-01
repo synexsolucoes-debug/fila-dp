@@ -21,7 +21,7 @@ export async function POST(request: Request, context: RouteContext) {
     if (!list) throw ApiError.notFound("Coluna não encontrada.", "LIST_NOT_FOUND");
     const position = await d1.prepare("SELECT COALESCE(MAX(position), 0) AS max_position FROM fdp_cards WHERE list_id = ? AND archived = 0").bind(toListId).first<{ max_position: number }>();
 
-    await d1.prepare("UPDATE fdp_cards SET list_id = ?, position = ?, sla_status = ?, closed_at = CASE WHEN ? = 'completed' THEN CURRENT_TIMESTAMP ELSE NULL END, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND board_id = ?")
+    await d1.prepare("UPDATE fdp_cards SET list_id = ?, position = ?, sla_status = ?, closed_at = CASE WHEN ? = 'completed' THEN CURRENT_TIMESTAMP ELSE NULL END, archived_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND board_id = ?")
       .bind(toListId, Number(position?.max_position ?? 0) + 1000, computeSlaStatus(card.due_at, list.sla_behavior), list.sla_behavior, id, board.id)
       .run();
     const fromList = await d1.prepare("SELECT name, kind FROM fdp_lists WHERE id = ?").bind(card.list_id).first<{ name: string; kind: string }>();

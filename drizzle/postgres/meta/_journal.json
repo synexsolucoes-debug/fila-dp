@@ -855,6 +855,13 @@
       "when": 1791909600000,
       "tag": "0119_erp_dp_employee_portal",
       "breakpoints": true
+    },
+    {
+      "idx": 122,
+      "version": "7",
+      "when": 1792000000000,
+      "tag": "0120_completed_card_archive",
+      "breakpoints": true
     }
   ]
 }

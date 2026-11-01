@@ -1,6 +1,7 @@
 import { apiError, getApiUser, text, validDate, validProcessType } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireWorkspaceRole } from "@/lib/fila-dp-db";
 import { requireCapability } from "@/lib/authorization";
+import { normalizeCompletedArchiveDays } from "@/lib/card-auto-archive";
 import { ApiError } from "@/lib/api-errors";
 import { parseRuleAction, parseRuleTrigger } from "@/lib/automation-rules";
 import { findDomainEvent } from "@/lib/domain-events";
@@ -74,6 +75,12 @@ export async function POST(request: Request) {
       await d1.prepare(`INSERT INTO fdp_sla_policies (id, workspace_id, process_type, target_business_days, warning_business_days, active)
         VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT(workspace_id, process_type) DO UPDATE SET target_business_days = excluded.target_business_days, warning_business_days = excluded.warning_business_days, active = excluded.active`).bind(crypto.randomUUID(), workspace.id, processType || "OUTROS", target, warning, body.active === false ? 0 : 1).run();
+    } else if (resource === "card-archive") {
+      /* Dias até a demanda concluída ir para o Arquivo (lib/card-auto-archive.ts).
+         Rota própria, e não o calendário de SLA: são decisões diferentes, e
+         salvar uma não pode reescrever a outra. */
+      const days = normalizeCompletedArchiveDays(body.completedArchiveDays);
+      await d1.prepare("UPDATE fdp_workspace_settings SET completed_archive_days = ?, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = ?").bind(days, workspace.id).run();
     } else if (resource === "settings") {
       const businessDays = Array.isArray(body.businessDays) ? body.businessDays.map(Number).filter((day) => Number.isInteger(day) && day >= 0 && day <= 6) : [1, 2, 3, 4, 5];
       if (!businessDays.length) return Response.json({ error: "Selecione ao menos um dia útil." }, { status: 400 });

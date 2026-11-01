@@ -734,3 +734,12 @@
 /* O conteúdo da Administração começa no topo e não estica os blocos para
    igualar a altura do menu ao lado. */
 .dashboard-shell.operational-ui .workspace-settings-content { align-content: start; }
+
+/* ========================================================================== */
+/* 8. Arquivo automático das concluídas                                        */
+/* ========================================================================== */
+.dashboard-shell.operational-ui .dashboard-column-archive-note { margin: 0 10px 6px; color: var(--ui-text-soft); font-size: 12px; line-height: 1.4; }
+.dashboard-shell.operational-ui .dashboard-column-archive-note button { padding: 0; border: 0; background: none; color: var(--ui-accent-text, var(--ui-primary)); font: inherit; font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.dashboard-shell.operational-ui .card-archive-settings form { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; padding: 14px; }
+.dashboard-shell.operational-ui .card-archive-settings label { display: grid; gap: 5px; color: var(--ui-text); font-size: 12px; font-weight: 600; }
+.dashboard-shell.operational-ui .card-archive-settings select { min-width: 160px; height: 36px; padding: 0 8px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); background: var(--ui-surface); color: var(--ui-text); font-size: 13px; }

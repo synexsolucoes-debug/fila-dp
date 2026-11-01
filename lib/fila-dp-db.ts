@@ -1,4 +1,5 @@
 import { isoTimestamp } from "./iso-timestamp";
+import { archiveFinishedCards, normalizeCompletedArchiveDays } from "./card-auto-archive";
 import { getD1, getScopedD1 } from "../db";
 import type { ChatGPTUser } from "../app/chatgpt-auth";
 import type { WorkspaceRole, WorkspaceSnapshot } from "./fila-dp-types";
@@ -388,6 +389,16 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
   const canManageMembers = hasCapability(workspace, "members.manage");
   const canReadHr = hasCapability(workspace, "hr.read");
   const canManageIntegrations = hasCapability(workspace, "integrations.manage");
+  /* Antes de ler o quadro: a demanda concluída há mais de N dias vai para o
+     Arquivo (lib/card-auto-archive.ts). Falhar aqui não pode impedir o quadro
+     de abrir, então o erro só é registrado. */
+  try {
+    const archiveSetting = await d1.prepare("SELECT completed_archive_days FROM fdp_workspace_settings WHERE workspace_id = ?")
+      .bind(workspace.id).first<{ completed_archive_days: number }>();
+    await archiveFinishedCards(d1, workspace.id, normalizeCompletedArchiveDays(archiveSetting?.completed_archive_days));
+  } catch (cause) {
+    console.error("[card-auto-archive]", cause instanceof Error ? cause.message : cause);
+  }
   const resolvedModules = await getWorkspaceModules(d1, workspace.id, workspace.role,
     String((workspace as Record<string, unknown>).status ?? "active"),
     (workspace as { memberGrants?: ReadonlyMap<string, boolean> }).memberGrants,
@@ -470,7 +481,7 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     d1.prepare(`SELECT a.id, a.card_id, a.filename, a.content_type, a.size_bytes, a.uploaded_by, a.created_at
       FROM fdp_card_attachments a JOIN fdp_cards c ON c.id = a.card_id WHERE c.board_id = ? AND c.archived = 0 ORDER BY a.created_at DESC`).bind(board.id).all(),
     d1.prepare("SELECT id, name, process_type, description, checklist_json, default_sla_days, active, position FROM fdp_process_templates WHERE workspace_id = ? ORDER BY position").bind(workspace.id).all(),
-    d1.prepare("SELECT business_days_json, day_start, day_end, realtime_seconds FROM fdp_workspace_settings WHERE workspace_id = ?").bind(workspace.id).first<Record<string, unknown>>(),
+    d1.prepare("SELECT business_days_json, day_start, day_end, realtime_seconds, completed_archive_days FROM fdp_workspace_settings WHERE workspace_id = ?").bind(workspace.id).first<Record<string, unknown>>(),
     d1.prepare("SELECT holiday_date, name FROM fdp_business_holidays WHERE workspace_id = ? ORDER BY holiday_date").bind(workspace.id).all(),
     d1.prepare("SELECT id, process_type, target_business_days, warning_business_days, active FROM fdp_sla_policies WHERE workspace_id = ? ORDER BY process_type").bind(workspace.id).all(),
     d1.prepare("SELECT id, channel, display_name, status, config_json, last_sync_at, last_error FROM fdp_integrations WHERE workspace_id = ? ORDER BY channel").bind(workspace.id).all(),
@@ -683,6 +694,7 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     position: Number(row.position),
     sourceType: String(row.source_type ?? "manual"),
     archived: Boolean(row.archived),
+    archivedAt: row.archived_at ? isoTimestamp(row.archived_at) : null,
     createdAt: isoTimestamp(row.created_at),
     updatedAt: isoTimestamp(row.updated_at),
     checklist: checklistRows.filter((item) => item.card_id === row.id).map((item) => ({
@@ -940,7 +952,7 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     })),
     slaPolicies: policyRows.map((row) => ({ id: String(row.id), processType: String(row.process_type), targetBusinessDays: Number(row.target_business_days), warningBusinessDays: Number(row.warning_business_days), active: Boolean(row.active) })),
     holidays: (holidaysResult.results as Array<Record<string, unknown>>).map((row) => ({ date: String(row.holiday_date), name: String(row.name) })),
-    settings: { businessDays: businessDays.length ? businessDays : [1, 2, 3, 4, 5], dayStart: String(settingsRow?.day_start ?? "08:00"), dayEnd: String(settingsRow?.day_end ?? "18:00"), realtimeSeconds: Number(settingsRow?.realtime_seconds ?? 30) },
+    settings: { businessDays: businessDays.length ? businessDays : [1, 2, 3, 4, 5], dayStart: String(settingsRow?.day_start ?? "08:00"), dayEnd: String(settingsRow?.day_end ?? "18:00"), realtimeSeconds: Number(settingsRow?.realtime_seconds ?? 30), completedArchiveDays: normalizeCompletedArchiveDays(settingsRow?.completed_archive_days) },
     notifications: (notificationsResult.results as Array<Record<string, unknown>>)
       .filter((row) => companyAccess.unrestricted || Boolean(row.card_id && visibleCardIds.has(String(row.card_id))))
       .map((row) => ({

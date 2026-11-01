@@ -85,6 +85,8 @@ export type WorkspaceSettings = {
   dayStart: string;
   dayEnd: string;
   realtimeSeconds: number;
+  /** Dias até a demanda concluída ir para o Arquivo; 0 = nunca. */
+  completedArchiveDays: number;
 };
 
 export type NotificationItem = {
@@ -193,6 +195,8 @@ export type Card = {
   position: number;
   sourceType: string;
   archived: boolean;
+  /** Quando saiu do quadro (botão Arquivar ou regra de concluídas). */
+  archivedAt?: string | null;
   createdAt: string;
   updatedAt: string;
   checklist: ChecklistItem[];
