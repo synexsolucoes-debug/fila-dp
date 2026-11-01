@@ -7,7 +7,7 @@
  * ficava sem porta junto com a tela morta em volta dela. */
 
 .matrixArea { margin-top: 10px; }
-.detailNote { display: flex; align-items: center; gap: 7px; margin: 0 0 12px; color: var(--ui-text-soft); font-size: .75rem; line-height: 1.5; flex-wrap: wrap; }
+.detailNote { display: block; gap: 7px; margin: 0 0 12px; color: var(--ui-text-soft); font-size: .75rem; line-height: 1.5; flex-wrap: wrap; }
 .detailEmpty { display: inline-flex; align-items: center; gap: 6px; color: var(--ui-text-soft); font-size: .75rem; }
 .detailEmpty svg { width: 13px; height: 13px; }
 
@@ -21,6 +21,7 @@
 .matrixDenied { color: var(--ui-text-soft); }
 
 .rowActions { display: flex; flex-wrap: wrap; gap: 6px; }
+.detailNote svg { width: 13px; height: 13px; vertical-align: -2px; }
 .secondaryButton { display: inline-flex; align-items: center; gap: 5px; min-height: 28px; padding: 0 9px; border: 1px solid var(--ui-border); border-radius: 999px; background: var(--ui-surface); color: var(--ui-text); font-size: .75rem; font-weight: 650; cursor: pointer; }
 .secondaryButton:hover:not(:disabled) { border-color: var(--ui-primary); color: var(--ui-primary); }
 .secondaryButton:disabled { cursor: not-allowed; opacity: .6; }
