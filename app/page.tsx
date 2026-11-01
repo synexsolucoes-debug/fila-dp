@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { ArrowRight, Check, Plus } from "lucide-react";
 import { VinculatoLogo } from "@/app/components/VinculatoLogo";
 import { getD1 } from "@/db";
@@ -10,6 +11,8 @@ import {
   integrationStateLabels, productBoundaries, siteNavigation, SIGNUP_PATH, type PlanCatalogRow,
 } from "@/lib/marketing";
 import s from "./home.module.css";
+import demandasShot from "@/public/site/produto-demandas.webp";
+import carteiraShot from "@/public/site/produto-carteira.webp";
 
 /** A home é a única página cuja canônica é a raiz — as outras declaram a sua. */
 export const metadata: Metadata = { alternates: { canonical: "/" } };
@@ -178,6 +181,19 @@ export default async function Home() {
         <MonthRuler />
       </section>
 
+      {/* Tela real do painel, com empresas e pessoas fictícias. */}
+      <figure className={s.shot}>
+        <div className={s.shotFrame}>
+          <Image
+            src={demandasShot}
+            alt="Tela de Demandas do Vinculato: pedidos de férias, desligamento e alteração de salário divididos por pessoa da equipe, cada um com empresa, tipo e prazo."
+            sizes="(max-width: 1280px) 100vw, 1200px"
+            priority
+          />
+        </div>
+        <figcaption>Demandas da equipe, por pessoa, com empresa e prazo. Dados fictícios.</figcaption>
+      </figure>
+
       <section className={s.section} aria-labelledby="audience-title">
         <h2 id="audience-title" className={s.title}>Para quem é</h2>
         <div className={s.compare}>
@@ -206,6 +222,16 @@ export default async function Home() {
             ))}
           </div>
         </div>
+        <figure className={s.shotSmall}>
+          <div className={s.shotFrame}>
+            <Image
+              src={carteiraShot}
+              alt="Carteira do escritório: seis empresas clientes, cada uma com a pessoa titular e a pessoa de backup."
+              sizes="(max-width: 1280px) 100vw, 960px"
+            />
+          </div>
+          <figcaption>Para escritórios: cada empresa cliente tem titular e backup. Dados fictícios.</figcaption>
+        </figure>
       </section>
 
       <section className={`${s.section} ${s.month}`} id="como-funciona" aria-labelledby="month-title">
