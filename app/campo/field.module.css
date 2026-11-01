@@ -91,6 +91,7 @@
 
 .actionGrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
 .actionCard {
+  position: relative;
   display: grid; gap: 4px; justify-items: start; text-align: left;
   min-height: 118px; padding: 14px;
   border: 1px solid var(--f-border); border-radius: 16px;
@@ -288,6 +289,82 @@
   background: var(--f-surface); color: var(--f-success);
   font-size: .83rem; font-weight: 720; box-shadow: var(--ui-shadow-card, none);
 }
+
+/* -------------------------------------------------------------------------- */
+/* SESMT: vencimentos, estoque, higienização e descarte                       */
+/* -------------------------------------------------------------------------- */
+
+.sectionTitle {
+  margin: 4px 2px -4px; color: var(--f-soft);
+  font-size: .75rem; font-weight: 820; letter-spacing: normal;
+}
+
+/* Contador no canto do cartão: o número que faz o técnico entrar. */
+.countBadge {
+  position: absolute; top: 10px; right: 10px;
+  min-width: 26px; height: 26px; padding: 0 7px;
+  display: grid; place-items: center;
+  border-radius: 999px; background: var(--f-danger); color: var(--f-bg);
+  font-size: .75rem; font-weight: 820; font-variant-numeric: tabular-nums;
+}
+
+.chipRow { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+.chipRow::-webkit-scrollbar { display: none; }
+.chip, .chipActive {
+  display: inline-flex; align-items: center; gap: 6px; flex: none;
+  min-height: 40px; padding: 0 13px; white-space: nowrap;
+  border: 1px solid var(--f-border); border-radius: 999px; background: var(--f-surface);
+  color: inherit; font-size: .78rem; font-weight: 700; cursor: pointer;
+}
+.chip svg, .chipActive svg { width: 16px; height: 16px; }
+.chipActive { border-color: var(--f-accent); background: var(--f-accent-soft); color: var(--f-accent-text); }
+.chip:disabled { opacity: .5; cursor: not-allowed; }
+
+/* Pílula de situação à direita do cartão. A cor reforça; o texto é que informa. */
+.statusPill {
+  display: grid; justify-items: end; gap: 1px; flex: none; margin-left: auto;
+  max-width: 44%; text-align: right;
+}
+.statusPill b {
+  padding: 3px 8px; border-radius: 999px; font-size: .72rem; font-weight: 800; white-space: nowrap;
+  border: 1px solid currentColor;
+}
+.statusPill small { font-size: .72rem !important; }
+.statusPill[data-tone="danger"] b { color: var(--f-danger); background: color-mix(in srgb, var(--f-danger) 10%, transparent); }
+.statusPill[data-tone="warning"] b { color: var(--f-warning); background: color-mix(in srgb, var(--f-warning) 10%, transparent); }
+.statusPill[data-tone="info"] b { color: var(--f-accent-text); background: var(--f-accent-soft); }
+
+.summaryRow article[data-tone="danger"] strong { color: var(--f-danger); }
+.summaryRow article[data-tone="warning"] strong { color: var(--f-warning); }
+.consequence[data-tone="warning"] {
+  border-color: color-mix(in srgb, var(--f-warning) 45%, transparent);
+  background: color-mix(in srgb, var(--f-warning) 8%, transparent);
+}
+.consequence[data-tone="warning"] > strong { color: var(--f-warning); }
+
+.inlineActions { display: flex; gap: 9px; }
+.inlineActions > * { flex: 1; }
+
+.rowBetween { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.qty { font-size: 1.15rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.qty[data-tone="warning"] { color: var(--f-warning); }
+
+.select {
+  min-height: var(--f-target); padding: 0 12px; width: 100%;
+  border: 1px solid var(--f-border); border-radius: 12px;
+  background: var(--f-surface); color: inherit;
+}
+
+/* Como instalar no iPhone. Aparece só no Safari, fora do modo instalado. */
+.installHint {
+  display: flex; align-items: flex-start; gap: 11px; padding: 12px 12px 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--f-accent) 45%, transparent); border-radius: 14px;
+  background: color-mix(in srgb, var(--f-accent) 10%, transparent);
+}
+.installHint > svg { flex: none; margin-top: 2px; color: var(--f-accent-text); }
+.installHint p { flex: 1; margin: 0; font-size: .79rem; line-height: 1.45; color: var(--f-soft); }
+.installHint strong { display: block; color: var(--f-text); font-size: .84rem; margin-bottom: 2px; }
+.installHint b { color: var(--f-text); }
 
 /* Leitor de código: tela cheia, porque apontar a câmera exige as duas mãos e
    nenhuma distração em volta. */
