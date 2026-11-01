@@ -424,7 +424,10 @@ function Home({ company, companies, onCompany, location, locations, onLocation, 
     return <button key={action.id} type="button" className={styles.actionCard}
       onClick={() => onPick(action.id)} disabled={!action.allowed}>
       <span className={styles.actionIcon}><Icon aria-hidden="true" /></span>
-      {action.badge ? <span className={styles.countBadge} aria-label={`${action.badge} pendente(s)`}>{action.badge}</span> : null}
+      {/* O número já está na frase de baixo; aqui é só sinal visual. Com
+          rótulo próprio, o leitor de tela anunciava "12 pendentes" antes do
+          nome do cartão. */}
+      {action.badge ? <span className={styles.countBadge} aria-hidden="true">{action.badge > 99 ? "99+" : action.badge}</span> : null}
       <strong>{action.label}</strong>
       <small>{action.allowed ? action.hint : "Sem permissão para esta ação"}</small>
     </button>;

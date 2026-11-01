@@ -141,3 +141,24 @@ test("o app de campo se instala no iPhone e abre direto nos vencimentos", async 
   assert.match(app, /vencimentos: \{ screen: "due"/u);
   assert.match(app, /Adicionar à Tela de Início/u);
 });
+
+test("o app de campo cabe no iPhone mais estreito e se comporta como app", async () => {
+  const css = await readFile(new URL("../app/campo/field.module.css", import.meta.url), "utf8");
+  // Sem `minmax(0, 1fr)` a coluna cresce até o texto mais longo e empurra
+  // cartões e botões para fora da tela no iPhone SE.
+  assert.match(css, /\.screen \{[^}]*grid-template-columns: minmax\(0, 1fr\)/u);
+  assert.match(css, /\.actionGrid \{[^}]*repeat\(2, minmax\(0, 1fr\)\)/u);
+  // Abaixo de 16px o Safari amplia a página ao focar o campo e não volta.
+  assert.match(css, /\.app input, \.app select, \.app textarea \{ font-size: 16px; \}/u);
+  // Hover preso depois do toque: todo `:hover` fica atrás do ponteiro fino.
+  const outside = css.replace(/\/\*[\s\S]*?\*\//gu, "")
+    .replace(/@media \(hover: hover\) and \(pointer: fine\) \{[\s\S]*?\n\}/u, "");
+  assert.doesNotMatch(outside, /:hover/u, "`:hover` fora do bloco de ponteiro fino gruda no toque");
+  assert.match(css, /-webkit-tap-highlight-color: transparent/u);
+  // Com a barra de status translúcida do app instalado, quem recua o topo é o cabeçalho fixo.
+  assert.match(css, /\.header \{[^}]*padding: calc\(10px \+ env\(safe-area-inset-top\)\)/u);
+  assert.match(css, /\.actionBar \{[^}]*env\(safe-area-inset-bottom\)/u);
+  const page = await readFile(new URL("../app/campo/page.tsx", import.meta.url), "utf8");
+  const pageCode = page.replace(/\/\/.*$/gmu, "").replace(/\/\*[\s\S]*?\*\//gu, "");
+  assert.doesNotMatch(pageCode, /maximumScale|userScalable/u, "travar o zoom não é a correção");
+});
