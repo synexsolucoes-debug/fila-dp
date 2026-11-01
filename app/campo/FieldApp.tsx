@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  AlertTriangle, ArrowLeft, Camera, Check, CloudOff, HardHat, LogOut, PackageCheck, RefreshCw,
-  ScanLine, Search, Trash2, Undo2, UploadCloud, UserRound, Warehouse,
+  AlertTriangle, ArrowLeft, Boxes, CalendarClock, Camera, Check, CloudOff, HardHat, LogOut, PackageCheck, RefreshCw,
+  Search, Share, Sparkles, Trash2, Undo2, UploadCloud, Warehouse, X,
 } from "lucide-react";
 import {
   damageRouting, epiDamageDecisionLabels, epiDamageDecisions, epiDamageReasonLabels, epiDamageReasons,
@@ -13,11 +13,11 @@ import {
 // Os normalizadores vêm do painel de propósito: as duas telas leem as mesmas
 // rotas, e uma segunda cópia do mapeamento divergiria na primeira mudança de
 // coluna — com a diferença aparecendo só no celular de quem está em campo.
-import {
-  normalizeDossier, normalizeEmployeeOption, normalizeProduct, type Row,
-} from "@/app/painel/features/epi/epi.api";
+import { normalizeDossier, type Row } from "@/app/painel/features/epi/epi.api";
 import type { EmployeeEpiDossier, EmployeeOption, EpiDelivery, EpiProduct } from "@/app/painel/features/epi/epi.types";
-import { CodeScanner } from "./CodeScanner";
+import { availableAt, Chosen, EmployeePicker, ProductPicker, Stepper } from "./FieldPickers";
+import { CareFlow, DueFlow, StockFlow } from "./SesmtFlows";
+import { dueDeliveryReason, type DueEntry } from "./sesmt.logic";
 import { SignaturePad } from "./SignaturePad";
 import {
   clearShellCache, dateLabel, discardOperation, flushQueue, listQueue, requestJson, submitOperation, today,
@@ -46,11 +46,32 @@ import styles from "./field.module.css";
  *    servidor usa, de modo que a pessoa veja "abre demanda para o DP" enquanto
  *    ainda pode mudar de ideia.
  */
-type Screen = "home" | "delivery" | "return" | "damage" | "lookup" | "queue";
+type Screen = "home" | "delivery" | "return" | "damage" | "lookup" | "queue" | "due" | "stock" | "care";
 
 type StockLocation = { id: string; name: string; code: string };
 type CompanyOption = { id: string; name: string; taxId: string; status: string };
-type Permissions = { deliver: boolean; receiveReturn: boolean; damage: boolean; view: boolean };
+type Permissions = {
+  deliver: boolean; receiveReturn: boolean; damage: boolean; view: boolean;
+  dispose: boolean; stockAdjust: boolean;
+};
+const noPermissions: Permissions = { deliver: false, receiveReturn: false, damage: false, view: false, dispose: false, stockAdjust: false };
+
+/** Contadores do resumo do módulo que a tela inicial mostra nos cartões do SESMT. */
+type Summary = { caExpired: number; caExpiring: number; pendingSanitizing: number; awaitingDisposal: number; pendingSignature: number };
+const emptySummary: Summary = { caExpired: 0, caExpiring: 0, pendingSanitizing: 0, awaitingDisposal: 0, pendingSignature: 0 };
+
+/**
+ * Entrega aberta a partir de uma pendência de vencimento.
+ *
+ * Carrega o colaborador e o EPI já escolhidos e, principalmente, o motivo: a
+ * troca periódica precisa sair no termo como troca, não como primeira entrega.
+ */
+type DeliveryPreset = {
+  employee: EmployeeOption;
+  productId: string;
+  productName: string;
+  reason: "first_delivery" | "expiry_replacement" | "periodic_exchange";
+};
 
 const screenTitles: Record<Screen, string> = {
   home: "Vinculato Campo",
@@ -59,6 +80,9 @@ const screenTitles: Record<Screen, string> = {
   damage: "Registrar dano",
   lookup: "Consultar colaborador",
   queue: "Pendências de envio",
+  due: "Vencimentos e trocas",
+  stock: "Estoque",
+  care: "Higienização e descarte",
 };
 
 export function FieldApp({ user, signOutPath }: {
@@ -70,7 +94,9 @@ export function FieldApp({ user, signOutPath }: {
   const [companyId, setCompanyId] = useState("");
   const [locations, setLocations] = useState<StockLocation[]>([]);
   const [locationId, setLocationId] = useState("");
-  const [permissions, setPermissions] = useState<Permissions>({ deliver: false, receiveReturn: false, damage: false, view: false });
+  const [permissions, setPermissions] = useState<Permissions>(noPermissions);
+  const [summary, setSummary] = useState<Summary>(emptySummary);
+  const [deliveryPreset, setDeliveryPreset] = useState<DeliveryPreset | null>(null);
   const [queue, setQueue] = useState<QueuedOperation[]>([]);
   // `navigator` não existe no servidor, então o valor inicial é otimista e o
   // efeito corrige na montagem. Ler isso dentro do corpo do efeito encadeava
@@ -102,6 +128,7 @@ export function FieldApp({ user, signOutPath }: {
       const allowed: Permissions = {
         view: Boolean(granted.view), deliver: Boolean(granted.deliver),
         receiveReturn: Boolean(granted.receiveReturn), damage: Boolean(granted.damage),
+        dispose: Boolean(granted.dispose), stockAdjust: Boolean(granted.stockAdjust),
       };
       setPermissions(allowed);
 
@@ -114,6 +141,8 @@ export function FieldApp({ user, signOutPath }: {
         entrega: { screen: "delivery", allowed: allowed.deliver },
         devolucao: { screen: "return", allowed: allowed.receiveReturn },
         dano: { screen: "damage", allowed: allowed.damage },
+        vencimentos: { screen: "due", allowed: allowed.view },
+        estoque: { screen: "stock", allowed: allowed.view },
       };
       const destino = pedido ? atalho[pedido] : undefined;
       if (destino?.allowed) setScreen(destino.screen);
@@ -136,6 +165,24 @@ export function FieldApp({ user, signOutPath }: {
     const frame = window.requestAnimationFrame(() => { void load(); void refreshQueue(); });
     return () => window.cancelAnimationFrame(frame);
   }, [load, refreshQueue]);
+
+  // Contadores dos cartões do SESMT no recorte da empresa escolhida. Ficam fora
+  // de `load` porque mudam com a empresa, e recarregar empresas e locais a cada
+  // troca de empresa faria a tela inteira piscar. Falha aqui não é erro de
+  // tela: o cartão só deixa de mostrar o número.
+  const refreshSummary = useCallback(async () => {
+    if (!companyId) return;
+    try {
+      const overview = await requestJson<{ summary?: Partial<Summary> }>(`/api/epi/overview?${new URLSearchParams({ companyId })}`);
+      setSummary({ ...emptySummary, ...overview.summary });
+    } catch { setSummary(emptySummary); }
+  }, [companyId]);
+
+  useEffect(() => {
+    if (screen !== "home") return;
+    const frame = window.requestAnimationFrame(() => void refreshSummary());
+    return () => window.cancelAnimationFrame(frame);
+  }, [refreshSummary, screen]);
 
   // A fila escoa quando a rede volta, sem a pessoa pedir. É o comportamento que
   // justifica a fila existir: ela não deve virar uma caixa que alguém precisa
@@ -174,7 +221,13 @@ export function FieldApp({ user, signOutPath }: {
 
   async function afterWrite(message: string) {
     setToast(message);
+    setDeliveryPreset(null);
     await refreshQueue();
+    setScreen("home");
+  }
+
+  function goHome() {
+    setDeliveryPreset(null);
     setScreen("home");
   }
 
@@ -222,7 +275,7 @@ export function FieldApp({ user, signOutPath }: {
       signOutPath={signOutPath}
       online={online}
       pending={queue.length}
-      onBack={screen === "home" ? undefined : () => setScreen("home")}
+      onBack={screen === "home" ? undefined : goHome}
       onQueue={() => setScreen("queue")}
     />
 
@@ -236,20 +289,43 @@ export function FieldApp({ user, signOutPath }: {
     {screen === "home" && <Home
       company={company} companies={companies} onCompany={setCompanyId}
       location={location} locations={locations} onLocation={setLocationId}
-      permissions={permissions} pending={queue.length}
+      permissions={permissions} pending={queue.length} summary={summary}
       onPick={(next) => setScreen(next)} />}
 
     {screen === "delivery" && company && location && <DeliveryFlow
-      companyId={company.id} locationId={location.id}
-      onDone={afterWrite} onCancel={() => setScreen("home")} />}
+      key={deliveryPreset ? `preset:${deliveryPreset.employee.id}:${deliveryPreset.productId}` : "blank"}
+      companyId={company.id} locationId={location.id} preset={deliveryPreset}
+      onDone={afterWrite} onCancel={goHome} />}
+
+    {screen === "due" && company && <DueFlow
+      key={company.id} companyId={company.id} canDeliver={permissions.deliver}
+      onDeliver={(entry: DueEntry) => {
+        setDeliveryPreset({
+          employee: {
+            id: entry.employeeId, name: entry.employeeName, registrationNumber: entry.registrationNumber,
+            positionName: entry.positionName, departmentName: entry.departmentName,
+          },
+          productId: entry.productId, productName: entry.productName, reason: dueDeliveryReason[entry.status],
+        });
+        setScreen("delivery");
+      }} />}
+
+    {screen === "stock" && location && <StockFlow
+      key={location.id} locationId={location.id} locations={locations} canAdjust={permissions.stockAdjust}
+      onDone={afterWrite} />}
+
+    {screen === "care" && company && <CareFlow
+      key={company.id} companyId={company.id} online={online}
+      canSanitize={permissions.receiveReturn} canDispose={permissions.dispose}
+      onToast={setToast} />}
 
     {screen === "return" && company && location && <ReturnFlow
       companyId={company.id} locationId={location.id}
-      onDone={afterWrite} onCancel={() => setScreen("home")} />}
+      onDone={afterWrite} onCancel={goHome} />}
 
     {screen === "damage" && company && location && <DamageFlow
       companyId={company.id} locationId={location.id}
-      onDone={afterWrite} onCancel={() => setScreen("home")} />}
+      onDone={afterWrite} onCancel={goHome} />}
 
     {screen === "lookup" && company && <LookupFlow companyId={company.id} />}
 
@@ -318,18 +394,43 @@ function Header({ title, user, signOutPath, online, pending, onBack, onQueue }: 
   </header>;
 }
 
-function Home({ company, companies, onCompany, location, locations, onLocation, permissions, pending, onPick }: {
+type HomeAction = { id: Screen; label: string; hint: string; icon: typeof PackageCheck; allowed: boolean; badge?: number };
+
+function Home({ company, companies, onCompany, location, locations, onLocation, permissions, pending, summary, onPick }: {
   company: CompanyOption | null; companies: CompanyOption[]; onCompany: (id: string) => void;
   location: StockLocation | null; locations: StockLocation[]; onLocation: (id: string) => void;
-  permissions: Permissions; pending: number; onPick: (screen: Screen) => void;
+  permissions: Permissions; pending: number; summary: Summary; onPick: (screen: Screen) => void;
 }) {
-  const actions: Array<{ id: Screen; label: string; hint: string; icon: typeof PackageCheck; allowed: boolean }> = [
+  const field: HomeAction[] = [
     { id: "delivery", label: "Entregar EPI", hint: "Sai do estoque e o colaborador assina", icon: PackageCheck, allowed: permissions.deliver },
     { id: "return", label: "Receber devolução", hint: "A condição decide o destino", icon: Undo2, allowed: permissions.receiveReturn },
     { id: "damage", label: "Registrar dano", hint: "Com foto da evidência", icon: Camera, allowed: permissions.damage },
     { id: "lookup", label: "Consultar colaborador", hint: "O que está em poder de quem", icon: Search, allowed: permissions.view },
   ];
+  const caAlerts = summary.caExpired + summary.caExpiring;
+  const careQueue = summary.pendingSanitizing + summary.awaitingDisposal;
+  // Os três cartões do SESMT são de leitura para quem tem `epi.view`; o que
+  // grava dentro deles confere a própria permissão na tela e no servidor.
+  const sesmt: HomeAction[] = [
+    { id: "due", label: "Vencimentos e trocas", icon: CalendarClock, allowed: permissions.view, badge: summary.caExpired,
+      hint: caAlerts ? `${summary.caExpired} CA vencido(s), ${summary.caExpiring} vencendo` : "Quem está sem EPI, vencido ou com troca chegando" },
+    { id: "stock", label: "Estoque", icon: Boxes, allowed: permissions.view,
+      hint: permissions.stockAdjust ? "Saldo do local, entrada e transferência" : "Saldo deste local e dos outros" },
+    { id: "care", label: "Higienização e descarte", icon: Sparkles, allowed: permissions.view, badge: careQueue,
+      hint: careQueue ? `${summary.pendingSanitizing} para higienizar, ${summary.awaitingDisposal} para descartar` : "Nada parado agora" },
+  ];
+  const card = (action: HomeAction) => {
+    const Icon = action.icon;
+    return <button key={action.id} type="button" className={styles.actionCard}
+      onClick={() => onPick(action.id)} disabled={!action.allowed}>
+      <span className={styles.actionIcon}><Icon aria-hidden="true" /></span>
+      {action.badge ? <span className={styles.countBadge} aria-label={`${action.badge} pendente(s)`}>{action.badge}</span> : null}
+      <strong>{action.label}</strong>
+      <small>{action.allowed ? action.hint : "Sem permissão para esta ação"}</small>
+    </button>;
+  };
   return <div className={styles.screen}>
+    <InstallHint />
     <div className={styles.contextPickers}>
       <label>
         <span>Empresa</span>
@@ -349,17 +450,11 @@ function Home({ company, companies, onCompany, location, locations, onLocation, 
       </label>
     </div>
 
-    <nav className={styles.actionGrid} aria-label="Ações de campo">
-      {actions.map((action) => {
-        const Icon = action.icon;
-        return <button key={action.id} type="button" className={styles.actionCard}
-          onClick={() => onPick(action.id)} disabled={!action.allowed}>
-          <span className={styles.actionIcon}><Icon aria-hidden="true" /></span>
-          <strong>{action.label}</strong>
-          <small>{action.allowed ? action.hint : "Sem permissão para esta ação"}</small>
-        </button>;
-      })}
-    </nav>
+    <h2 className={styles.sectionTitle}>Operação</h2>
+    <nav className={styles.actionGrid} aria-label="Ações de campo">{field.map(card)}</nav>
+
+    <h2 className={styles.sectionTitle}>SESMT</h2>
+    <nav className={styles.actionGrid} aria-label="Acompanhamento do SESMT">{sesmt.map(card)}</nav>
 
     {pending > 0 && <button type="button" className={styles.queueCallout} onClick={() => onPick("queue")}>
       <UploadCloud aria-hidden="true" />
@@ -367,140 +462,6 @@ function Home({ company, companies, onCompany, location, locations, onLocation, 
         <small>Feitos sem rede. Vão sozinhos quando a conexão voltar.</small></span>
     </button>}
   </div>;
-}
-
-/* -------------------------------------------------------------------------- */
-/* Busca de colaborador e de EPI, compartilhada pelos fluxos                  */
-/* -------------------------------------------------------------------------- */
-
-function EmployeePicker({ companyId, onPick }: { companyId: string; onPick: (employee: EmployeeOption) => void }) {
-  const [term, setTerm] = useState("");
-  const [results, setResults] = useState<EmployeeOption[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [scanning, setScanning] = useState(false);
-  const [problem, setProblem] = useState("");
-
-  const search = useCallback(async (value: string) => {
-    const query = value.trim();
-    if (!query) { setResults([]); return; }
-    setBusy(true);
-    try {
-      const params = new URLSearchParams({ companyId, status: "active", limit: "25", search: query });
-      const payload = await requestJson<{ employees?: Row[] }>(`/api/employees?${params}`);
-      const list = (payload.employees ?? []).map(normalizeEmployeeOption);
-      setResults(list);
-      setProblem(list.length ? "" : "Nenhum colaborador encontrado com esse nome ou matrícula.");
-      // Leitura de código que acha um só: segue direto, que é o ganho do scanner.
-      if (list.length === 1) onPick(list[0]);
-    } catch (cause) {
-      setProblem(cause instanceof Error ? cause.message : "Erro ao buscar colaborador.");
-    } finally { setBusy(false); }
-  }, [companyId, onPick]);
-
-  return <section className={styles.step}>
-    <h2>Quem vai receber?</h2>
-    <div className={styles.searchRow}>
-      <input value={term} onChange={(event) => setTerm(event.target.value)}
-        onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void search(term); } }}
-        placeholder="Nome ou matrícula" autoComplete="off" enterKeyHint="search" aria-label="Buscar colaborador" />
-      {/* O ícone é a única coisa dentro do botão, e `aria-hidden` o esconde do
-          leitor de tela — sem rótulo o botão não tem nome nenhum. A varredura
-          WCAG apontou isto nas quatro telas de campo. */}
-      <button type="button" className={styles.secondaryButton} onClick={() => void search(term)}
-        disabled={busy} aria-label="Procurar com o nome digitado">
-        <Search aria-hidden="true" />
-      </button>
-      <button type="button" className={styles.secondaryButton} onClick={() => setScanning(true)} aria-label="Ler crachá">
-        <ScanLine aria-hidden="true" />
-      </button>
-    </div>
-    {problem && <p className={styles.hint} role="alert">{problem}</p>}
-    <ul className={styles.pickList}>
-      {results.map((employee) => <li key={employee.id}>
-        <button type="button" onClick={() => onPick(employee)}>
-          <UserRound aria-hidden="true" />
-          <span><strong>{employee.name}</strong><small>{employee.registrationNumber} · {employee.positionName || "Sem cargo"}</small></span>
-        </button>
-      </li>)}
-    </ul>
-    {scanning && <CodeScanner label="Ler crachá do colaborador"
-      onCode={(code) => { setScanning(false); setTerm(code); void search(code); }}
-      onClose={() => setScanning(false)} />}
-  </section>;
-}
-
-/**
- * Saldo do EPI **no local escolhido**.
- *
- * `stockQuantity` é o disponível somado de todos os locais, e a entrega debita
- * um local só. Mostrar o total faria a tela oferecer doze unidades onde há
- * zero: a pessoa entregaria, e a recusa chegaria depois — longe do colaborador
- * que já assinou.
- */
-const availableAt = (product: EpiProduct, locationId: string) =>
-  product.stockLocations.find((place) => place.id === locationId)?.quantity ?? 0;
-
-function ProductPicker({ locationId, onPick }: { locationId: string; onPick: (product: EpiProduct) => void }) {
-  const [term, setTerm] = useState("");
-  const [results, setResults] = useState<EpiProduct[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [scanning, setScanning] = useState(false);
-  const [problem, setProblem] = useState("");
-
-  const search = useCallback(async (value: string) => {
-    const query = value.trim();
-    setBusy(true);
-    try {
-      const params = new URLSearchParams({ limit: "25" });
-      if (query) params.set("search", query);
-      const payload = await requestJson<{ products?: Row[] }>(`/api/epi/products?${params}`);
-      const list = (payload.products ?? []).map(normalizeProduct)
-        .filter((item) => !["discarded", "lost", "inactive"].includes(item.status));
-      setResults(list);
-      setProblem(list.length ? "" : "Nenhum EPI encontrado por nome, código interno ou CA.");
-      if (query && list.length === 1 && availableAt(list[0], locationId) > 0) onPick(list[0]);
-    } catch (cause) {
-      setProblem(cause instanceof Error ? cause.message : "Erro ao buscar EPI.");
-    } finally { setBusy(false); }
-  }, [locationId, onPick]);
-
-  useEffect(() => { const frame = window.requestAnimationFrame(() => void search("")); return () => window.cancelAnimationFrame(frame); }, [search]);
-
-  return <section className={styles.step}>
-    <h2>Qual EPI?</h2>
-    <div className={styles.searchRow}>
-      <input value={term} onChange={(event) => setTerm(event.target.value)}
-        onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void search(term); } }}
-        placeholder="Nome, código interno ou CA" autoComplete="off" enterKeyHint="search" aria-label="Buscar EPI" />
-      <button type="button" className={styles.secondaryButton} onClick={() => void search(term)}
-        disabled={busy} aria-label="Procurar com o código digitado">
-        <Search aria-hidden="true" />
-      </button>
-      <button type="button" className={styles.secondaryButton} onClick={() => setScanning(true)} aria-label="Ler código do EPI">
-        <ScanLine aria-hidden="true" />
-      </button>
-    </div>
-    {problem && <p className={styles.hint} role="alert">{problem}</p>}
-    <ul className={styles.pickList}>
-      {results.map((product) => {
-        const here = availableAt(product, locationId);
-        return <li key={product.id}>
-          <button type="button" onClick={() => onPick(product)} disabled={here <= 0}>
-            <HardHat aria-hidden="true" />
-            <span>
-              <strong>{product.name}</strong>
-              <small>CA {product.caNumber || "—"} · {product.size || "—"} · {here > 0
-                ? `${here} neste local`
-                : `sem saldo aqui${product.stockQuantity > 0 ? ` (${product.stockQuantity} em outros locais)` : ""}`}</small>
-            </span>
-          </button>
-        </li>;
-      })}
-    </ul>
-    {scanning && <CodeScanner label="Ler código do EPI"
-      onCode={(code) => { setScanning(false); setTerm(code); void search(code); }}
-      onClose={() => setScanning(false)} />}
-  </section>;
 }
 
 /**
@@ -521,15 +482,22 @@ const outcome = (
 /* Entrega                                                                    */
 /* -------------------------------------------------------------------------- */
 
-function DeliveryFlow({ companyId, locationId, onDone, onCancel }: {
-  companyId: string; locationId: string;
+const deliveryReasonLabels: Record<DeliveryPreset["reason"], string> = {
+  first_delivery: "Primeira entrega",
+  periodic_exchange: "Troca periódica",
+  expiry_replacement: "Substituição por vencimento",
+};
+
+function DeliveryFlow({ companyId, locationId, preset, onDone, onCancel }: {
+  companyId: string; locationId: string; preset: DeliveryPreset | null;
   onDone: (message: string) => Promise<void>; onCancel: () => void;
 }) {
-  const [employee, setEmployee] = useState<EmployeeOption | null>(null);
+  const [employee, setEmployee] = useState<EmployeeOption | null>(preset?.employee ?? null);
   const [product, setProduct] = useState<EpiProduct | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [signature, setSignature] = useState<Blob | null>(null);
-  const [signatureName, setSignatureName] = useState("");
+  const [signatureName, setSignatureName] = useState(preset?.employee.name ?? "");
+  const reason = preset?.reason ?? "first_delivery";
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState("");
@@ -537,11 +505,11 @@ function DeliveryFlow({ companyId, locationId, onDone, onCancel }: {
   if (!employee) return <div className={styles.screen}><EmployeePicker companyId={companyId} onPick={(picked) => { setEmployee(picked); setSignatureName(picked.name); }} /></div>;
   if (!product) return <div className={styles.screen}>
     <Chosen label="Colaborador" value={employee.name} onClear={() => setEmployee(null)} />
-    <ProductPicker locationId={locationId} onPick={setProduct} />
+    <ProductPicker locationId={locationId} onPick={setProduct}
+      initialTerm={preset?.productName ?? ""} preferId={preset?.productId ?? ""} />
   </div>;
 
   const here = availableAt(product, locationId);
-  const maximum = Math.max(here, 1);
 
   async function submit() {
     if (!employee || !product) return;
@@ -554,7 +522,7 @@ function DeliveryFlow({ companyId, locationId, onDone, onCancel }: {
           companyId, productId: product.id, employeeId: employee.id, stockLocationId: locationId,
           deliveredOn: today(), quantity, caNumber: product.caNumber, size: product.size,
           positionName: employee.positionName, departmentName: employee.departmentName,
-          deliveryReason: "first_delivery",
+          deliveryReason: reason,
           // A assinatura colhida na tela é o que torna o termo assinado; sem
           // ela o registro nasce pendente, e o relatório de termos sem
           // assinatura é justamente o que cobra isso depois.
@@ -579,14 +547,11 @@ function DeliveryFlow({ companyId, locationId, onDone, onCancel }: {
   return <div className={styles.screen}>
     <Chosen label="Colaborador" value={employee.name} onClear={() => setEmployee(null)} />
     <Chosen label="EPI" value={`${product.name} · CA ${product.caNumber || "—"}`} onClear={() => setProduct(null)} />
+    {preset && <p className={styles.hint}>Motivo no termo: <strong>{deliveryReasonLabels[reason]}</strong> — veio da lista de vencimentos.</p>}
 
     <section className={styles.step}>
       <h2>Quantidade</h2>
-      <div className={styles.stepper}>
-        <button type="button" onClick={() => setQuantity((value) => Math.max(1, value - 1))} aria-label="Diminuir">−</button>
-        <output aria-live="polite">{quantity}</output>
-        <button type="button" onClick={() => setQuantity((value) => Math.min(maximum, value + 1))} aria-label="Aumentar">+</button>
-      </div>
+      <Stepper value={quantity} onChange={setQuantity} max={here} />
       <p className={styles.hint}>{here} disponível(is) neste local.</p>
     </section>
 
@@ -706,11 +671,7 @@ function ReturnFlow({ companyId, locationId, onDone, onCancel }: {
 
     <section className={styles.step}>
       <h2>Quantidade devolvida</h2>
-      <div className={styles.stepper}>
-        <button type="button" onClick={() => setQuantity((value) => Math.max(1, value - 1))} aria-label="Diminuir">−</button>
-        <output aria-live="polite">{quantity}</output>
-        <button type="button" onClick={() => setQuantity((value) => Math.min(delivery.outstanding, value + 1))} aria-label="Aumentar">+</button>
-      </div>
+      <Stepper value={quantity} onChange={setQuantity} max={delivery.outstanding} />
       <p className={styles.hint}>{delivery.outstanding} em poder do colaborador.</p>
     </section>
 
@@ -1015,9 +976,47 @@ function QueuePanel({ queue, online, onFlush, onDiscard }: {
   </div>;
 }
 
-function Chosen({ label, value, onClear }: { label: string; value: string; onClear: () => void }) {
-  return <div className={styles.chosen}>
-    <span><small>{label}</small><strong>{value}</strong></span>
-    <button type="button" className={styles.ghostButton} onClick={onClear}>Trocar</button>
-  </div>;
+/**
+ * Como instalar no iPhone.
+ *
+ * O Safari não tem o aviso de instalação que o Android mostra sozinho: quem não
+ * souber do "Adicionar à Tela de Início" usa o aplicativo pela aba do navegador
+ * para sempre — sem tela cheia, e com a fila sem rede dependendo de a aba não
+ * ser descartada. O aviso aparece só no iPhone/iPad, só fora do modo
+ * instalado, e some de vez quando a pessoa fecha.
+ *
+ * O teste roda no efeito, não na renderização: `navigator` não existe no
+ * servidor, e decidir lá desenharia o aviso para todo mundo por um instante.
+ */
+const INSTALL_HINT_KEY = "vinculato-campo:install-hint-dismissed";
+
+function InstallHint() {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      const ios = /iphone|ipad|ipod/i.test(navigator.userAgent)
+        // iPadOS se apresenta como Mac; o toque é o que denuncia.
+        || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+      const standalone = window.matchMedia("(display-mode: standalone)").matches
+        || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+      let dismissed = false;
+      try { dismissed = window.localStorage.getItem(INSTALL_HINT_KEY) === "1"; } catch { /* armazenamento bloqueado */ }
+      setVisible(ios && !standalone && !dismissed);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  if (!visible) return null;
+  return <aside className={styles.installHint} aria-label="Instalar no iPhone">
+    <Share aria-hidden="true" />
+    <p>
+      <strong>Instale no iPhone, sem App Store</strong>
+      Toque em <b>Compartilhar</b> na barra do Safari e depois em <b>Adicionar à Tela de Início</b>. O app abre em tela cheia e funciona sem rede.
+    </p>
+    <button type="button" className={styles.iconButton} aria-label="Fechar aviso de instalação" onClick={() => {
+      setVisible(false);
+      try { window.localStorage.setItem(INSTALL_HINT_KEY, "1"); } catch { /* segue sem lembrar */ }
+    }}><X aria-hidden="true" /></button>
+  </aside>;
 }
