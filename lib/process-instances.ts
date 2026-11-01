@@ -34,7 +34,7 @@
  * automaticamente (§13): converter histórico sem regra comprovada inventaria
  * vínculo, e vínculo inventado em DP vira erro trabalhista.
  */
-import type { getD1 } from "../db";
+import type { getD1 } from "../db/index.ts";
 
 import { ApiError } from "./api-errors.ts";
 import {

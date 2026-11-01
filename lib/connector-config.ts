@@ -1,4 +1,4 @@
-import type { getD1 } from "../db";
+import type { getD1 } from "../db/index.ts";
 import { agentConfigFields, productAgentByChannel } from "./agent-catalog.ts";
 import { ApiError } from "./api-errors.ts";
 import { validateConnectorEndpoint } from "./integrations.ts";

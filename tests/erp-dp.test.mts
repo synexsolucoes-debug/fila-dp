@@ -26,8 +26,6 @@ const drawer = await read("app/painel/features/registrations/RegistrationsView.t
 const correction = await read("app/painel/features/erp-dp/ErpCorrectionPanel.tsx");
 const erpService = await read("lib/erp-dp-service.ts");
 const returnAction = await read("app/api/erp-dp/actions/return-to-work/route.ts");
-const shellCss = await read("app/dashboard-modern.css");
-const accessCss = await read("app/access.css");
 const routes = {
   headcount: await read("app/api/erp-dp/headcount/route.ts"),
   esocial: await read("app/api/erp-dp/esocial/route.ts"),

@@ -127,7 +127,7 @@ test("legacy board process snapshots are preserved before the operations schema"
 test("authentication sessions are opaque, persisted and revocable", async () => {
   const [schema, auth, migration] = await Promise.all([
     readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
-    readFile(new URL("../app/chatgpt-auth.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/auth/session.ts", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/postgres/0003_revocable_sessions_and_solides_boundary.sql", import.meta.url), "utf8"),
   ]);
   assert.match(schema, /fdp_auth_sessions/);
@@ -140,7 +140,7 @@ test("authentication sessions are opaque, persisted and revocable", async () => 
 test("users can inspect and revoke only their own persisted sessions", async () => {
   const [schema, auth, login, sessions, sessionById, reset, migration, dashboard] = await Promise.all([
     readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
-    readFile(new URL("../app/chatgpt-auth.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/auth/session.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/auth/login/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/auth/sessions/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/auth/sessions/[id]/route.ts", import.meta.url), "utf8"),
@@ -203,7 +203,7 @@ test("tenant relationships are enforced by composite database constraints", asyn
 
 test("login recusa bootstrap e mantém defesas de redirect", async () => {
   const [auth, login, logout, limiter, migration] = await Promise.all([
-    readFile(new URL("../app/chatgpt-auth.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/auth/session.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/auth/login/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/auth/logout/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/auth-rate-limit.ts", import.meta.url), "utf8"),

@@ -1,5 +1,5 @@
 import { ApiError } from "./api-errors.ts";
-import type { WorkspaceRole } from "./fila-dp-types";
+import type { WorkspaceRole } from "./fila-dp-types.ts";
 
 export const capabilities = [
   "workspace.read",

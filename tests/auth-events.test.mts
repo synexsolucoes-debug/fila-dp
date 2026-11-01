@@ -82,7 +82,7 @@ test("o login registra sucesso e as três recusas, distinguindo-as", () => {
 test("logout lê a identidade antes de encerrar a sessão", async () => {
   const logout = await readFile(new URL("../app/api/auth/logout/route.ts", import.meta.url), "utf8");
   // Depois de `clearAuthSession` não há mais de quem registrar o evento.
-  assert.ok(logout.indexOf("getChatGPTUser") < logout.indexOf("await clearAuthSession()"),
+  assert.ok(logout.indexOf("getSessionUser") < logout.indexOf("await clearAuthSession()"),
     "a identidade precisa ser lida antes do encerramento");
   assert.match(logout, /action: "logout", outcome: "success"/u);
 });

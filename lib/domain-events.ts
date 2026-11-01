@@ -310,7 +310,7 @@ export function deriveIdempotencyKey(parts: {
 }) {
   const external = text(parts.externalId, 300);
   const discriminator = external || [text(parts.entityId, 120), text(parts.occurredAt, 40)].join("|");
-  const material = [text(parts.workspaceId, 100), text(parts.name, 120), text(parts.origin, 40), discriminator].join(" ");
+  const material = [text(parts.workspaceId, 100), text(parts.name, 120), text(parts.origin, 40), discriminator].join("\u0000");
   return createHash("sha256").update(material).digest("hex").slice(0, 64);
 }
 

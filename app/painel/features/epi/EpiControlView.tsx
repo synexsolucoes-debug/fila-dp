@@ -352,7 +352,8 @@ export function EpiControlView({ role }: { role: WorkspaceRole }) {
     if (companyId) params.set("companyId", companyId);
     if (filters.from) params.set("from", filters.from);
     if (filters.to) params.set("to", filters.to);
-    window.location.href = `/api/epi/reports?${params}`;
+    // Download do CSV pela própria API: não é navegação entre telas.
+    window.location.assign(new URL(`/api/epi/reports?${params}`, window.location.origin).href);
   }
 
   if (role === "guest") {

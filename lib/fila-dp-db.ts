@@ -1,17 +1,18 @@
-import { isoTimestamp } from "./iso-timestamp";
-import { archiveFinishedCards, normalizeCompletedArchiveDays } from "./card-auto-archive";
-import { getD1, getScopedD1 } from "../db";
-import type { ChatGPTUser } from "../app/chatgpt-auth";
-import type { WorkspaceRole, WorkspaceSnapshot } from "./fila-dp-types";
-import { businessMinutesBetween, workingDayMinutes } from "./fila-dp-sla";
-import { getTenantContext, setTenantContext } from "./tenant-context";
-import { hasCapability } from "./authorization";
-import { deniedWriteCapabilities, mergeDepartmentAndMemberGrants, resolveModules, type ModuleCategory, type ModuleDefinition } from "./modules";
-import { ApiError } from "./fila-dp-api";
-import { safeIntegrationError } from "./integrations";
-import { listAccessibleWorkspaces, noAccessibleWorkspaceError, resolveActiveWorkspace } from "./workspace-access";
-import { parseBpmnGraph, stepLabel, type BpmnGraph } from "./bpmn-graph";
-import { stepChecklist, stepConfigOf } from "./process-instances";
+import { isoTimestamp } from "./iso-timestamp.ts";
+import { log } from "./observability.ts";
+import { archiveFinishedCards, normalizeCompletedArchiveDays } from "./card-auto-archive.ts";
+import { getD1, getScopedD1 } from "../db/index.ts";
+import type { SessionUser } from "./auth/session.ts";
+import type { WorkspaceRole, WorkspaceSnapshot } from "./fila-dp-types.ts";
+import { businessMinutesBetween, workingDayMinutes } from "./fila-dp-sla.ts";
+import { getTenantContext, setTenantContext } from "./tenant-context.ts";
+import { hasCapability } from "./authorization.ts";
+import { deniedWriteCapabilities, mergeDepartmentAndMemberGrants, resolveModules, type ModuleCategory, type ModuleDefinition } from "./modules.ts";
+import { ApiError } from "./fila-dp-api.ts";
+import { safeIntegrationError } from "./integrations.ts";
+import { listAccessibleWorkspaces, noAccessibleWorkspaceError, resolveActiveWorkspace } from "./workspace-access.ts";
+import { parseBpmnGraph, stepLabel, type BpmnGraph } from "./bpmn-graph.ts";
+import { stepChecklist, stepConfigOf } from "./process-instances.ts";
 
 
 
@@ -193,7 +194,7 @@ export async function provisionWorkspaceDefaults(
   ]);
 }
 
-export async function getWorkspaceContext(user: ChatGPTUser) {
+export async function getWorkspaceContext(user: SessionUser) {
   const d1 = getD1();
   const normalizedEmail = user.email.trim().toLowerCase();
 
@@ -383,7 +384,7 @@ export async function loadMemberModuleGrants(d1: ReturnType<typeof getD1>, works
   };
 }
 
-export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<WorkspaceSnapshot> {
+export async function getWorkspaceSnapshot(user: SessionUser): Promise<WorkspaceSnapshot> {
   const { d1, workspace, board, user: userRow, accessible, switchedFrom } = await getWorkspaceContext(user);
   const companyAccess = await getCompanyAccessScope(d1, workspace.id, userRow.id, workspace.role);
   const canManageMembers = hasCapability(workspace, "members.manage");
@@ -397,7 +398,7 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
       .bind(workspace.id).first<{ completed_archive_days: number }>();
     await archiveFinishedCards(d1, workspace.id, normalizeCompletedArchiveDays(archiveSetting?.completed_archive_days));
   } catch (cause) {
-    console.error("[card-auto-archive]", cause instanceof Error ? cause.message : cause);
+    log("error", "card.auto_archive_failed", { workspaceId: workspace.id }, { reason: cause instanceof Error ? cause.message : String(cause) });
   }
   const resolvedModules = await getWorkspaceModules(d1, workspace.id, workspace.role,
     String((workspace as Record<string, unknown>).status ?? "active"),

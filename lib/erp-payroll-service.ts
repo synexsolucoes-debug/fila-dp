@@ -1,6 +1,6 @@
 import { ApiError } from "./api-errors.ts";
-import { requireCompanyAccess } from "./fila-dp-db";
-import type { WorkspaceRole } from "./fila-dp-types";
+import { requireCompanyAccess } from "./fila-dp-db.ts";
+import type { WorkspaceRole } from "./fila-dp-types.ts";
 import { remunerationFromRow, type Remuneration } from "./remuneration.ts";
 
 /**

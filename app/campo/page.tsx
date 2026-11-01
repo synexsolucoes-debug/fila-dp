@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { chatGPTSignOutPath, requireChatGPTUser } from "../chatgpt-auth";
+import { signOutPath, requireSessionUser } from "@/lib/auth/session";
 import { FieldApp } from "./FieldApp";
 import { ServiceWorker } from "./ServiceWorker";
 
@@ -30,13 +30,13 @@ export const viewport: Viewport = {
 };
 
 export default async function FieldPage() {
-  const user = await requireChatGPTUser("/campo");
+  const user = await requireSessionUser("/campo");
 
   return <>
     <ServiceWorker />
     <FieldApp
       user={{ displayName: user.displayName, email: user.email }}
-      signOutPath={chatGPTSignOutPath("/")}
+      signOutPath={signOutPath("/")}
     />
   </>;
 }

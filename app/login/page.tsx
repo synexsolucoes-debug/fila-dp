@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { getChatGPTUser } from "../chatgpt-auth";
+import { getSessionUser } from "@/lib/auth/session";
 import { LoginForm } from "./LoginForm";
 import { VinculatoLogo } from "@/app/components/VinculatoLogo";
 
@@ -17,7 +17,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   // "Entrar em outra conta" chega aqui com a sessão já encerrada. Mesmo assim a
   // tela nunca deve oferecer "continuar": a intenção era trocar de identidade.
   const switching = query.trocar === "1";
-  const user = switching ? null : await getChatGPTUser();
+  const user = switching ? null : await getSessionUser();
 
   /* A tela de entrada mostra só a marca e o acesso. Sem painel de vitrine e
      sem "voltar para o site": quem chega aqui veio para entrar. */

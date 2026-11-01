@@ -2550,7 +2550,8 @@ export function WorkspaceApp({
       const payload = await response.json() as { signedOut?: boolean; error?: string };
       if (!response.ok) throw new Error(payload.error || "Não foi possível revogar a sessão.");
       if (payload.signedOut) {
-        window.location.assign("/login");
+        // Recarga completa de propósito: a sessão acabou e nenhum estado do painel pode sobreviver.
+        window.location.assign(new URL("/login", window.location.origin).href);
         return;
       }
       await loadAuthSessions();

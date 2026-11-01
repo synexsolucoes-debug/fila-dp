@@ -1,5 +1,5 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import type { getD1 } from "../db";
+import type { getD1 } from "../db/index.ts";
 import { ApiError } from "./api-errors.ts";
 import { log, requestIdFrom } from "./observability.ts";
 import { cleanText } from "./registrations.ts";

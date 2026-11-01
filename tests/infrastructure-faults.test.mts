@@ -267,17 +267,20 @@ test("o cofre recusado nomeia a variável que falta em vez de só falhar", async
   }
 });
 
-test("todo arquivo de teste está na lista que o npm test executa", async () => {
-  // O script enumera os arquivos um a um. Um teste novo fica invisível até ser
-  // registrado — passa a suíte inteira sem nunca ter rodado. Já aconteceu com
-  // tests/contractor-registry.test.mts nesta sessão.
+test("o npm test executa todo arquivo de teste da pasta", async () => {
+  // O script já enumerou os arquivos um a um, e um teste novo ficava invisível
+  // até alguém registrá-lo — passava a suíte sem nunca ter rodado (aconteceu
+  // com tests/contractor-registry.test.mts). Agora o script usa padrão de
+  // arquivo; esta prova garante que ninguém volte a uma lista que esquece.
   const files = (await readdir(fileURLToPath(new URL("../tests", import.meta.url))))
-    .filter((file) => /\.test\.(mts|mjs)$/u.test(file))
-    .sort();
+    .filter((file) => /\.test\.(mts|mjs)$/u.test(file));
+  assert.ok(files.length > 0);
   const pkg = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8")) as {
     scripts: Record<string, string>;
   };
   const script = pkg.scripts.test ?? "";
-  const missing = files.filter((file) => !script.includes(`tests/${file}`));
-  assert.deepEqual(missing, [], `adicione ao script "test" do package.json: ${missing.join(", ")}`);
+  assert.match(script, /"tests\/\*\.test\.mts"/u, "o script test precisa rodar tests/*.test.mts");
+  assert.match(script, /"tests\/\*\.test\.mjs"/u, "o script test precisa rodar tests/*.test.mjs");
+  const extensions = new Set(files.map((file) => file.split(".").pop()));
+  assert.deepEqual([...extensions].sort(), ["mjs", "mts"], "extensão de teste nova precisa entrar no padrão do script");
 });
