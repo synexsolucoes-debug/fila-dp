@@ -34,6 +34,38 @@ export const productPositioning = {
   ].join(" "),
 };
 
+/**
+ * Os dois públicos que a home atende, cada um com a sua dor e o seu caminho.
+ *
+ * Tudo aqui descreve o que já existe no produto: escopo por empresa, carteira
+ * de competências, movimentações conferidas, pagamentos PJ e de psicólogos e
+ * o portal do gestor. Nada de promessa nova escondida em texto de venda.
+ */
+export const audienceSegments = [
+  {
+    id: "escritorios",
+    label: "Escritório de contabilidade",
+    title: "Muitas empresas clientes, um mês só para fechar.",
+    text: "Cada cliente tem sua competência, seus prazos e suas pendências. O Vinculato mostra a carteira inteira de uma vez e aponta qual empresa está travando o fechamento.",
+    points: [
+      "Competência por empresa cliente, com o que falta para fechar cada uma",
+      "Acesso da equipe restrito às empresas que cada pessoa atende",
+      "Pedidos que chegam por e-mail ou mensagem viram demanda com prazo e responsável",
+    ],
+  },
+  {
+    id: "empresas",
+    label: "DP da sua empresa",
+    title: "Pedidos dos gestores com dono, prazo e histórico.",
+    text: "Férias, desligamentos e alterações deixam de se perder em conversa. Cada movimentação é aprovada antes de ir para a folha e conferida quando volta do ERP.",
+    points: [
+      "Movimentações para a folha aprovadas e conferidas com o retorno do ERP",
+      "Pagamentos de prestadores PJ e de psicólogos apurados na competência",
+      "Gestores consultam a própria equipe sem abrir o painel do DP",
+    ],
+  },
+] as const;
+
 /** O que o produto explicitamente não é — exibido no site, não escondido. */
 export const productBoundaries = [
   {
