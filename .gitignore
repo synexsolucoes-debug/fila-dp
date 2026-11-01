@@ -56,3 +56,6 @@ next-env.d.ts
 # App de mesa (Electron)
 /desktop/node_modules/
 /desktop/dist/
+
+# Gerado automaticamente pelo `next dev`
+/AGENTS.md
