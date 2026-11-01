@@ -11,7 +11,7 @@ import type { EpiProduct } from "@/app/painel/features/epi/epi.types";
 import { availableAt, Chosen, ProductPicker, searchProducts, Stepper } from "./FieldPickers";
 import { dateLabel, requestJson, submitOperation, today } from "./field.api";
 import {
-  actionableStatuses, awaitingDisposals, countByStatus, disposalStockEffect, dueDateLabel, dueEntries, dueStatusLabels,
+  awaitingDisposals, countByStatus, disposalStockEffect, dueDateLabel, dueEntries, dueStatusLabels,
   matchesTerm, pendingSanitization, type ActionableStatus, type DisposalItem, type DueEntry, type SanitizationItem,
 } from "./sesmt.logic";
 import styles from "./field.module.css";
@@ -44,6 +44,18 @@ type DashboardPayload = {
   summary?: { activeEmployees?: number; unconfiguredEmployees?: number; compliantEmployees?: number };
 };
 
+type DueFilter = "all" | "missing" | "expired" | "exchange";
+
+/** Troca atrasada e troca próxima viram um quadro só: as duas pedem a mesma ação, que é trocar. */
+const dueFilters: Array<{ id: Exclude<DueFilter, "all">; label: string; tone: "danger" | "warning"; statuses: ActionableStatus[] }> = [
+  { id: "missing", label: "Sem EPI", tone: "danger", statuses: ["missing"] },
+  { id: "expired", label: "Vencidos", tone: "danger", statuses: ["expired"] },
+  { id: "exchange", label: "Trocas", tone: "warning", statuses: ["overdue", "due_soon"] },
+];
+
+const dueFilterMatches = (filter: DueFilter, status: ActionableStatus) =>
+  filter === "all" || (dueFilters.find((item) => item.id === filter)?.statuses.includes(status) ?? false);
+
 /** Quantos cartões desenhar de uma vez. Uma empresa de 2.000 pessoas não cabe numa rolagem de celular. */
 const PAGE = 60;
 
@@ -53,7 +65,7 @@ export function DueFlow({ companyId, canDeliver, onDeliver }: {
   const [data, setData] = useState<DashboardPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [problem, setProblem] = useState("");
-  const [filter, setFilter] = useState<ActionableStatus | "all">("all");
+  const [filter, setFilter] = useState<DueFilter>("all");
   const [term, setTerm] = useState("");
   const [shown, setShown] = useState(PAGE);
 
@@ -72,7 +84,7 @@ export function DueFlow({ companyId, canDeliver, onDeliver }: {
   const entries = useMemo(() => dueEntries(data?.employees ?? []), [data]);
   const counts = useMemo(() => countByStatus(entries), [entries]);
   const visible = useMemo(
-    () => entries.filter((entry) => (filter === "all" || entry.status === filter) && matchesTerm(entry, term)),
+    () => entries.filter((entry) => dueFilterMatches(filter, entry.status) && matchesTerm(entry, term)),
     [entries, filter, term],
   );
   const now = today();
@@ -82,10 +94,16 @@ export function DueFlow({ companyId, canDeliver, onDeliver }: {
   return <div className={styles.screen}>
     {problem && <p className={styles.errorBanner} role="alert"><AlertTriangle aria-hidden="true" />{problem}</p>}
 
-    <div className={styles.summaryRow}>
-      <article data-tone="danger"><small>Sem EPI</small><strong>{counts.missing}</strong></article>
-      <article data-tone="danger"><small>Vencidos</small><strong>{counts.expired}</strong></article>
-      <article data-tone="warning"><small>Trocas</small><strong>{counts.overdue + counts.due_soon}</strong></article>
+    {/* Os quadros são o filtro. Uma fileira de botões repetindo os mesmos
+        números ocupava três linhas no iPhone SE antes de aparecer a primeira
+        pessoa. Tocar de novo no quadro escolhido volta para "todas". */}
+    <div className={styles.summaryRow} role="group" aria-label="Filtrar pendências">
+      {dueFilters.map((item) => <button key={item.id} type="button" className={styles.summaryButton}
+        data-tone={item.tone} aria-pressed={filter === item.id}
+        onClick={() => { setFilter((current) => current === item.id ? "all" : item.id); setShown(PAGE); }}>
+        <small>{item.label}</small>
+        <strong>{item.statuses.reduce((sum, status) => sum + counts[status], 0)}</strong>
+      </button>)}
     </div>
 
     {(data?.shortages?.length ?? 0) > 0 && <div className={styles.consequence} data-tone="warning">
@@ -97,13 +115,10 @@ export function DueFlow({ companyId, canDeliver, onDeliver }: {
       </ul>
     </div>}
 
-    <div className={styles.chipRow} role="radiogroup" aria-label="Filtrar pendências">
-      <button type="button" role="radio" aria-checked={filter === "all"} className={filter === "all" ? styles.chipActive : styles.chip}
-        onClick={() => { setFilter("all"); setShown(PAGE); }}>Todas · {entries.length}</button>
-      {actionableStatuses.map((status) => <button key={status} type="button" role="radio" aria-checked={filter === status}
-        className={filter === status ? styles.chipActive : styles.chip}
-        onClick={() => { setFilter(status); setShown(PAGE); }}>{dueStatusLabels[status]} · {counts[status]}</button>)}
-    </div>
+    {filter !== "all" && <div className={styles.rowBetween}>
+      <p className={styles.hint}>Mostrando só <strong>{dueFilters.find((item) => item.id === filter)?.label.toLowerCase()}</strong> · {visible.length}</p>
+      <button type="button" className={styles.ghostButton} onClick={() => { setFilter("all"); setShown(PAGE); }}>Ver todas</button>
+    </div>}
 
     <div className={styles.searchRow}>
       <input value={term} onChange={(event) => { setTerm(event.target.value); setShown(PAGE); }}
@@ -128,14 +143,18 @@ export function DueFlow({ companyId, canDeliver, onDeliver }: {
         <button type="button" onClick={() => onDeliver(entry)} disabled={!canDeliver}
           aria-label={`${entry.employeeName}, ${entry.productName}: ${dueStatusLabels[entry.status]}. ${canDeliver ? "Abrir entrega" : ""}`}>
           <CalendarClock aria-hidden="true" />
+          {/* A situação fica embaixo do nome, e não ao lado: ao lado ela
+              disputava a largura e o nome quebrava em quatro linhas no
+              iPhone SE. */}
           <span>
             <strong>{entry.employeeName}</strong>
             <small>{entry.productName}{entry.caNumber ? ` · CA ${entry.caNumber}` : ""}</small>
             <small>{entry.registrationNumber}{entry.positionName ? ` · ${entry.positionName}` : ""}</small>
-          </span>
-          <span className={styles.statusPill} data-tone={statusTone[entry.status]}>
-            <b>{dueStatusLabels[entry.status]}</b>
-            <small>{dueDateLabel(entry, now)}</small>
+            {/* Uma etiqueta só, com a frase inteira: "Troca atrasada" ao lado
+                de "Troca atrasada há 7 dias" dizia a mesma coisa duas vezes. */}
+            <span className={styles.statusPill} data-tone={statusTone[entry.status]}>
+              <b>{entry.status === "missing" ? dueStatusLabels.missing : dueDateLabel(entry, now)}</b>
+            </span>
           </span>
         </button>
       </li>)}
@@ -198,9 +217,9 @@ function StockList({ locationId, locationName, canAdjust, onMode }: {
 
   return <div className={styles.screen}>
     <div className={styles.summaryRow}>
-      <article><small>Unidades aqui</small><strong>{unitsHere}</strong></article>
+      <article><small>Unidades</small><strong>{unitsHere}</strong></article>
       <article><small>EPIs</small><strong>{products.length}</strong></article>
-      <article data-tone={zeroHere ? "warning" : undefined}><small>Zerados aqui</small><strong>{zeroHere}</strong></article>
+      <article data-tone={zeroHere ? "warning" : undefined}><small>Zerados</small><strong>{zeroHere}</strong></article>
     </div>
 
     <div className={styles.inlineActions}>
@@ -223,9 +242,10 @@ function StockList({ locationId, locationName, canAdjust, onMode }: {
     </div>
     <div className={styles.chipRow} role="radiogroup" aria-label="Recorte do estoque">
       <button type="button" role="radio" aria-checked={!onlyHere} className={!onlyHere ? styles.chipActive : styles.chip} onClick={() => setOnlyHere(false)}>Todos</button>
-      <button type="button" role="radio" aria-checked={onlyHere} className={onlyHere ? styles.chipActive : styles.chip} onClick={() => setOnlyHere(true)}>Com saldo em {locationName || "este local"}</button>
+      <button type="button" role="radio" aria-checked={onlyHere} className={onlyHere ? styles.chipActive : styles.chip} onClick={() => setOnlyHere(true)}>Só com saldo aqui</button>
     </div>
 
+    <p className={styles.hint}>Saldos de <strong>{locationName || "este local"}</strong>. Para ver outro local, troque na tela inicial.</p>
     {problem && <p className={styles.errorBanner} role="alert"><AlertTriangle aria-hidden="true" />{problem}</p>}
     {loading && <p className={styles.hint} role="status">Carregando…</p>}
 
@@ -237,7 +257,7 @@ function StockList({ locationId, locationName, canAdjust, onMode }: {
         return <li key={product.id}>
           <div className={styles.rowBetween}>
             <strong>{product.name}</strong>
-            <span className={styles.qty} data-tone={here > 0 ? undefined : "warning"}>{here}</span>
+            <span className={styles.qty} data-tone={here > 0 ? undefined : "warning"}>{here}<small> un.</small></span>
           </div>
           <small>CA {product.caNumber || "—"} · {product.size || "—"}{product.internalCode ? ` · ${product.internalCode}` : ""}</small>
           {product.caExpiresOn && <small className={caExpired ? styles.queueError : undefined}>
@@ -382,7 +402,7 @@ function StockTransfer({ locationId, locations, onDone, onCancel }: {
     <div className={styles.actionBar}>
       <button type="button" className={styles.secondaryButton} onClick={onCancel} disabled={busy}>Cancelar</button>
       <button type="button" className={styles.primaryButton} onClick={() => void submit()} disabled={busy || here <= 0}>
-        {busy ? "Gravando…" : "Confirmar transferência"}
+        {busy ? "Gravando…" : "Transferir"}
       </button>
     </div>
   </div>;
@@ -442,12 +462,19 @@ export function CareFlow({ companyId, canSanitize, canDispose, online, onToast }
   }
 
   return <div className={styles.screen}>
-    <div className={styles.chipRow} role="tablist" aria-label="Higienização e descarte">
-      <button type="button" role="tab" aria-selected={tab === "sanitize"} className={tab === "sanitize" ? styles.chipActive : styles.chip}
-        onClick={() => setTab("sanitize")}><Sparkles aria-hidden="true" /> Higienização · {sanitizing.length}</button>
-      <button type="button" role="tab" aria-selected={tab === "dispose"} className={tab === "dispose" ? styles.chipActive : styles.chip}
-        onClick={() => setTab("dispose")}><Trash2 aria-hidden="true" /> Descarte · {disposals.length}</button>
-      <button type="button" className={styles.chip} onClick={() => void load()} disabled={loading} aria-label="Atualizar">
+    {/* Duas metades iguais em vez de pílulas soltas: com o ícone e o número,
+        as pílulas quebravam em duas linhas no iPhone SE e a aba ativa ficava
+        sozinha em cima. */}
+    <div className={styles.tabBar}>
+      <div className={styles.segmented} role="tablist" aria-label="Higienização e descarte">
+        <button type="button" role="tab" aria-selected={tab === "sanitize"} onClick={() => setTab("sanitize")}>
+          Higienizar <b>{sanitizing.length}</b>
+        </button>
+        <button type="button" role="tab" aria-selected={tab === "dispose"} onClick={() => setTab("dispose")}>
+          Descartar <b>{disposals.length}</b>
+        </button>
+      </div>
+      <button type="button" className={styles.iconButton} onClick={() => void load()} disabled={loading} aria-label="Atualizar">
         <RefreshCw aria-hidden="true" className={loading ? styles.spin : undefined} />
       </button>
     </div>
@@ -469,10 +496,10 @@ export function CareFlow({ companyId, canSanitize, canDispose, online, onToast }
             <Sparkles aria-hidden="true" />
             <span>
               <strong>{item.epiName}</strong>
-              <small>{item.quantity} un. · devolvido por {item.employeeName || "—"} em {dateLabel(item.returnedOn)}</small>
-            </span>
-            <span className={styles.statusPill} data-tone={item.status === "in_progress" ? "info" : "warning"}>
-              <b>{item.status === "in_progress" ? "Em andamento" : "Aguardando"}</b>
+              <small>{item.quantity} un. · devolvido por {item.employeeName || "—"} · {dateLabel(item.returnedOn)}</small>
+              <span className={styles.statusPill} data-tone={item.status === "in_progress" ? "info" : "warning"}>
+                <b>{item.status === "in_progress" ? "Em andamento" : "Aguardando"}</b>
+              </span>
             </span>
           </button>
         </li>)}
@@ -528,7 +555,11 @@ function SanitizationDecision({ item, online, allowed, onDone, onCancel }: {
 
   return <div className={styles.screen}>
     <Chosen label="EPI devolvido" value={`${item.epiName} · ${item.quantity} un.`} onClear={onCancel} />
-    <p className={styles.hint}>Devolvido por {item.employeeName || "—"} em {dateLabel(item.returnedOn)}. Situação: {item.status === "in_progress" ? "em andamento" : "aguardando"}.</p>
+    <ul className={styles.plainList}>
+      <li><small>Devolvido por</small><strong>{item.employeeName || "—"}</strong></li>
+      <li><small>Data da devolução</small><strong>{dateLabel(item.returnedOn)}</strong></li>
+      <li><small>Situação</small><strong>{item.status === "in_progress" ? "Em andamento" : "Aguardando"}</strong></li>
+    </ul>
 
     <label className={styles.field}>
       <span>Resultado</span>
@@ -548,13 +579,15 @@ function SanitizationDecision({ item, online, allowed, onDone, onCancel }: {
     {!online && <p className={styles.hint}>Sem rede. Volte a ter sinal para decidir.</p>}
     {problem && <p className={styles.errorBanner} role="alert"><AlertTriangle aria-hidden="true" />{problem}</p>}
 
-    <div className={styles.actionBar}>
+    {/* Três ações não cabem lado a lado no iPhone SE: as secundárias ficam numa
+        linha e a principal ocupa a largura toda embaixo, onde o polegar alcança. */}
+    <div className={`${styles.actionBar} ${styles.actionBarStack}`}>
       {item.status === "awaiting" && <button type="button" className={styles.secondaryButton} onClick={() => void act("start")} disabled={blocked}>Iniciar</button>}
       <button type="button" className={styles.secondaryButton} onClick={() => void act("reject")} disabled={blocked}>
         <XCircle aria-hidden="true" /> Reprovar
       </button>
       <button type="button" className={styles.primaryButton} onClick={() => void act("complete")} disabled={blocked}>
-        {busy ? "Gravando…" : "Concluir"}
+        <Check aria-hidden="true" /> {busy ? "Gravando…" : "Concluir higienização"}
       </button>
     </div>
   </div>;
@@ -613,11 +646,11 @@ function DisposalDecision({ item, online, allowed, onDone, onCancel }: {
     {!online && <p className={styles.hint}>Sem rede. Volte a ter sinal para decidir.</p>}
     {problem && <p className={styles.errorBanner} role="alert"><AlertTriangle aria-hidden="true" />{problem}</p>}
 
-    <div className={styles.actionBar}>
+    <div className={`${styles.actionBar} ${styles.actionBarStack}`}>
       <button type="button" className={styles.secondaryButton} onClick={() => void act("reevaluate")} disabled={blocked}>Reavaliar</button>
       <button type="button" className={styles.secondaryButton} onClick={() => void act("cancel")} disabled={blocked}>Cancelar</button>
       <button type="button" className={styles.primaryButton} onClick={() => void act("confirm")} disabled={blocked}>
-        <Trash2 aria-hidden="true" /> {busy ? "Gravando…" : "Confirmar"}
+        <Trash2 aria-hidden="true" /> {busy ? "Gravando…" : "Confirmar descarte"}
       </button>
     </div>
   </div>;

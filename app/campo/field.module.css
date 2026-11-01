@@ -16,6 +16,8 @@
  * Repetidos, sim — mas repetidos de propósito e com a origem nomeada, até que
  * o acento suba para `:root` como o resto já subiu.
  */
+:global(html):has(.app), :global(body):has(.app) { overscroll-behavior: none; background: var(--ui-bg, #07111f); }
+
 .app {
   --f-accent: var(--ui-accent, #365cf5);
   --f-accent-text: var(--ui-accent-text, #b9c8ff);
@@ -38,11 +40,41 @@
   color: var(--f-text);
   display: flex;
   flex-direction: column;
-  /* Barra de status e indicador de gesto do aparelho. */
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  /* Laterais e indicador de gesto. O topo **não** entra aqui: com a barra de
+     status `black-translucent` do app instalado, o conteúdo passa por baixo do
+     relógio. Se o recuo do topo ficasse no `.app`, o cabeçalho fixo grudaria em
+     `top: 0` ao rolar e o título entraria embaixo da hora. Quem recua o topo é
+     o próprio cabeçalho. */
+  padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  /* A rolagem não puxa a página inteira nem dispara o "puxar para atualizar":
+     num app instalado, isso recarregaria no meio de uma entrega. */
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 .app button, .app input, .app select, .app textarea { font: inherit; }
-.app svg { width: 20px; height: 20px; stroke-width: 1.9; }
+/* 16px é o piso: abaixo disso o Safari amplia a página ao focar o campo e não
+   volta sozinho — a tela fica cortada e "desconfigurada" até a pessoa dar
+   pinça. Travar o zoom no viewport seria a correção errada. */
+.app input, .app select, .app textarea { font-size: 16px; }
+.app svg { width: 20px; height: 20px; flex: none; stroke-width: 1.9; }
+
+/* Toque com cara de app, não de site: sem o clarão cinza do Safari, sem atraso
+   de duplo toque, sem selecionar o texto do botão no toque longo. A resposta
+   ao toque vem do `:active` logo abaixo, que vale para dedo e mouse. */
+.app { -webkit-tap-highlight-color: transparent; }
+.app button, .app a, .app label, .app select, .app [role="radio"], .app [role="tab"] {
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.app button:not(:disabled), .app a, .app label { transition: transform 110ms ease-out, background-color 110ms ease-out, border-color 110ms ease-out; }
+.app button:not(:disabled):active, .app a:active, .app .photoPicker:active { transform: scale(.97); }
+.app .pickList button:not(:disabled):active { transform: scale(.985); background: var(--f-muted); }
+@media (prefers-reduced-motion: reduce) {
+  .app button:not(:disabled):active, .app a:active, .app .photoPicker:active, .app .pickList button:not(:disabled):active { transform: none; }
+}
 .app button:focus-visible, .app a:focus-visible, .app input:focus-visible,
 .app select:focus-visible, .app textarea:focus-visible {
   outline: 3px solid color-mix(in srgb, var(--f-accent) 45%, transparent);
@@ -52,12 +84,17 @@
 .header {
   position: sticky; top: 0; z-index: 10;
   display: flex; align-items: center; gap: 10px;
-  padding: 10px 12px;
+  padding: calc(10px + env(safe-area-inset-top)) 12px 10px;
   background: var(--f-surface);
   border-bottom: 1px solid var(--f-border);
 }
 .headerTitle { display: grid; min-width: 0; flex: 1; }
-.headerTitle strong { font-size: .95rem; line-height: 1.2; }
+/* Até duas linhas: "Vencimentos e trocas" cortado em "troc…" no iPhone SE
+   escondia justamente a palavra que diz onde a pessoa está. */
+.headerTitle strong {
+  font-size: .95rem; line-height: 1.2; overflow: hidden;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+}
 .headerTitle small { color: var(--f-soft); font-size: .78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .headerIcon {
   display: grid; place-items: center; width: 36px; height: 36px; flex: none;
@@ -68,7 +105,6 @@
   border: 1px solid var(--f-border); border-radius: 12px; background: var(--f-surface);
   color: inherit; cursor: pointer; text-decoration: none;
 }
-.iconButton:hover { border-color: var(--f-accent); }
 .pendingBadge {
   display: inline-flex; align-items: center; gap: 5px; min-height: 36px; padding: 0 11px; flex: none;
   border: 1px solid color-mix(in srgb, var(--f-warning) 55%, transparent); border-radius: 999px;
@@ -78,18 +114,24 @@
 .networkDot { width: 10px; height: 10px; flex: none; border-radius: 50%; background: var(--f-danger); }
 .networkDot[data-online="true"] { background: var(--f-success); }
 
-.screen { display: grid; gap: 14px; padding: 14px 12px 28px; align-content: start; }
+/* `minmax(0, 1fr)` e `min-width: 0` são o que segura a tela na largura do
+   aparelho. Sem eles a coluna da grade cresce até o texto mais comprido —
+   nome de empresa no seletor, campo de busca — e empurra cartões e botões para
+   fora da borda direita no iPhone SE e no mini. */
+.screen { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; padding: 14px 12px 28px; align-content: start; min-width: 0; }
+.screen > *, .step > *, .contextPickers > *, .field > * { min-width: 0; }
 
 .contextPickers { display: grid; gap: 10px; }
 .contextPickers label { display: grid; gap: 5px; }
 .contextPickers span { color: var(--f-soft); font-size: .75rem; font-weight: 820; letter-spacing: normal; }
 .contextPickers select {
+  width: 100%; min-width: 0; text-overflow: ellipsis;
   min-height: var(--f-target); padding: 0 12px;
   border: 1px solid var(--f-border); border-radius: 12px;
   background: var(--f-surface); color: inherit;
 }
 
-.actionGrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.actionGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .actionCard {
   position: relative;
   display: grid; gap: 4px; justify-items: start; text-align: left;
@@ -98,7 +140,7 @@
   background: var(--f-surface); cursor: pointer;
 }
 .actionCard:disabled { opacity: .5; cursor: not-allowed; }
-.actionCard strong { font-size: .9rem; }
+.actionCard strong { font-size: .9rem; line-height: 1.25; overflow-wrap: anywhere; }
 .actionCard small { color: var(--f-soft); font-size: .78rem; line-height: 1.3; }
 .actionIcon {
   display: grid; place-items: center; width: 40px; height: 40px; margin-bottom: 4px;
@@ -118,7 +160,8 @@
 .step h2 { margin: 0; font-size: .86rem; }
 .hint { margin: 0; color: var(--f-soft); font-size: .76rem; line-height: 1.4; }
 
-.searchRow { display: flex; gap: 8px; }
+.searchRow { display: flex; gap: 8px; min-width: 0; }
+.searchRow > button { flex: none; width: var(--f-target); padding: 0; }
 .searchRow input {
   flex: 1; min-width: 0; min-height: var(--f-target); padding: 0 12px;
   border: 1px solid var(--f-border); border-radius: 12px; background: var(--f-surface); color: inherit;
@@ -132,8 +175,8 @@
   color: inherit; cursor: pointer;
 }
 .pickList button:disabled { opacity: .5; cursor: not-allowed; }
-.pickList button:hover:not(:disabled) { border-color: var(--f-accent); }
-.pickList strong, .plainList strong { display: block; font-size: .86rem; }
+.pickList button > span:not([class]) { flex: 1; min-width: 0; }
+.pickList strong, .plainList strong { display: block; font-size: .86rem; overflow-wrap: anywhere; }
 .pickList small, .plainList small { display: block; color: var(--f-soft); font-size: .78rem; }
 .plainList li {
   display: grid; gap: 3px; padding: 11px 13px;
@@ -147,7 +190,9 @@
   padding: 10px 13px; border: 1px solid var(--f-border); border-radius: 13px; background: var(--f-muted);
 }
 .chosen small { display: block; color: var(--f-soft); font-size: .75rem; font-weight: 800; letter-spacing: normal; }
-.chosen strong { font-size: .85rem; }
+.chosen > span { min-width: 0; }
+.chosen strong { font-size: .85rem; overflow-wrap: anywhere; }
+.chosen button { flex: none; }
 
 .stepper { display: flex; align-items: center; gap: 12px; }
 .stepper button {
@@ -155,7 +200,6 @@
   border: 1px solid var(--f-border); border-radius: 14px; background: var(--f-surface);
   color: inherit; font-size: 1.5rem; font-weight: 700; cursor: pointer;
 }
-.stepper button:hover { border-color: var(--f-accent); }
 .stepper output { font-size: 1.6rem; font-weight: 780; font-variant-numeric: tabular-nums; min-width: 2.4ch; text-align: center; }
 
 .choiceList { display: grid; gap: 8px; }
@@ -206,7 +250,6 @@
 }
 .photoPicker input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .photoPicker span { font-size: .82rem; overflow: hidden; text-overflow: ellipsis; }
-.photoPicker:hover { border-color: var(--f-accent); }
 
 .summaryRow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .summaryRow article {
@@ -217,8 +260,11 @@
 .summaryRow strong { font-size: 1.3rem; font-variant-numeric: tabular-nums; }
 
 .actionBar {
-  position: sticky; bottom: 0;
-  display: flex; gap: 9px; padding: 11px 0 0;
+  position: sticky; bottom: 0; z-index: 5;
+  display: flex; gap: 9px;
+  /* O indicador de gesto fica embaixo da barra, não em cima dos botões. */
+  padding: 11px 0 calc(8px + env(safe-area-inset-bottom));
+  margin-bottom: calc(-1 * env(safe-area-inset-bottom));
   background: linear-gradient(to top, var(--f-bg) 72%, transparent);
 }
 .primaryButton, .secondaryButton, .ghostButton {
@@ -226,6 +272,16 @@
   min-height: var(--f-target); padding: 0 16px;
   border-radius: 13px; font-size: .86rem; font-weight: 740; cursor: pointer; text-decoration: none;
 }
+.actionBar > * { min-width: 0; }
+/* Na barra, o botão secundário ocupa só o que o texto pede e o principal fica
+   com o resto. Com 16px de cada lado, "Confirmar devolução" não cabia ao lado
+   de "Cancelar" no iPhone SE. */
+.actionBar > .primaryButton { padding: 0 12px; }
+.actionBar > .secondaryButton { padding: 0 14px; flex: none; }
+.actionBarStack { flex-wrap: wrap; }
+.actionBarStack > .secondaryButton { flex: 1 1 0; }
+.actionBarStack > .primaryButton { flex: 1 1 100%; order: 9; }
+.primaryButton, .secondaryButton { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .primaryButton {
   flex: 1;
   border: 1px solid var(--f-accent); background: var(--f-accent);
@@ -234,14 +290,11 @@
      preenchimento de destaque. */
   color: var(--f-on-accent, #fff) !important;
 }
-.primaryButton:hover:not(:disabled) { background: color-mix(in srgb, var(--f-accent) 88%, black); }
 .secondaryButton { border: 1px solid var(--f-border); background: var(--f-surface); color: inherit; }
-.secondaryButton:hover:not(:disabled) { border-color: var(--f-accent); }
 .ghostButton {
   min-height: 40px; padding: 0 12px; font-size: .78rem;
   border: 1px solid transparent; background: transparent; color: var(--f-accent-text) !important;
 }
-.ghostButton:hover:not(:disabled) { border-color: var(--f-border); }
 .primaryButton:disabled, .secondaryButton:disabled, .ghostButton:disabled { opacity: .5; cursor: not-allowed; }
 
 .errorBanner, .offlineBanner {
@@ -308,11 +361,12 @@
   font-size: .75rem; font-weight: 820; font-variant-numeric: tabular-nums;
 }
 
-.chipRow { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
-.chipRow::-webkit-scrollbar { display: none; }
+/* Quebra de linha em vez de rolagem lateral: filtro escondido além da borda é
+   filtro que ninguém acha. */
+.chipRow { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip, .chipActive {
   display: inline-flex; align-items: center; gap: 6px; flex: none;
-  min-height: 40px; padding: 0 13px; white-space: nowrap;
+  min-height: 44px; padding: 0 14px; white-space: nowrap;
   border: 1px solid var(--f-border); border-radius: 999px; background: var(--f-surface);
   color: inherit; font-size: .78rem; font-weight: 700; cursor: pointer;
 }
@@ -322,18 +376,29 @@
 
 /* Pílula de situação à direita do cartão. A cor reforça; o texto é que informa. */
 .statusPill {
-  display: grid; justify-items: end; gap: 1px; flex: none; margin-left: auto;
-  max-width: 44%; text-align: right;
+  display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px 8px;
+  margin-top: 6px;
 }
 .statusPill b {
-  padding: 3px 8px; border-radius: 999px; font-size: .72rem; font-weight: 800; white-space: nowrap;
+  padding: 3px 9px; border-radius: 999px; font-size: .78rem; font-weight: 800; white-space: nowrap;
   border: 1px solid currentColor;
 }
-.statusPill small { font-size: .72rem !important; }
+.statusPill small { display: inline !important; font-size: .78rem !important; color: var(--f-text) !important; font-weight: 650; }
 .statusPill[data-tone="danger"] b { color: var(--f-danger); background: color-mix(in srgb, var(--f-danger) 10%, transparent); }
 .statusPill[data-tone="warning"] b { color: var(--f-warning); background: color-mix(in srgb, var(--f-warning) 10%, transparent); }
 .statusPill[data-tone="info"] b { color: var(--f-accent-text); background: var(--f-accent-soft); }
 
+.summaryButton {
+  display: grid; gap: 2px; padding: 11px 12px; min-height: 64px; text-align: left;
+  border: 1px solid var(--f-border); border-radius: 13px; background: var(--f-surface);
+  color: inherit; cursor: pointer;
+}
+.summaryButton small { color: var(--f-soft); font-size: .75rem; }
+.summaryButton strong { font-size: 1.3rem; font-variant-numeric: tabular-nums; }
+.summaryButton[data-tone="danger"] strong { color: var(--f-danger); }
+.summaryButton[data-tone="warning"] strong { color: var(--f-warning); }
+.summaryButton[aria-pressed="true"] { border-color: var(--f-accent); background: var(--f-accent-soft); box-shadow: inset 0 0 0 1px var(--f-accent); }
+.summaryButton[aria-pressed="true"] small { color: var(--f-accent-text); font-weight: 750; }
 .summaryRow article[data-tone="danger"] strong { color: var(--f-danger); }
 .summaryRow article[data-tone="warning"] strong { color: var(--f-warning); }
 .consequence[data-tone="warning"] {
@@ -342,12 +407,30 @@
 }
 .consequence[data-tone="warning"] > strong { color: var(--f-warning); }
 
+.tabBar { display: flex; gap: 8px; align-items: stretch; }
+.segmented {
+  flex: 1; min-width: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px;
+  border: 1px solid var(--f-border); border-radius: 14px; background: var(--f-surface);
+}
+.segmented button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 0;
+  min-height: 40px; padding: 0 8px; border: 0; border-radius: 10px; background: transparent;
+  color: var(--f-soft); font-size: .84rem; font-weight: 720; cursor: pointer; white-space: nowrap;
+}
+.segmented button[aria-selected="true"] { background: var(--f-accent-soft); color: var(--f-accent-text); }
+.segmented b {
+  min-width: 22px; padding: 1px 6px; border-radius: 999px; font-size: .75rem; font-variant-numeric: tabular-nums;
+  background: var(--f-muted); color: var(--f-text);
+}
 .inlineActions { display: flex; gap: 9px; }
 .inlineActions > * { flex: 1; }
 
 .rowBetween { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .qty { font-size: 1.15rem; font-weight: 800; font-variant-numeric: tabular-nums; }
 .qty[data-tone="warning"] { color: var(--f-warning); }
+.qty small { display: inline !important; font-size: .75rem !important; font-weight: 600; color: var(--f-soft); }
+.rowBetween > strong { min-width: 0; }
+.qty { flex: none; white-space: nowrap; }
 
 .select {
   min-height: var(--f-target); padding: 0 12px; width: 100%;
@@ -400,6 +483,17 @@
 .scannerManual input {
   min-height: var(--f-target); padding: 0 12px;
   border: 1px solid var(--f-border); border-radius: 12px; background: var(--f-surface); color: inherit;
+}
+
+/* Realce de passagem só onde existe ponteiro de verdade. No toque, o Safari
+   aplica o `:hover` no primeiro toque e o deixa preso até tocar em outro
+   lugar — o cartão ficava com borda azul depois de voltar da tela. */
+@media (hover: hover) and (pointer: fine) {
+  .iconButton:hover, .stepper button:hover, .photoPicker:hover,
+  .pickList button:hover:not(:disabled), .secondaryButton:hover:not(:disabled),
+  .actionCard:hover:not(:disabled), .chip:hover:not(:disabled) { border-color: var(--f-accent); }
+  .primaryButton:hover:not(:disabled) { background: color-mix(in srgb, var(--f-accent) 88%, black); }
+  .ghostButton:hover:not(:disabled) { border-color: var(--f-border); }
 }
 
 /* Em telas largas o aplicativo não esparrama: a coluna estreita é a forma, não

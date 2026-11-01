@@ -334,7 +334,9 @@ export const dateLabel = (value: string) => {
   const parsed = new Date(`${value.slice(0, 10)}T12:00:00`);
   return Number.isNaN(parsed.getTime())
     ? value
-    : new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short" }).format(parsed);
+    // Dia, mês e ano em número: "10 de mar." não diz de que ano é a validade
+    // do CA, e o mês abreviado ainda colava ponto duplo no fim da frase.
+    : new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" }).format(parsed);
 };
 
 export const today = () => new Date().toISOString().slice(0, 10);
