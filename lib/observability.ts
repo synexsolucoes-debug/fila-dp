@@ -56,6 +56,9 @@ export function log(level: LogLevel, event: string, context: LogContext = {}, fi
     service: "fila-dp",
     timestamp: new Date().toISOString(),
   };
+  // Versão no ar: liga cada erro ao deploy que o produziu (e ao `/api/version`).
+  const release = process.env.VERCEL_GIT_COMMIT_SHA;
+  if (release) entry.release = release.slice(0, 12);
   for (const key of correlationKeys) {
     const value = context[key];
     if (value) entry[key] = String(value).slice(0, 120);
