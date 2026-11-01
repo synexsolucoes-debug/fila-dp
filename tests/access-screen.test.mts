@@ -94,10 +94,10 @@ test("a revisão de acesso do grupo cobre papel, empresa, ativação e módulo",
   // Quem está com ativação pendente.
   assert.match(view, /Ativação pendente/u);
   // Papel e escopo por empresa, as duas dimensões do acesso pelo cargo.
-  assert.match(view, /updateMemberRole\(member\.userId/u);
+  assert.match(view, /updateMemberRole\(editing\.userId/u);
   assert.match(view, /onSave=\{updateMemberCompanies\}/u);
   // E a terceira dimensão: exceção de módulo por pessoa.
-  assert.match(view, /<MemberModules memberId=\{member\.userId\}/u);
+  assert.match(view, /<MemberModules memberId=\{editing\.userId\}/u);
   // Remoção pede confirmação: perder acesso não pode ser um clique distraído.
   assert.match(view, /function removeMember\(/u);
 
