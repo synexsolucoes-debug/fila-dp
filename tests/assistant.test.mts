@@ -154,6 +154,48 @@ test("sem configuração o assistente diz o que falta em vez de fingir que funci
   assert.ok(pronto.configured && pronto.config.model.length > 0, "precisa de um modelo padrão");
 });
 
+test("o Claude tem teto de saída que cabe o raciocínio e a resposta", async () => {
+  const { readAssistantConfig } = await import("../lib/assistant/provider.ts");
+
+  const claude = readAssistantConfig({ FDP_ASSISTANT_PROVIDER: "anthropic", ANTHROPIC_API_KEY: "sk-teste" });
+  assert.ok(claude.configured);
+  assert.equal(claude.config.model, "claude-sonnet-5-5");
+  assert.ok(claude.config.maxOutputTokens >= 4000, "900 tokens cortava a resposta do Claude");
+
+  const explicito = readAssistantConfig({
+    FDP_ASSISTANT_PROVIDER: "anthropic", ANTHROPIC_API_KEY: "sk-teste", FDP_ASSISTANT_MAX_TOKENS: "2500",
+  });
+  assert.ok(explicito.configured && explicito.config.maxOutputTokens === 2500);
+
+  const invalido = readAssistantConfig({
+    FDP_ASSISTANT_PROVIDER: "anthropic", ANTHROPIC_API_KEY: "sk-teste", FDP_ASSISTANT_MAX_TOKENS: "abc",
+  });
+  assert.ok(invalido.configured && invalido.config.maxOutputTokens === 4000);
+
+  const openai = readAssistantConfig({ FDP_ASSISTANT_PROVIDER: "openai", OPENAI_API_KEY: "sk-teste" });
+  assert.ok(openai.configured && openai.config.maxOutputTokens === 900);
+});
+
+test("recusa do Claude vira mensagem própria, não erro técnico", async (t) => {
+  const { askAssistant, readAssistantConfig } = await import("../lib/assistant/provider.ts");
+  const status = readAssistantConfig({ FDP_ASSISTANT_PROVIDER: "anthropic", ANTHROPIC_API_KEY: "sk-teste" });
+  assert.ok(status.configured);
+
+  t.mock.method(globalThis, "fetch", async () => new Response(JSON.stringify({
+    content: [], stop_reason: "refusal", stop_details: { type: "refusal", category: null },
+  }), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+  await assert.rejects(
+    askAssistant({ config: status.config, system: "teste", messages: [{ role: "user", content: "oi" }] }),
+    (error: { code: string; status: number; message: string }) => {
+      assert.equal(error.code, "ASSISTANT_REFUSED");
+      assert.equal(error.status, 422);
+      assert.doesNotMatch(error.message, /tente de novo/iu);
+      return true;
+    },
+  );
+});
+
 test("a instrução do sistema diz o que o assistente não tem", async () => {
   const { buildSystemPrompt } = await import("../lib/assistant/provider.ts");
   const prompt = buildSystemPrompt({
