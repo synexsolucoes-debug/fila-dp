@@ -26,8 +26,6 @@ const drawer = await read("app/painel/features/registrations/RegistrationsView.t
 const correction = await read("app/painel/features/erp-dp/ErpCorrectionPanel.tsx");
 const erpService = await read("lib/erp-dp-service.ts");
 const returnAction = await read("app/api/erp-dp/actions/return-to-work/route.ts");
-const shellCss = await read("app/dashboard-modern.css");
-const accessCss = await read("app/access.css");
 const routes = {
   headcount: await read("app/api/erp-dp/headcount/route.ts"),
   esocial: await read("app/api/erp-dp/esocial/route.ts"),
@@ -212,7 +210,7 @@ test("o ERP DP abre pela janela de módulos e vira uma aba que não perde o esta
   assert.match(app, /id === "erp-dp" \? "ERP DP"/u);
   assert.doesNotMatch(app, /className="erp-mode-toggle"/u, "os botões de troca de modo voltaram ao topo");
   // Aberto uma vez, o ERP continua montado enquanto a aba existir.
-  assert.match(app, /\{erpAlive && <div className="view-pane view-transition" hidden=\{!erpMode\}><ErpDpView /u);
+  assert.match(app, /\{erpAlive && <div className="view-pane view-transition" hidden=\{!erpMode\}>(?:<ViewPaneActiveContext\.Provider value=\{erpMode\}>)?<ErpDpView /u);
   assert.match(app, /const canUseErp = snapshot \? hasCapability\(snapshot\.workspace\.role, "employees\.read"\)/u);
   // Preferência local protegida: armazenamento indisponível não quebra o painel.
   assert.match(app, /try \{ window\.localStorage\.setItem\(APP_MODE_KEY, next\); \} catch/u);

@@ -1,8 +1,9 @@
-import { safeRelativeReturnPath, setAuthSession, verifyPassword } from "@/app/chatgpt-auth";
+import { safeRelativeReturnPath, setAuthSession, verifyPassword } from "@/lib/auth/session";
 import { getD1 } from "@/db";
 import { checkLoginRateLimit, clearLoginIdentityFailures, clientAddress, recordLoginFailure } from "@/lib/auth-rate-limit";
 import { isPlatformAdmin } from "@/lib/platform-authorization";
 import { recordAuthEvent } from "@/lib/auth-events";
+import { log, requestIdFrom } from "@/lib/observability";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -102,7 +103,8 @@ export async function POST(request: Request) {
       redirectTo: platformAdmin && !access ? "/plataforma" : cleanReturnTo(body.returnTo),
     });
   } catch (error) {
-    console.error("Vinculato login failed", error);
+    // Sem o objeto de erro inteiro: ele pode carregar o corpo com e-mail e senha.
+    log("error", "auth.login_failed", { requestId: requestIdFrom(request), route: "/api/auth/login" }, { reason: error instanceof Error ? error.name : "unknown" });
     return Response.json({ error: "Não foi possível iniciar a sessão. Tente novamente." }, { status: 500 });
   }
 }

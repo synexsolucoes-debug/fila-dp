@@ -24,6 +24,7 @@ import type {
 } from "./payments.types";
 import { competenceWindow, ErrorBanner } from "../shared";
 import styles from "./payments.module.css";
+import { contagem } from "../shared/plural";
 
 const moduleConfig: Record<PaymentModule, { title: string; eyebrow: string; description: string; icon: typeof Stethoscope }> = {
   psychology: {
@@ -268,14 +269,14 @@ export function PaymentsView({ role, module, section = "contractorPayments", foc
     if (pendentes.length === 0) {
       setToast(providerId
         ? "Prestador apurado."
-        : `Competência apurada: ${apurados} prestador(es).`);
+        : `Competência apurada: ${contagem(apurados, "prestador", "prestadores")}.`);
       return;
     }
     /* O motivo do primeiro fica no aviso, e não só a contagem: com um
        prestador para trás, "1 ficou de fora" manda a pessoa caçar qual. */
     const primeiro = pendentes[0];
     const restantes = pendentes.length - 1;
-    setToast(`${apurados} apurado(s). ${String(primeiro.contractorName ?? "Um prestador")}: ${String(primeiro.blockedReason)}${restantes > 0 ? ` (e mais ${restantes})` : ""}.`);
+    setToast(`${contagem(apurados, "apurado", "apurados")}. ${String(primeiro.contractorName ?? "Um prestador")}: ${String(primeiro.blockedReason)}${restantes > 0 ? ` (e mais ${restantes})` : ""}.`);
   }
 
   const openContractorDetail = useCallback(async (closingId: string) => {
@@ -643,7 +644,7 @@ export function PaymentsView({ role, module, section = "contractorPayments", foc
       link.click();
       URL.revokeObjectURL(url);
       setNoticeOpen(false);
-      setToast(`Avisos gerados com link para ${payload.links?.length ?? 0} prestador(es).`);
+      setToast(`Avisos gerados com link para ${contagem(payload.links?.length ?? 0, "prestador", "prestadores")}.`);
       await loadOverview(companyId, competence, true);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível gerar os avisos com link.");
@@ -685,7 +686,7 @@ export function PaymentsView({ role, module, section = "contractorPayments", foc
               {cycle.status === "closed" ? <LockKeyhole aria-hidden="true" /> : <CircleDot aria-hidden="true" />}
               Competência {statusLabels[cycle.status] ?? cycle.status}
               {module === "contractors" && cycle.status !== "closed" && lockedProviderIds.length > 0
-                && ` · ${lockedProviderIds.length} pagamento(s) fechado(s)`}
+                && ` · ${contagem(lockedProviderIds.length, "pagamento fechado", "pagamentos fechados")}`}
             </span>
           )}
         </div>

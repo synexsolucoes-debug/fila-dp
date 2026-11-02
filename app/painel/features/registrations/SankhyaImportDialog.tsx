@@ -4,6 +4,7 @@ import { FormEvent, useMemo, useState } from "react";
 import { Check, FileSpreadsheet, LoaderCircle, Upload, X } from "lucide-react";
 import type { Company } from "./registrations.types";
 import styles from "./registrations.module.css";
+import { contagem } from "../shared/plural";
 
 type Classification = "new" | "changed" | "unchanged" | "conflict" | "ignored";
 type Preview = {
@@ -69,7 +70,7 @@ export function SankhyaImportDialog({ companies, initialCompanyId, onClose, onIm
     setBusy("import"); setError("");
     try {
       const result = await send(file, companyId, "import");
-      await onImported(`${result.created ?? 0} colaborador(es) criado(s) e ${result.updated ?? 0} atualizado(s).`);
+      await onImported(`${contagem(result.created ?? 0, "colaborador criado", "colaboradores criados")} e ${contagem(result.updated ?? 0, "atualizado", "atualizados")}.`);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível importar a planilha."); setBusy(null); }
   }
 
@@ -87,7 +88,7 @@ export function SankhyaImportDialog({ companies, initialCompanyId, onClose, onIm
         <div className={styles.importGuidance}><Check /><p><strong>Nenhuma alteração foi gravada ainda.</strong><span>Novos serão cadastrados, alterados serão sincronizados e conflitos serão ignorados para revisão.{preview.ignoredReason ? ` ${preview.ignoredReason}` : ""}</span></p></div>
         <div className={styles.importTableWrap}><table className={styles.importTable}><thead><tr><th>Colaborador</th><th>Matrícula</th><th>CPF</th><th>Admissão</th><th>Resultado</th></tr></thead><tbody>{preview.items.map((item) => <tr key={item.externalId}><td><strong>{item.fullName}</strong><small>Sankhya {item.externalId}</small></td><td>{item.registrationNumber}</td><td>{item.cpfLast4 ? `•••-${item.cpfLast4}` : "Não informado"}</td><td>{item.admissionDate}</td><td><span className={styles.importStatus} data-status={item.classification}>{labels[item.classification]}</span></td></tr>)}</tbody></table></div>
       </div>}
-      <footer><span>{preview ? `${preview.items.length} registro(s) exibido(s) na prévia` : "A importação não apaga colaboradores existentes."}</span><button type="button" className={styles.secondaryButton} onClick={onClose} disabled={Boolean(busy)}>Cancelar</button><button type="button" className={styles.primaryButton} onClick={() => void importFile()} disabled={!preview || Boolean(busy) || (preview.summary.new + preview.summary.changed === 0)}>{busy === "import" ? <LoaderCircle className={styles.spin} /> : <Upload />} Importar selecionados</button></footer>
+      <footer><span>{preview ? `${contagem(preview.items.length, "registro exibido", "registros exibidos")} na prévia` : "A importação não apaga colaboradores existentes."}</span><button type="button" className={styles.secondaryButton} onClick={onClose} disabled={Boolean(busy)}>Cancelar</button><button type="button" className={styles.primaryButton} onClick={() => void importFile()} disabled={!preview || Boolean(busy) || (preview.summary.new + preview.summary.changed === 0)}>{busy === "import" ? <LoaderCircle className={styles.spin} /> : <Upload />} Importar selecionados</button></footer>
     </section>
   </div>;
 }

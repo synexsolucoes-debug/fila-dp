@@ -12,6 +12,7 @@ import type {
   LedgerImport, LedgerImportCandidate, LedgerImportCommitResult, LedgerImportRow, LedgerImportTotals,
 } from "./ledger.api";
 import type { LedgerCompanyOption, LedgerPermissions, LedgerPersonOption } from "./ledger.types";
+import { contagem } from "../shared/plural";
 
 /**
  * Importação assistida da planilha de vales.
@@ -120,7 +121,7 @@ export function ImportPanel({
         {file && (
           <p className={styles.notice}>
             <FileSpreadsheet aria-hidden="true" />
-            <span><strong>{file.name}</strong> — {sheets.length} aba(s) encontrada(s).</span>
+            <span><strong>{file.name}</strong> — {contagem(sheets.length, "aba encontrada", "abas encontradas")}.</span>
           </p>
         )}
 
@@ -183,7 +184,7 @@ export function ImportPanel({
                 onClick={() => onPreview(escolhidas)}
               >
                 {busy ? <Loader2 aria-hidden="true" className={styles.spin} /> : <FileSpreadsheet aria-hidden="true" />}
-                Montar a prévia de {escolhidas.length} aba(s)
+                Montar a prévia de {contagem(escolhidas.length, "aba", "abas")}
               </button>
             </div>
           </>
@@ -204,8 +205,8 @@ export function ImportPanel({
         </span>
         {totals && (
           <span>
-            {totals.total} linha(s) · {totals.resolved} resolvida(s) · {totals.ignored} ignorada(s) ·{" "}
-            {pendentes} pendente(s) · {totals.unidentified} sem pessoa
+            {contagem(totals.total, "linha", "linhas")} · {contagem(totals.resolved, "resolvida", "resolvidas")} · {contagem(totals.ignored, "ignorada", "ignoradas")} ·{" "}
+            {contagem(pendentes, "pendente", "pendentes")} · {totals.unidentified} sem pessoa
           </span>
         )}
       </div>
@@ -214,16 +215,16 @@ export function ImportPanel({
         <p className={styles.notice} data-tone="safe">
           <CheckCircle2 aria-hidden="true" />
           <span>
-            {commitResult.committed} lançamento(s) gravado(s).
+            {contagem(commitResult.committed, "lançamento gravado", "lançamentos gravados")}.
             {commitResult.priorInstallmentsAsHistory > 0 && (
               <>
-                {" "}{commitResult.priorInstallmentsAsHistory} parcela(s) anteriores entraram como{" "}
+                {" "}{contagem(commitResult.priorInstallmentsAsHistory, "parcela", "parcelas")} anteriores entraram como{" "}
                 <strong>histórico da planilha</strong>, não como desconto confirmado — se foram mesmo descontadas,
                 confirme cada uma pela tela de parcelas.
               </>
             )}
             {commitResult.alreadyImported > 0 && (
-              <> {commitResult.alreadyImported} linha(s) já tinham sido gravadas numa importação anterior e não viraram
+              <> {contagem(commitResult.alreadyImported, "linha", "linhas")} já tinham sido gravadas numa importação anterior e não viraram
               lançamento de novo.</>
             )}
           </span>
@@ -389,7 +390,7 @@ export function ImportPanel({
               onClick={onCommit}
             >
               {busy ? <Loader2 aria-hidden="true" className={styles.spin} /> : <CheckCircle2 aria-hidden="true" />}
-              Gravar {totals?.resolved ?? 0} linha(s) resolvida(s)
+              Gravar {contagem(totals?.resolved ?? 0, "linha resolvida", "linhas resolvidas")}
             </button>
             <button type="button" className={styles.secondaryButton} disabled={busy} onClick={onCancel}>
               Cancelar importação

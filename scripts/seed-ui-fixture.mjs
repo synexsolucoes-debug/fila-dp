@@ -50,7 +50,7 @@ if (!databaseUrl?.startsWith("postgres")) {
 const email = process.env.A11Y_EMAIL ?? "admin@vinculato.test";
 const password = process.env.A11Y_PASSWORD ?? "EnsaioLocal!2026";
 
-// Mesmo algoritmo de `app/chatgpt-auth.ts`: scrypt com sal por usuário. Não é
+// Mesmo algoritmo de `lib/auth/session.ts`: scrypt com sal por usuário. Não é
 // possível importar de lá porque aquele módulo depende do runtime do Next.
 const salt = randomBytes(16).toString("hex");
 const hash = (await scryptAsync(password, salt, 64)).toString("hex");

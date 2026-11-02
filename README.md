@@ -8,13 +8,50 @@ PostgreSQL/Neon e Vercel Blob privado para anexos.
 
 - Node.js `24.x`
 
-## Quick Start
+## Rodar localmente
 
-```bash
-npm install
-npm run dev
-npm run build
-```
+`npm run dev` sozinho não abre o painel: o produto precisa de um PostgreSQL com
+as migrations aplicadas e de uma conta. O caminho abaixo é o mesmo que a CI usa
+(`.github/workflows/ci.yml`, job `interface`).
+
+1. Suba um PostgreSQL 16 vazio (Docker, Homebrew ou o do sistema):
+
+   ```bash
+   docker run -d --name vinculato-db -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=vinculato -p 5432:5432 postgres:16
+   ```
+
+2. Crie `.env.local` com o mínimo para desenvolvimento:
+
+   ```bash
+   DATABASE_URL=postgresql://postgres:postgres@localhost:5432/vinculato
+   FDP_DB_DRIVER=pg
+   FDP_AUTH_SECRET=troque-por-um-segredo-local-com-mais-de-32-caracteres
+   FDP_PLATFORM_ADMIN_EMAILS=admin@vinculato.test
+   FDP_SANKHYA_VAULT_KEY=ExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExM=
+   FDP_SANKHYA_VAULT_KEY_VERSION=1
+   ```
+
+   A chave do cofre acima é a de ensaio, pública de propósito; nunca use em
+   produção. A lista completa de variáveis está em `.env.example`.
+
+3. Instale, aplique as migrations e crie a conta de ensaio:
+
+   ```bash
+   npm install
+   npm run db:migrate
+   A11Y_PASSWORD=uma-senha-local node scripts/seed-ui-fixture.mjs
+   ```
+
+   `db:migrate` e a semente leem as variáveis do ambiente, não do arquivo.
+   Carregue-as no terminal antes: `set -a; . ./.env.local; set +a`.
+
+4. Rode e entre com `admin@vinculato.test` e a senha do passo 3:
+
+   ```bash
+   npm run dev
+   ```
+
+Antes de abrir PR: `npm run ci` (lint, typecheck, migrations, testes e build).
 
 ## App de mesa (Windows)
 

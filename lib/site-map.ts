@@ -32,10 +32,10 @@ export const privatePaths = ["/painel", "/plataforma", "/login", "/recuperar", "
  * `metadataBase` do layout já resolve o host da requisição; sitemap e robots
  * rodam fora dela e precisam de uma origem própria. `FDP_PUBLIC_ORIGIN` é o
  * lugar de dizer o domínio real quando ele existir — sem ela, a reserva é o
- * mesmo endereço que o layout usa hoje.
+ * produção na Vercel, o mesmo endereço que o app de mesa abre.
  */
 export function publicOrigin() {
   const configured = (process.env.FDP_PUBLIC_ORIGIN ?? "").trim().replace(/\/$/u, "");
   if (/^https?:\/\/[^\s/]+$/u.test(configured)) return configured;
-  return "https://fila-dp.synexsolucoes.chatgpt.site";
+  return "https://vinculato.vercel.app";
 }

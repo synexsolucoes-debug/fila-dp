@@ -44,3 +44,11 @@ padrão do upstream.
 `animate-expo` (React Native/Expo) e `write-swift` (Swift/SwiftUI) vieram junto no
 repositório de origem, mas não se aplicam a este projeto (Next.js + React + Tailwind).
 `ask-sonner` só passa a valer se o projeto adotar o [Sonner](https://sonner.emilkowal.ski).
+
+## Skills próprias
+
+Escritas para este repositório; podem ser editadas diretamente.
+
+| Skill | Para que serve |
+|---|---|
+| `dp-legislacao-brasil` | Regras de CLT, NR-7 e eSocial aplicadas ao código: onde a regra mora, como testar prazo e a tabela de referência com a fonte de cada regra |

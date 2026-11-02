@@ -1,4 +1,4 @@
-import { getD1, getScopedD1 } from "../db";
+import { getD1, getScopedD1 } from "../db/index.ts";
 import { ApiError } from "./api-errors.ts";
 import { cleanText } from "./clean-text.ts";
 import { optionalDate } from "./registrations.ts";

@@ -16,6 +16,7 @@ import { ErpVacationsPanel } from "./ErpVacationsPanel";
 import { ErpCostsPanel } from "./ErpCostsPanel";
 import { parseReceiptSheet } from "@/lib/esocial-receipts";
 import styles from "./erp-dp.module.css";
+import { contagem } from "../shared/plural";
 
 /**
  * Modo ERP DP — o Vinculato lido com a gramática do SAP HCM.
@@ -433,7 +434,7 @@ function HeadcountSection({ companyId }: { companyId: string }) {
         <div className={styles.tile}><small>Desligados até a data</small><strong>{data.summary.byStatus.terminated ?? 0}</strong><span>fora do quadro</span></div>
       </div>
       {data.summary.approximated > 0 && <div className={styles.note}><AlertTriangle aria-hidden="true" /><p>
-        {data.summary.approximated} pessoa(s) ainda sem histórico funcional completo: para elas a lotação vem do cadastro de hoje.
+        {contagem(data.summary.approximated, "pessoa", "pessoas")} ainda sem histórico funcional completo: para elas a lotação vem do cadastro de hoje.
         O histórico passa a valer a partir da primeira mudança registrada de cada pessoa.</p></div>}
       {data.summary.byDepartment.length > 0 && <div className={styles.bars} aria-label="Quadro por departamento">
         {data.summary.byDepartment.slice(0, 12).map((item) => {
@@ -595,10 +596,10 @@ function EsocialSection({ companyId, canCheck }: { companyId: string; canCheck: 
       else unmatched += 1;
     }
     if (!matched.length) {
-      setFeedback({ tone: "error", text: `Nenhuma das ${lines.length} linha(s) válidas corresponde a um evento esperado desta competência. Formato: matrícula;evento;data;recibo.` });
+      setFeedback({ tone: "error", text: `Nenhuma das ${contagem(lines.length, "linha", "linhas")} válidas corresponde a um evento esperado desta competência. Formato: matrícula;evento;data;recibo.` });
       return;
     }
-    await send(matched, `${matched.length} recibo(s) conferido(s)${unmatched ? `; ${unmatched} linha(s) sem evento correspondente nesta competência` : ""}.`);
+    await send(matched, `${contagem(matched.length, "recibo conferido", "recibos conferidos")}${unmatched ? `; ${contagem(unmatched, "linha", "linhas")} sem evento correspondente nesta competência` : ""}.`);
   }
 
   return <div className={styles.stack}>

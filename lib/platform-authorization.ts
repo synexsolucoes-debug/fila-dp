@@ -1,4 +1,4 @@
-import type { ChatGPTUser } from "@/app/chatgpt-auth";
+import type { SessionUser } from "@/lib/auth/session";
 import { ApiError } from "./api-errors.ts";
 
 function configuredPlatformAdmins() {
@@ -10,11 +10,11 @@ function configuredPlatformAdmins() {
   );
 }
 
-export function isPlatformAdmin(user: ChatGPTUser) {
+export function isPlatformAdmin(user: SessionUser) {
   return Boolean(user.id && configuredPlatformAdmins().has(user.email.trim().toLowerCase()));
 }
 
-export function requirePlatformAdmin(user: ChatGPTUser) {
+export function requirePlatformAdmin(user: SessionUser) {
   if (!user.id || !isPlatformAdmin(user)) {
     throw ApiError.forbidden("A administração da plataforma exige uma identidade global autorizada.", "PLATFORM_ADMIN_REQUIRED");
   }

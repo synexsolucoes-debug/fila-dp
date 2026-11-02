@@ -15,6 +15,7 @@ import { EmptyState, ErrorBanner, LoadingState, StatusPill } from "../shared";
 import { currency, dateLabel, fileSize, normalizeDossier, requestJson, type Row } from "./epi.api";
 import type { EmployeeEpiDossier } from "./epi.types";
 import styles from "./epi.module.css";
+import { contagem } from "../shared/plural";
 
 /**
  * A aba de EPIs dentro do cadastro do colaborador.
@@ -248,7 +249,7 @@ function ShieldCheckIcon() {
 
 function Section({ title, count, children }: { title: string; count: number; children: React.ReactNode }) {
   return <section>
-    <header className={styles.sectionTitle}><h3>{title}</h3><span>{count} registro(s)</span></header>
+    <header className={styles.sectionTitle}><h3>{title}</h3><span>{contagem(count, "registro", "registros")}</span></header>
     {children}
   </section>;
 }

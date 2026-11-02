@@ -27,10 +27,16 @@ const {
   workItemSources, buildWorkCenterQuery, buildWorkCountsQuery, buildWorkGroupQuery, emptyWorkItemFilters,
 } = await import("../lib/work-items.ts");
 const { toPostgresParameters } = await import("../lib/postgres-parameters.ts");
+const {
+  SNAPSHOT_ACTIVE_CARDS_SQL, SNAPSHOT_RECENT_ARCHIVED_SQL, SNAPSHOT_ARCHIVED_TOTAL_SQL, SNAPSHOT_ARCHIVE_LIMIT,
+} = await import("../lib/snapshot-queries.ts");
 const { Client } = await import("pg");
 
 const CARDS = Number(process.env.MEASURE_CARDS ?? 20_000);
 const SIDE_ROWS = Number(process.env.MEASURE_SIDE_ROWS ?? 2_000);
+/* O arquivo de um quadro com anos de operação. Fica num quadro próprio para
+   não mudar o volume que a Central de Trabalho mede. */
+const ARCHIVED = Number(process.env.MEASURE_ARCHIVED ?? 40_000);
 
 const client = new Client({ connectionString: databaseUrl });
 await client.connect();
@@ -149,6 +155,25 @@ async function seed() {
       'AGENT_LOW_CONFIDENCE', now() - make_interval(days => g % 45)
     FROM generate_series(1, 1000) g`, [id("prop"), id("w")]);
 
+  /* Quadro do painel com arquivo grande: 500 ativas e ARCHIVED arquivadas.
+     É o caso que fazia cada recarga do painel crescer com o histórico. */
+  await client.query(`INSERT INTO fdp_boards (id, workspace_id, name, board_type) VALUES ($1, $2, 'Quadro com arquivo', 'operational')`,
+    [id("ba"), id("w")]);
+  await client.query(`INSERT INTO fdp_lists (id, workspace_id, board_id, name, kind, position)
+    VALUES ($1, $2, $3, 'Concluídas', 'done', 1000)`, [id("la"), id("w"), id("ba")]);
+  await client.query(`INSERT INTO fdp_cards
+      (id, workspace_id, board_id, list_id, title, description, company_id, company, process_type,
+       priority, sla_status, position, source_type, created_by, archived, archived_at, created_at, updated_at)
+    SELECT $1 || '-' || g, $2, $3, $4, 'Arquivo ' || g, 'Ensaio de medição',
+      $5 || '-' || (1 + g % 10), 'Empresa', 'CONCILIAÇÃO CADASTRAL', 'normal',
+      CASE WHEN g <= 500 THEN 'safe' ELSE 'completed' END,
+      g * 1000, 'manual', 'medicao@local',
+      CASE WHEN g <= 500 THEN 0 ELSE 1 END,
+      CASE WHEN g <= 500 THEN NULL ELSE now() - make_interval(mins => g) END,
+      now() - make_interval(days => g % 700), now() - make_interval(days => g % 400)
+    FROM generate_series(1, $6::int) g`,
+    [id("ca"), id("w"), id("ba"), id("la"), id("co"), ARCHIVED + 500]);
+
   await client.query("ANALYZE fdp_cards, fdp_employee_movements, fdp_movement_approval_steps, fdp_operational_pending_items, fdp_movement_suggestions, fdp_agent_proposals");
 }
 
@@ -208,6 +233,15 @@ try {
 
   const grouped = buildWorkGroupQuery({ ...shared, scope: "team", group: "source" });
   await measure("Central de Trabalho — agrupamento por origem", grouped.sql, grouped.parameters);
+
+  await measure("Painel — demandas ativas do quadro com arquivo grande",
+    SNAPSHOT_ACTIVE_CARDS_SQL, [id("ba")]);
+  await measure(`Painel — ${SNAPSHOT_ARCHIVE_LIMIT} arquivadas mais recentes, acesso irrestrito`,
+    SNAPSHOT_RECENT_ARCHIVED_SQL, [id("ba"), true, [], SNAPSHOT_ARCHIVE_LIMIT]);
+  await measure(`Painel — ${SNAPSHOT_ARCHIVE_LIMIT} arquivadas mais recentes, duas empresas`,
+    SNAPSHOT_RECENT_ARCHIVED_SQL, [id("ba"), false, [`${id("co")}-1`, `${id("co")}-2`], SNAPSHOT_ARCHIVE_LIMIT]);
+  await measure("Painel — total de arquivadas",
+    SNAPSHOT_ARCHIVED_TOTAL_SQL, [id("ba"), true, []]);
 
   await measure("Triagem — página inicial",
     `SELECT p.id, p.agent_key, p.status, p.confidence, p.decision_code, p.created_at

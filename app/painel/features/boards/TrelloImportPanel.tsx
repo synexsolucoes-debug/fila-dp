@@ -5,6 +5,7 @@ import { AlertTriangle, CheckCircle2, FileJson, LoaderCircle, Upload } from "luc
 import type { WorkspaceSnapshot } from "@/lib/fila-dp-types";
 import { readTrelloExport, TrelloImportError, type SlaBehavior, type TrelloBoardExport, type TrelloImportMapping, type TrelloImportPlan } from "@/lib/trello-import";
 import styles from "./trello-import.module.css";
+import { contagem } from "../shared/plural";
 
 /**
  * Importar quadro do Trello (`lib/trello-import.ts`).
@@ -139,7 +140,7 @@ export function TrelloImportPanel({ busy, processTypes, onImport }: {
     if (snapshot) {
       reset();
       setFileName("");
-      setDone(`Quadro "${mapping.boardName}" importado: ${summary.cards} demanda(s), ${summary.checklistItems} item(ns) e ${summary.comments} comentário(s).`);
+      setDone(`Quadro "${mapping.boardName}" importado: ${contagem(summary.cards, "demanda", "demandas")}, ${summary.checklistItems} item(ns) e ${contagem(summary.comments, "comentário", "comentários")}.`);
     }
   }
 
@@ -164,7 +165,7 @@ export function TrelloImportPanel({ busy, processTypes, onImport }: {
 
     {preview && mapping && <>
       {preview.alreadyImportedAt && <p className={styles.error} role="alert"><AlertTriangle aria-hidden="true" />Este quadro do Trello já foi importado em {new Date(preview.alreadyImportedAt).toLocaleDateString("pt-BR")}. Importar de novo cria um segundo quadro com as mesmas demandas.</p>}
-      <p className={styles.found}>{preview.board.cards} cartão(ões) em {preview.board.lists.length} lista(s), {preview.board.labels.length} etiqueta(s), {preview.board.members.length} membro(s) e {preview.board.comments} comentário(s) no arquivo.</p>
+      <p className={styles.found}>{preview.board.cards} cartão(ões) em {contagem(preview.board.lists.length, "lista", "listas")}, {contagem(preview.board.labels.length, "etiqueta", "etiquetas")}, {contagem(preview.board.members.length, "membro", "membros")} e {contagem(preview.board.comments, "comentário", "comentários")} no arquivo.</p>
 
       <div className={styles.grid}>
         <label><span>Nome do quadro no Vinculato</span><input value={mapping.boardName} maxLength={80} onChange={(event) => update({ boardName: event.target.value })} /></label>
@@ -241,10 +242,10 @@ export function TrelloImportPanel({ busy, processTypes, onImport }: {
 
       {plan && <div className={styles.plan}>
         <div className={styles.summary}>
-          <article><small>Demandas</small><strong>{plan.summary.cards}</strong><span>{plan.summary.archivedCards} arquivada(s){plan.summary.skippedArchived ? ` · ${plan.summary.skippedArchived} fora` : ""}</span></article>
+          <article><small>Demandas</small><strong>{plan.summary.cards}</strong><span>{contagem(plan.summary.archivedCards, "arquivada", "arquivadas")}{plan.summary.skippedArchived ? ` · ${plan.summary.skippedArchived} fora` : ""}</span></article>
           <article><small>Colunas</small><strong>{plan.lists.length}</strong><span>{plan.lists.map((list) => list.name).join(" → ")}</span></article>
-          <article><small>Itens de checklist</small><strong>{plan.summary.checklistItems}</strong><span>{plan.labels.length} etiqueta(s)</span></article>
-          <article><small>Comentários</small><strong>{plan.summary.comments}</strong><span>{plan.summary.attachmentsAsLinks} anexo(s) como link</span></article>
+          <article><small>Itens de checklist</small><strong>{plan.summary.checklistItems}</strong><span>{contagem(plan.labels.length, "etiqueta", "etiquetas")}</span></article>
+          <article><small>Comentários</small><strong>{plan.summary.comments}</strong><span>{contagem(plan.summary.attachmentsAsLinks, "anexo", "anexos")} como link</span></article>
         </div>
         {plan.warnings.length > 0 && <ul className={styles.warnings}>{plan.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
         <p className={styles.hint}>As demandas entram sem disparar automações nem notificações. Demanda aberta sem responsável recebe o titular da empresa na carteira do DP.</p>

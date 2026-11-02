@@ -649,7 +649,8 @@ export const SAVED_VIEWS_LIMIT = 12;
 /** Presets que todo grupo de DP usa, sem ninguém precisar montá-los. */
 export function presetViews(currentMemberName: string): Array<{ id: string; label: string; filters: Partial<DemandFilters>; mode?: BoardViewMode }> {
   return [
-    { id: "minha-fila", label: "Minha fila", mode: "queue", filters: { assignee: currentMemberName || "all" } },
+    // "Comigo": "Minha fila" já é o nome do modo de visão, na mesma barra.
+    { id: "minha-fila", label: "Comigo", mode: "queue", filters: { assignee: currentMemberName || "all" } },
     { id: "sem-responsavel", label: "Sem responsável", filters: { assignee: "none" } },
     { id: "atrasadas", label: "Atrasadas", filters: { sla: "overdue" } },
     { id: "hoje", label: "Hoje", filters: { due: "today" } },

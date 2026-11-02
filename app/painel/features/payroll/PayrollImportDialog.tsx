@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { CheckCircle2, FileText, LoaderCircle, Upload, X } from "lucide-react";
 import type { Company, WorkspaceSnapshot } from "@/lib/fila-dp-types";
+import { contagem } from "../shared/plural";
 
 type Preview = {
   model: string;
@@ -75,7 +76,7 @@ export function PayrollImportDialog({ companies, importing, onClose, onImport, o
         {error && <p className="payroll-import-error">{error}</p>}
       </form>
       {result && <div className="payroll-import-preview">
-        <div className="payroll-import-identification"><CheckCircle2 /><div><strong>{result.preview.modelLabel}</strong><span>{result.preview.companyName} · CNPJ {result.preview.taxId} · competência {periodLabel(result.preview.period)} · {result.preview.totalPages} página(s)</span></div><b>{result.targetCompanyName}</b></div>
+        <div className="payroll-import-identification"><CheckCircle2 /><div><strong>{result.preview.modelLabel}</strong><span>{result.preview.companyName} · CNPJ {result.preview.taxId} · competência {periodLabel(result.preview.period)} · {contagem(result.preview.totalPages, "página", "páginas")}</span></div><b>{result.targetCompanyName}</b></div>
         <div className="payroll-import-kpis"><article><span>Pessoas identificadas</span><strong>{result.preview.headcount}</strong><small>{result.preview.admissions} admissões · {result.preview.terminations} desligamentos</small></article><article><span>Proventos brutos</span><strong>{money(result.preview.grossPayroll)}</strong><small>Valor oficial do documento</small></article><article><span>Descontos</span><strong>{money(result.preview.totalDeductions)}</strong><small>Líquido {money(result.preview.netPay)}</small></article><article><span>Custo monitorado</span><strong>{money(result.preview.payrollCost)}</strong><small>Inclui {money(result.preview.employerCharges)} de encargos encontrados</small></article></div>
         <div className="payroll-import-notice"><strong>Pronto para atualizar o painel</strong><span>Os valores são copiados do PDF; o Vinculato não recalcula impostos ou encargos.</span>{result.preview.warnings.map((warning) => <small key={warning}>{warning}</small>)}</div>
       </div>}

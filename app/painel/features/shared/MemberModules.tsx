@@ -5,6 +5,7 @@ import { Building2, LoaderCircle, Lock, MinusCircle, PlusCircle, RotateCcw } fro
 import { roleLabels } from "@/lib/capability-catalog";
 import { ErrorBanner } from "./panel-ui";
 import styles from "./member-modules.module.css";
+import { contagem } from "./plural";
 
 /**
  * Acesso individual aos módulos, dentro da ficha de um membro.
@@ -111,7 +112,7 @@ export function MemberModules({ memberId, memberName, canManage }: {
     <div className={styles.matrixArea}>
       <p className={styles.detailNote}>
         {payload.member.department ? <>
-          <Building2 aria-hidden="true" /> O departamento <b>{payload.member.department.name}</b> dá {departmentModules} módulo(s) por
+          <Building2 aria-hidden="true" /> O departamento <b>{payload.member.department.name}</b> dá {contagem(departmentModules, "módulo", "módulos")} por
           padrão, e {approved} estão liberados para {memberName}.
         </> : <>
           O papel <b>{roleLabels[payload.member.role as keyof typeof roleLabels] ?? payload.member.role}</b> decide o acesso porque não há departamento principal cadastrado.

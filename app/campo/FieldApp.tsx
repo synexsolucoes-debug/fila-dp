@@ -24,6 +24,8 @@ import {
   type QueuedOperation,
 } from "./field.api";
 import styles from "./field.module.css";
+import { askConfirm } from "./ConfirmSheet";
+import { contagem } from "../painel/features/shared/plural";
 
 /**
  * Vinculato Campo.
@@ -192,7 +194,7 @@ export function FieldApp({ user, signOutPath }: {
       setOnline(navigator.onLine);
       if (!navigator.onLine) return;
       const result = await flushQueue();
-      if (result.sent) setToast(`${result.sent} registro(s) enviado(s) da fila.`);
+      if (result.sent) setToast(`${contagem(result.sent, "registro enviado", "registros enviados")} da fila.`);
       await refreshQueue();
     };
     // As duas referências são estáveis de propósito: uma função inline no
@@ -337,8 +339,8 @@ export function FieldApp({ user, signOutPath }: {
         // quando o servidor recusou mandaria a pessoa esperar por uma conexão
         // que já existe, em vez de ler o motivo que está na própria pendência.
         setToast(
-          result.sent > 0 ? `${result.sent} enviado(s).`
-            : result.failed > 0 ? `${result.failed} recusado(s) pelo servidor — veja o motivo na pendência.`
+          result.sent > 0 ? `${contagem(result.sent, "enviado", "enviados")}.`
+            : result.failed > 0 ? `${contagem(result.failed, "recusado", "recusados")} pelo servidor — veja o motivo na pendência.`
               : "Nada foi enviado — a rede continua indisponível.",
         );
         await refreshQueue();
@@ -367,9 +369,12 @@ function Header({ title, user, signOutPath, online, pending, onBack, onQueue }: 
    */
   async function signOut(event: React.MouseEvent<HTMLAnchorElement>) {
     event.preventDefault();
-    if (pending > 0 && !window.confirm(
-      `Há ${pending} registro(s) aguardando envio. Se sair agora, eles subirão no nome de quem entrar depois. Sair mesmo assim?`,
-    )) return;
+    if (pending > 0 && !(await askConfirm({
+      title: "Sair com registros pendentes?",
+      message: `${pending === 1 ? "Há 1 registro aguardando envio" : `Há ${pending} registros aguardando envio`}. Se sair agora, ${pending === 1 ? "ele subirá" : "eles subirão"} no nome de quem entrar depois.`,
+      confirmLabel: "Sair mesmo assim",
+      danger: true,
+    }))) return;
     // Um limite de tempo para a limpeza: sem rede ou com armazenamento travado,
     // ninguém pode ficar preso dentro do aplicativo.
     await Promise.race([clearShellCache(), new Promise((resolve) => window.setTimeout(resolve, 1500))]);
@@ -385,7 +390,7 @@ function Header({ title, user, signOutPath, online, pending, onBack, onQueue }: 
       <small>{user.displayName}</small>
     </div>
     {onQueue && pending > 0 && <button type="button" className={styles.pendingBadge} onClick={onQueue}
-      aria-label={`${pending} registro(s) aguardando envio`}>
+      aria-label={`${contagem(pending, "registro", "registros")} aguardando envio`}>
       <UploadCloud aria-hidden="true" />{pending}
     </button>}
     <span className={styles.networkDot} data-online={online} aria-label={online ? "Com rede" : "Sem rede"} />
@@ -461,7 +466,7 @@ function Home({ company, companies, onCompany, location, locations, onLocation, 
 
     {pending > 0 && <button type="button" className={styles.queueCallout} onClick={() => onPick("queue")}>
       <UploadCloud aria-hidden="true" />
-      <span><strong>{pending} registro(s) aguardando envio</strong>
+      <span><strong>{contagem(pending, "registro", "registros")} aguardando envio</strong>
         <small>Feitos sem rede. Vão sozinhos quando a conexão voltar.</small></span>
     </button>}
   </div>;
@@ -957,7 +962,7 @@ function QueuePanel({ queue, online, onFlush, onDiscard }: {
     <ul className={styles.plainList}>
       {queue.map((item) => <li key={item.id}>
         <strong>{item.label}</strong>
-        <small>{new Date(item.createdAt).toLocaleString("pt-BR")} · {item.attempts} tentativa(s)</small>
+        <small>{new Date(item.createdAt).toLocaleString("pt-BR")} · {contagem(item.attempts, "tentativa", "tentativas")}</small>
         {/* Dizer qual parte está pendente evita o pior engano possível aqui:
             descartar achando que nada foi registrado, quando a entrega já
             debitou o estoque e só a evidência ficou na fila. */}

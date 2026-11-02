@@ -13,6 +13,7 @@ import type {
   AgentLogLine, AgentRun, AgentScheduleHealth, AgentsPayload, AgentStatus, AgentWorkerHealth,
 } from "./work.types";
 import styles from "./work.module.css";
+import { contagem } from "../shared/plural";
 
 /**
  * Central de Agentes (§20 a §26).
@@ -303,7 +304,7 @@ export function AgentsView({ initialRunId = "" }: { initialRunId?: string }) {
             <span>{agent.lastError}</span>
             <span>
               {agent.schedule.consecutiveFailures > 0
-                ? `${agent.schedule.consecutiveFailures} falha(s) seguida(s). A próxima tentativa é adiada a cada uma delas para não insistir em um sistema fora do ar.`
+                ? `${contagem(agent.schedule.consecutiveFailures, "falha seguida", "falhas seguidas")}. A próxima tentativa é adiada a cada uma delas para não insistir em um sistema fora do ar.`
                 : "Nenhuma demanda foi alterada por esta falha."}
             </span>
           </div> : null}

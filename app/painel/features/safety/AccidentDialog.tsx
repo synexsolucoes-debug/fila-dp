@@ -9,6 +9,7 @@ import {
 import { payloadFromDraft } from "./safety.api";
 import type { AccidentDraft, SafetyCompanyOption } from "./safety.types";
 import styles from "./safety.module.css";
+import { contagem } from "../shared/plural";
 
 /**
  * O formulário do lançamento.
@@ -126,7 +127,7 @@ export function AccidentDialog({ draft: initial, companies, busy, error, onClose
 
           <p className={styles.formHint}>
             Este lançamento entra no período de {preview.occurredOn ? preview.occurredOn.split("-").reverse().join("/") : "—"}
-            {preview.leaveDays > 0 ? ` e soma ${preview.leaveDays} dia(s) de afastamento.` : " e não soma dias de afastamento."}
+            {preview.leaveDays > 0 ? ` e soma ${contagem(preview.leaveDays, "dia", "dias")} de afastamento.` : " e não soma dias de afastamento."}
           </p>
         </div>
 

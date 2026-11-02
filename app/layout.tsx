@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Mono, Inter, Manrope } from "next/font/google";
 import { headers } from "next/headers";
+import { publicOrigin } from "@/lib/site-map";
+import { ModalFocusGuard } from "./components/ModalFocusGuard";
 import "./globals.css";
 import "./access.css";
 import "./dashboard-modern.css";
@@ -57,7 +59,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const requestHeaders = await headers();
   const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
   const protocol = requestHeaders.get("x-forwarded-proto") ?? (host?.includes("localhost") ? "http" : "https");
-  const origin = host ? `${protocol}://${host}` : "https://fila-dp.synexsolucoes.chatgpt.site";
+  const origin = host ? `${protocol}://${host}` : publicOrigin();
 
   return {
     metadataBase: new URL(origin),
@@ -130,7 +132,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="pt-BR" data-scroll-behavior="smooth" className={`${interface_.variable} ${titles.variable} ${data.variable}`}>
-      <body>{children}</body>
+      <body>{children}<ModalFocusGuard /></body>
     </html>
   );
 }
