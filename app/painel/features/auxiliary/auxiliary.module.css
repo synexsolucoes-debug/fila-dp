@@ -87,13 +87,13 @@
 .moduleLenses button > svg { color: var(--aux-soft); }
 .activeLens > svg { color: #fff; }
 
-.privacyBanner, .privacyNotice { display: flex; align-items: center; gap: 11px; border: 1px solid color-mix(in srgb, var(--module-psychology) 32%, var(--aux-border)); background: #f4f1fb; color: #4d3c83; }
+.privacyBanner, .privacyNotice { display: flex; align-items: center; gap: 11px; border: 1px solid color-mix(in srgb, var(--module-psychology) 32%, var(--aux-border)); background: color-mix(in srgb, var(--module-psychology) 8%, var(--ui-surface, #f4f1fb)); color: var(--ui-text, #4d3c83); }
 .privacyBanner { margin-bottom: 12px; padding: 10px 13px; border-radius: 7px; }
 .privacyBanner > svg, .privacyNotice > svg { flex: 0 0 auto; }
 .privacyBanner > div, .privacyNotice > div { display: grid; flex: 1; gap: 2px; }
 .privacyBanner strong, .privacyNotice strong { font-size: .75rem; }
 .privacyBanner span, .privacyNotice span { font-size: .75rem; line-height: 1.4; }
-.privacyBanner > b { padding: 5px 7px; border: 1px solid #cfc5e9; border-radius: 4px; font-size: .75rem; letter-spacing: normal; white-space: nowrap; }
+.privacyBanner > b { padding: 5px 7px; border: 1px solid color-mix(in srgb, var(--module-psychology) 35%, var(--ui-border, #cfc5e9)); border-radius: 4px; font-size: .75rem; letter-spacing: normal; white-space: nowrap; }
 
 .stageLedger { margin-bottom: 12px; border: 1px solid var(--aux-border); border-radius: 9px; overflow: hidden; background: var(--aux-surface); box-shadow: var(--ui-shadow-card); }
 .stageLedger > header { display: flex; align-items: center; justify-content: space-between; min-height: 48px; padding: 8px 14px; border-bottom: 1px solid var(--aux-border); background: var(--aux-muted); }

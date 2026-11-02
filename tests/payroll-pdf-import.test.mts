@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { parsePayrollTextPages } from "../lib/payroll-pdf.ts";
+import { painelSource } from "./painel-source.ts";
 
 test("resumo Pessoal+ vira indicadores consolidados sem recalcular tributos", () => {
   const parsed = parsePayrollTextPages([
@@ -39,7 +40,7 @@ test("extrato mensal Domínio reconhece colaboradores, totais e encargos", () =>
 test("importador de PDF exige acesso, faz prévia e atualiza a competência com auditoria", async () => {
   const [route, view, dialog] = await Promise.all([
     readFile(new URL("../app/api/hr-metrics/import/pdf/route.ts", import.meta.url), "utf8"),
-    readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8"),
+    painelSource(),
     readFile(new URL("../app/painel/features/payroll/PayrollImportDialog.tsx", import.meta.url), "utf8"),
   ]);
   assert.match(route, /requireCapability\(workspace, "hr\.write"\)/u);

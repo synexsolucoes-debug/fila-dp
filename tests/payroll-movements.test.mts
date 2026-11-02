@@ -6,6 +6,7 @@ import {
   hasBlock, normalizeTipmov, parseCompetence, parseDecimalInput, parseEventCatalogRows, parsePastedMovements, pastedCompanyMismatch, pastedMovementCells,
   sankhyaCompanyCode, sankhyaEmployeeCode, toCents, type PayrollCatalogEvent,
 } from "../lib/payroll-movements.ts";
+import { painelSource } from "./painel-source.ts";
 
 const read = (path: string) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
@@ -197,7 +198,7 @@ test("as rotas exigem capacidade e escopo de empresa, e a exportação fica na a
 });
 
 test("a tela Folha mostra o lançador", async () => {
-  const app = await read("app/painel/WorkspaceApp.tsx");
+  const app = await painelSource();
   assert.match(app, /<PayrollMovementsPanel /u);
 });
 

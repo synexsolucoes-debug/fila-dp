@@ -206,261 +206,23 @@
   transition: grid-template-columns var(--motion-slow) var(--ease-standard);
 }
 
-.dashboard-sidebar {
-  z-index: 30;
-  height: 100dvh;
-  padding: 22px 16px 16px;
-  background: var(--ui-rail);
-  border-right: 1px solid var(--ui-rail-border);
-}
-
-.sidebar-toggle {
-  /* A barra lateral é um flex em coluna: sem `flex: 0 0 auto` o botão encolhia
-     de 34px para 20px de altura e caía abaixo do alvo mínimo da WCAG 2.5.8. */
-  flex: 0 0 auto;
-  width: 34px;
-  height: 34px;
-  margin: -5px 0 10px auto;
-  border-radius: var(--ui-radius-sm);
-}
-
-.sidebar-toggle svg,
-.dashboard-header-actions svg {
-  width: 18px;
-  height: 18px;
-  stroke-width: 1.9;
-}
-
-.dashboard-brand {
-  min-height: 40px;
-  padding-inline: 8px;
-}
-
-.dashboard-brand-logo { display: inline-flex; }
-.dashboard-brand-logo-mark { display: none; }
-.sidebar-collapsed .dashboard-brand-logo-full { display: none; }
-.sidebar-collapsed .dashboard-brand-logo-mark { display: inline-flex; }
-
-.dashboard-sidebar nav {
-  gap: 6px;
-  margin-top: 38px;
-}
-
-.dashboard-sidebar nav button {
-  position: relative;
-  min-height: 46px;
-  padding: 0 12px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  /* Na escala do painel (3/5/8), e não 9px avulso: o item de menu é uma linha
-     de índice, não uma pílula. */
-  border-radius: var(--ui-radius-md);
-  color: var(--ui-rail-text);
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.2;
-}
-
-.dashboard-sidebar nav button > span {
-  width: 20px;
-  height: 20px;
-  display: grid;
-  place-items: center;
-  color: var(--ui-rail-icon);
-}
-
-.dashboard-sidebar nav button > span svg {
-  width: 19px;
-  height: 19px;
-  stroke-width: 1.8;
-}
-
-.dashboard-sidebar nav button b {
-  min-width: 22px;
-  height: 22px;
-  margin-left: auto;
-  font-size: 12px;
-}
-
-.dashboard-sidebar nav button:hover {
-  background: var(--ui-rail-hover);
-  color: var(--ui-text);
-}
-
 /* O item ativo ganha barra à esquerda além da cor: o Modelo 2 marca o lugar
    pela forma, e forma continua legível para quem não distingue matiz. */
-.dashboard-sidebar nav button.active {
-  background: var(--ui-rail-active);
-  color: var(--ui-rail-active-text);
-  font-weight: 700;
-  box-shadow: inset 3px 0 0 var(--ui-rail-active-text);
-}
-
-.dashboard-sidebar nav button.active > span {
-  color: var(--ui-rail-active-text);
-}
 
 /* O seletor completo só participa da navegação compacta. No desktop o menu
    lateral já tem altura rolável e mostra todos os módulos no próprio contexto. */
-.sidebar-mobile-more { display: none; }
-
-.sidebar-collapsed .dashboard-sidebar nav button {
-  padding-inline: 0;
-  justify-content: center;
-  font-size: 0;
-}
-
-.sidebar-collapsed .dashboard-sidebar nav button > span {
-  width: 22px;
-}
-
-.sidebar-collapsed .dashboard-sidebar nav button b {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  min-width: 17px;
-  width: 17px;
-  height: 17px;
-  margin: 0;
-  font-size: 11px;
-}
 
 /* A barra compacta continua rolavel por mouse, toque e teclado, mas o trilho
    visivel rouba quase um quarto dos 76px e faz os icones parecerem fora do
    centro. As marcas de favorito/recente tambem precisam sair: sem o rotulo que
    explicava cada uma, elas viravam um segundo icone solto ao lado do destino. */
-.sidebar-collapsed .dashboard-sidebar nav {
-  scrollbar-width: none;
-}
-
-.sidebar-collapsed .dashboard-sidebar nav::-webkit-scrollbar {
-  display: none;
-}
-
-.sidebar-collapsed .sidebar-shortcut-mark {
-  display: none;
-}
 
 /* Os dois comandos da conta somam mais que a largura util da coluna recolhida.
    Empilha-los preserva as duas acoes sem cortar o botao de sair. */
-.sidebar-collapsed .sidebar-account-actions {
-  flex-direction: column;
-  gap: 2px;
-}
-
-.sidebar-workspace {
-  padding-bottom: 16px;
-}
-
-.sidebar-workspace > span {
-  font-size: 12px;
-}
-
-.sidebar-workspace button {
-  min-height: 52px;
-  border-radius: var(--ui-radius-lg);
-  font-size: 12px;
-}
-
-.sidebar-workspace button > svg {
-  width: 16px;
-  margin-left: auto;
-}
-
-.sidebar-account {
-  grid-template-columns: 38px minmax(0, 1fr) 28px;
-}
-
-.user-avatar {
-  width: 38px;
-  height: 38px;
-  font-size: 11px;
-}
-
-.sidebar-account strong {
-  font-size: 12px;
-}
-
-.sidebar-account small {
-  font-size: 12px;
-}
-
-.sidebar-account :is(a, .sign-out-button) {
-  width: 28px;
-  height: 28px;
-  display: grid;
-  place-items: center;
-}
-
-.sidebar-account :is(a, .sign-out-button) svg {
-  width: 17px;
-  height: 17px;
-}
 
 .dashboard-main {
   min-height: 100dvh;
   background: var(--ui-bg);
-}
-
-.dashboard-header {
-  position: sticky;
-  top: 0;
-  z-index: 24;
-  height: 68px;
-  padding-inline: clamp(18px, 2vw, 34px);
-  border-color: var(--ui-border);
-  background: color-mix(in srgb, var(--ui-surface) 94%, transparent);
-  backdrop-filter: blur(14px);
-}
-
-.dashboard-header > div:first-child {
-  color: var(--ui-text-soft);
-  font-size: 12px;
-}
-
-.dashboard-header > div:first-child strong {
-  color: var(--ui-text);
-}
-
-.dashboard-header-actions {
-  gap: 7px;
-}
-
-.dashboard-header-actions button {
-  min-width: 38px;
-  height: 38px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-color: var(--ui-border);
-  border-radius: var(--ui-radius-lg);
-  background: var(--ui-surface);
-  color: var(--ui-text-soft);
-  transition: border-color .15s ease, background .15s ease, color .15s ease, transform .15s ease;
-}
-
-.dashboard-header-actions button:hover {
-  border-color: var(--ui-border-strong);
-  background: var(--ui-surface-muted);
-  color: var(--ui-text);
-  transform: translateY(-1px);
-}
-
-.dashboard-header-actions .new-demand {
-  gap: 7px;
-  min-width: max-content;
-  padding: 0 15px;
-  border-color: var(--ui-brand);
-  background: var(--ui-brand);
-  color: #fff;
-  font-size: 12px;
-}
-
-.dashboard-header-actions .new-demand:hover {
-  border-color: var(--ui-brand-soft);
-  background: var(--ui-brand-soft);
-  color: #fff;
 }
 
 /* Troca de modo Vinculato ⇄ ERP DP: a última porta do canto superior
@@ -468,44 +230,9 @@
    para a pessoa saber em que modo está sem ler o rótulo. O seletor leva
    `.operational-ui` e `button` porque a faixa já tem regras desse peso
    (interface-refresh.css) que, de outro modo, apagariam a cor de destaque. */
-.operational-ui .dashboard-header-actions button.erp-mode-toggle {
-  display: inline-flex;
-  gap: 7px;
-  width: auto;
-  min-width: max-content;
-  padding: 0 13px;
-  border-color: var(--ui-accent);
-  background: var(--ui-surface);
-  color: var(--ui-accent-text);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.operational-ui .dashboard-header-actions button.erp-mode-toggle:hover {
-  background: var(--ui-accent-soft);
-  color: var(--ui-accent-text);
-}
-
-.operational-ui .dashboard-header-actions button.erp-mode-toggle[aria-pressed="true"],
-.operational-ui .dashboard-header-actions button.erp-mode-toggle[aria-pressed="true"]:hover {
-  background: var(--ui-accent);
-  color: var(--ui-on-accent);
-}
 
 /* No celular a faixa já está cheia: fica só o ícone, no mesmo tamanho das
    outras portas, e o rótulo continua no aria-label. */
-@media (max-width: 640px) {
-  .operational-ui .dashboard-header-actions button.erp-mode-toggle {
-    width: 34px;
-    min-width: 34px;
-    padding: 0;
-    justify-content: center;
-  }
-
-  .operational-ui .dashboard-header-actions button.erp-mode-toggle span {
-    display: none;
-  }
-}
 
 /* Em notebook a faixa também não comporta os rótulos. Com "Módulos",
    "Sistema PJ" e "ERP DP" escritos, a Visão geral — que soma empresa e
@@ -513,53 +240,18 @@
    resoluções da §43, recortados em silêncio pelo `overflow: hidden` do shell.
    Fica o ícone, do tamanho das outras portas; o nome continua no `title` e no
    `aria-label` de cada botão. */
-@media (min-width: 641px) and (max-width: 1400px) {
-  .operational-ui .dashboard-header-actions button.erp-mode-toggle {
-    width: 38px;
-    min-width: 38px;
-    padding: 0;
-    justify-content: center;
-  }
-
-  .operational-ui .dashboard-header-actions button.erp-mode-toggle span {
-    display: none;
-  }
-}
 
 /* No modo ERP o menu do Vinculato sai — inclusive a barra inferior do
    celular, que é o mesmo `nav` com outra roupa e regras mais pesadas: quem
    navega é o menu do ERP DP. */
-.operational-ui.erp-mode .dashboard-sidebar nav {
-  display: none !important;
-}
 
 /* Sistema PJ: os nove destinos ficam à mostra, em cinco seções. Numa tela
    baixa eles não cabem com o rodapé da barra, e sem rolagem própria o seletor
    de grupo passava por cima dos últimos itens. O menu rola; o rodapé fica. */
-@media (min-width: 781px) {
-  .operational-ui.pj-mode .dashboard-sidebar nav {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
-    gap: 12px;
-  }
-  .operational-ui.pj-mode .dashboard-sidebar nav .sidebar-nav-group { flex: 0 0 auto; gap: 2px; }
-  .operational-ui.pj-mode .dashboard-sidebar nav .sidebar-pj-section button { min-height: 36px; }
-  .operational-ui.pj-mode .sidebar-workspace { margin-top: 12px; }
-}
 
 /* Na barra inferior as seções não podem ocupar célula da grade: sem isto uma
    seção cujos itens estão todos em "Mais" virava um alvo vazio e empurrava a
    Administração para uma segunda linha, fora da tela. */
-@media (max-width: 780px) {
-  .operational-ui.pj-mode .dashboard-sidebar nav .sidebar-pj-section { display: contents; }
-}
-
-.theme-dark .dashboard-header-actions .new-demand {
-  border-color: var(--ui-primary);
-  background: var(--ui-primary);
-  color: #04162c;
-}
 
 .dashboard-content {
   width: 100%;
@@ -569,12 +261,6 @@
 
 .dashboard-heading {
   align-items: center;
-}
-
-.dashboard-eyebrow {
-  color: var(--ui-primary);
-  font-size: 12px;
-  letter-spacing: normal;
 }
 
 /* 38px era manchete. O Modelo 2 abre com saudação discreta e devolve a dobra
@@ -634,83 +320,6 @@
    filtro consumiam cerca de 470 dos 900 pixels antes do primeiro cartão —
    metade da tela antes da primeira demanda, na tela onde a operação passa o
    dia. O número continua legível; o que sai é o ar em volta dele. */
-.dashboard-stats {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 16px;
-}
-
-.dashboard-stats article {
-  min-height: 74px;
-  padding: 11px 14px;
-  border-color: var(--ui-border);
-  border-radius: var(--ui-radius-md);
-  background: var(--ui-surface);
-  box-shadow: var(--ui-shadow-card);
-}
-
-.dashboard-stats span {
-  color: var(--ui-text-soft);
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.dashboard-stats strong {
-  color: var(--ui-text);
-  font-size: clamp(21px, 1.4vw, 25px);
-  letter-spacing: -.02em;
-}
-
-.dashboard-stats small {
-  color: var(--ui-text-soft);
-  font-size: 12px;
-}
-
-.dashboard-stats .warning-text {
-  color: var(--ui-warning);
-}
-
-.dashboard-stats .safe-text {
-  color: var(--ui-success);
-}
-
-.dashboard-board-head {
-  margin-top: 25px;
-  align-items: end;
-  gap: 18px;
-  border-color: var(--ui-border);
-}
-
-.dashboard-tabs,
-.dashboard-filters {
-  align-items: center;
-  gap: 5px;
-}
-
-.dashboard-tabs button {
-  min-height: 42px;
-  height: 42px;
-  padding-inline: 11px;
-  color: var(--ui-text-soft);
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.dashboard-tabs button.active {
-  border-bottom-color: var(--ui-primary);
-  color: var(--ui-accent-text, var(--ui-primary));
-}
-
-.dashboard-tabs .archive-trigger {
-  gap: 6px;
-  display: inline-flex;
-  align-items: center;
-}
-
-.archive-trigger svg {
-  width: 15px;
-  height: 15px;
-}
 
 .board-selector {
   min-height: 38px;
@@ -731,52 +340,6 @@
 
 .board-selector select {
   color: var(--ui-text);
-}
-
-.dashboard-filters {
-  padding-bottom: 7px;
-}
-
-.dashboard-filters .filter-chip,
-.dashboard-filters .filter-clear {
-  min-width: max-content;
-  height: 34px;
-  padding: 0 11px;
-  border: 1px solid var(--ui-border);
-  border-radius: 999px;
-  background: var(--ui-surface);
-  color: var(--ui-text-soft);
-  font-size: 11px;
-  font-weight: 650;
-}
-
-.dashboard-filters .filter-chip:hover,
-.dashboard-filters .filter-chip.active {
-  border-color: color-mix(in srgb, var(--ui-primary) 58%, var(--ui-border));
-  background: var(--ui-primary-soft);
-  color: var(--ui-accent-text, var(--ui-primary));
-}
-
-.dashboard-filters .filter-clear {
-  border-color: transparent;
-  background: transparent;
-  color: var(--ui-accent-text, var(--ui-primary));
-}
-
-.dashboard-filters label {
-  min-width: 154px;
-  min-height: 36px;
-  border-color: var(--ui-border);
-  border-radius: var(--ui-radius-sm);
-  background: var(--ui-surface);
-  color: var(--ui-text-soft);
-  font-size: 12px;
-}
-
-.dashboard-filters select {
-  height: 34px;
-  color: var(--ui-text);
-  font-size: 11px;
 }
 
 .dashboard-kanban {
@@ -1120,8 +683,6 @@
 .planner-connections select, .planner-connections input { min-height: 34px; padding: 0 8px; border: 1px solid var(--ui-border-strong); border-radius: var(--ui-radius-md); background: var(--ui-surface); color: var(--ui-text); font: inherit; font-size: 12px; }
 .planner-connections form .secondary-button { min-height: 34px; font-size: 12px; }
 
-.workspace-member-list article:has(.member-recovery-button) { grid-template-columns: 34px minmax(0, 1fr) 128px 110px 30px; }
-.workspace-member-list article > .member-recovery-button { width: auto; min-height: 28px; height: 28px; padding: 0 8px; border: 1px solid var(--ui-border-strong); border-radius: var(--ui-radius-md); background: var(--ui-primary-soft); color: var(--ui-primary); cursor: pointer; font: 700 11px var(--font-geist-sans), sans-serif; white-space: nowrap; }
 .access-recovery-link { margin-top: 14px; padding: 14px; border: 1px solid color-mix(in srgb, var(--ui-primary) 35%, var(--ui-border)); border-radius: var(--ui-radius-lg); background: var(--ui-primary-soft); }
 .access-recovery-link > header { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
 .access-recovery-link span, .access-recovery-link strong, .access-recovery-link small { display: block; }
@@ -1143,8 +704,7 @@
 
 @media (max-width: 760px) {
   .access-recovery-link > header { flex-direction: column; }
-  .workspace-member-list article:has(.member-recovery-button) { grid-template-columns: 34px minmax(0, 1fr) 28px; }
-  .workspace-member-list article > .member-recovery-button { grid-column: 2; grid-row: 3; justify-self: start; }
+
 }
 
 @media (max-width: 980px) {
@@ -1167,8 +727,6 @@
   .attachment-preview-modal > header h2 { max-width: 44vw; }
 }
 
-.theme-dark .dashboard-header,
-.theme-dark .dashboard-stats article,
 .theme-dark .dashboard-column,
 .theme-dark .dashboard-task,
 .theme-dark .workspace-modal {
@@ -1193,65 +751,6 @@
     grid-template-columns: 80px minmax(0, 1fr);
   }
 
-  .dashboard-sidebar {
-    padding-inline: 12px;
-  }
-
-  .dashboard-brand {
-    justify-content: center;
-  }
-
-  .dashboard-brand > span:last-child,
-  .dashboard-sidebar nav button {
-    font-size: 0;
-  }
-
-  .dashboard-sidebar nav button {
-    justify-content: center;
-    padding-inline: 0;
-  }
-
-  .dashboard-sidebar nav button b {
-    position: absolute;
-    top: 4px;
-    right: 4px;
-    width: 17px;
-    min-width: 17px;
-    height: 17px;
-    margin: 0;
-    font-size: 11px;
-  }
-
-  .sidebar-workspace,
-  .sidebar-account > span:nth-child(2) {
-    display: none;
-  }
-
-  .sidebar-account {
-    grid-template-columns: 1fr;
-    justify-items: center;
-  }
-
-  .sidebar-account :is(a, .sign-out-button) {
-    margin-top: 5px;
-  }
-
-  .dashboard-board-head {
-    align-items: stretch;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .dashboard-tabs,
-  .dashboard-filters {
-    overflow-x: auto;
-  }
-}
-
-@media (max-width: 900px) {
-  .dashboard-stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 760px) {
@@ -1261,254 +760,16 @@
     min-height: 100svh;
   }
 
-  .dashboard-sidebar {
-    position: sticky;
-    top: 0;
-    width: 100%;
-    height: 60px;
-    min-height: 60px;
-    padding: 8px 12px;
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-  }
-
-  .sidebar-toggle,
-  .sidebar-workspace,
-  .sidebar-account {
-    display: none;
-  }
-
-  .dashboard-brand,
-  .sidebar-collapsed .dashboard-brand {
-    flex: 0 0 auto;
-    justify-content: flex-start;
-    padding: 0;
-  }
-
-  .dashboard-brand > span:last-child,
-  .sidebar-collapsed .dashboard-brand > span:last-child {
-    display: inline;
-    font-size: 17px;
-  }
-
   /* No celular a barra lateral vira cabeçalho. O estado salvo de recolhimento
      não pode trocar a assinatura horizontal pelo símbolo nesse outro layout. */
-  .dashboard-brand-logo-full,
-  .sidebar-collapsed .dashboard-brand-logo-full { display: inline-flex; }
-  .dashboard-brand-logo-mark,
-  .sidebar-collapsed .dashboard-brand-logo-mark { display: none; }
-
-  .dashboard-sidebar nav {
-    position: fixed;
-    z-index: 90;
-    inset: auto 0 0;
-    height: calc(70px + env(safe-area-inset-bottom));
-    margin: 0;
-    padding: 5px 6px env(safe-area-inset-bottom);
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 3px;
-    overflow: visible;
-    border-top: 1px solid var(--ui-rail-border);
-    background: color-mix(in srgb, var(--ui-rail) 96%, transparent);
-    box-shadow: 0 -10px 30px rgba(5, 18, 33, .09);
-    backdrop-filter: blur(14px);
-  }
-
-  .dashboard-sidebar nav button,
-  .sidebar-collapsed .dashboard-sidebar nav button {
-    min-width: 0;
-    min-height: 60px;
-    padding: 5px 2px;
-    flex-direction: column;
-    justify-content: center;
-    gap: 4px;
-    font-size: 12px;
-    line-height: 1;
-    white-space: nowrap;
-  }
-
-  .dashboard-sidebar nav button > span,
-  .sidebar-collapsed .dashboard-sidebar nav button > span {
-    width: 20px;
-    height: 20px;
-  }
-
-  .dashboard-sidebar nav button b,
-  .sidebar-collapsed .dashboard-sidebar nav button b {
-    top: 4px;
-    right: calc(50% - 24px);
-  }
 
   /* A grade de cinco colunas mostrava somente a primeira linha e deixava os
      outros módulos abaixo de uma barra com altura fixa. Quatro atalhos ficam
      sempre visíveis; o quinto abre todos os demais sem exigir gesto oculto. */
-  .dashboard-sidebar nav .mobile-secondary { display: none; }
-
-  .sidebar-mobile-more {
-    position: static;
-    min-width: 0;
-    display: block;
-  }
-
-  .sidebar-mobile-more > summary {
-    min-width: 0;
-    min-height: 60px;
-    padding: 5px 2px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-direction: column;
-    gap: 4px;
-    border-radius: var(--ui-radius-lg);
-    color: var(--ui-rail-text);
-    font-size: 12px;
-    font-weight: 650;
-    line-height: 1;
-    list-style: none;
-    cursor: pointer;
-    touch-action: manipulation;
-  }
-
-  .sidebar-mobile-more > summary::-webkit-details-marker { display: none; }
-  .sidebar-mobile-more > summary::marker { content: ""; }
-  .sidebar-mobile-more > summary:hover,
-  .sidebar-mobile-more > summary.active,
-  .sidebar-mobile-more[open] > summary {
-    background: var(--ui-rail-active);
-    color: var(--ui-rail-active-text);
-  }
-  .sidebar-mobile-more > summary:focus-visible {
-    outline: 3px solid color-mix(in srgb, var(--ui-accent) 42%, transparent);
-    outline-offset: 2px;
-  }
-  .sidebar-mobile-more > summary > span:first-child {
-    width: 20px;
-    height: 20px;
-    display: grid;
-    place-items: center;
-  }
-  .sidebar-mobile-more > summary svg { width: 19px; height: 19px; }
-
-  .sidebar-mobile-more-panel {
-    position: fixed;
-    z-index: 95;
-    right: 8px;
-    bottom: calc(76px + env(safe-area-inset-bottom));
-    left: 8px;
-    max-height: min(62dvh, 520px);
-    padding: 12px;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    border: 1px solid var(--ui-border);
-    border-radius: var(--ui-radius-lg);
-    background: var(--ui-surface);
-    box-shadow: var(--ui-shadow-modal);
-  }
 
   /* Chromium ainda calcula caixas de descendentes posicionados de um
      <details> fechado. Além de confundir a auditoria de alvos de toque, isso
      deixa controles invisíveis participarem da geometria da página. */
-  .sidebar-mobile-more:not([open]) > .sidebar-mobile-more-panel { display: none; }
-
-  .sidebar-mobile-more-panel > section + section {
-    margin-top: 13px;
-    padding-top: 13px;
-    border-top: 1px solid var(--ui-border);
-  }
-
-  .sidebar-mobile-more-panel > section > span {
-    display: block;
-    margin: 0 4px 7px;
-    color: var(--ui-text-soft);
-    font-size: 12px;
-    font-weight: 850;
-    letter-spacing: normal;
-  }
-
-  .sidebar-mobile-more-panel > section > div {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 6px;
-  }
-
-  .dashboard-sidebar nav .sidebar-mobile-more-panel button,
-  .sidebar-collapsed .dashboard-sidebar nav .sidebar-mobile-more-panel button {
-    min-width: 0;
-    min-height: 48px;
-    padding: 7px 9px;
-    flex-direction: row;
-    justify-content: flex-start;
-    gap: 8px;
-    border: 1px solid var(--ui-border);
-    background: var(--ui-surface-muted);
-    color: var(--ui-text);
-    font-size: 11px;
-    line-height: 1.25;
-    text-align: left;
-    white-space: normal;
-  }
-
-  .dashboard-sidebar nav .sidebar-mobile-more-panel button:hover,
-  .dashboard-sidebar nav .sidebar-mobile-more-panel button.active {
-    border-color: color-mix(in srgb, var(--ui-primary) 38%, var(--ui-border));
-    background: var(--ui-rail-active);
-    color: var(--ui-rail-active-text);
-  }
-
-  .dashboard-sidebar nav .sidebar-mobile-more-panel button > span:first-child {
-    width: 20px;
-    height: 20px;
-    flex: 0 0 auto;
-  }
-
-  .dashboard-sidebar nav .sidebar-mobile-more-panel button > span:nth-child(2) {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .dashboard-header {
-    position: sticky;
-    top: 60px;
-    height: 58px;
-    padding-inline: 12px;
-  }
-
-  .dashboard-header > div:first-child {
-    max-width: 38%;
-    overflow: hidden;
-    font-size: 12px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .dashboard-header-actions {
-    gap: 4px;
-  }
-
-  .dashboard-header-actions button {
-    min-width: 34px;
-    width: 34px;
-    height: 34px;
-    padding: 0;
-  }
-
-  .dashboard-header-actions .workspace-settings-button {
-    display: inline-grid !important;
-    place-items: center;
-  }
-
-  .dashboard-header-actions .new-demand {
-    min-width: 36px;
-    width: 36px;
-    padding: 0;
-  }
-
-  .dashboard-header-actions .new-demand span {
-    display: none;
-  }
 
   .dashboard-content {
     padding: 23px 12px calc(96px + env(safe-area-inset-bottom));
@@ -1528,42 +789,6 @@
 
   .dashboard-date {
     display: none;
-  }
-
-  .dashboard-stats {
-    display: flex;
-    gap: 9px;
-    overflow-x: auto;
-    scroll-snap-type: x mandatory;
-  }
-
-  .dashboard-stats article {
-    min-width: min(72vw, 250px);
-    min-height: 94px;
-    scroll-snap-align: start;
-  }
-
-  .dashboard-board-head {
-    align-items: stretch;
-    flex-direction: column;
-    gap: 9px;
-  }
-
-  .dashboard-tabs,
-  .dashboard-filters {
-    overflow-x: auto;
-  }
-
-  .dashboard-tabs {
-    padding-bottom: 2px;
-  }
-
-  .dashboard-filters {
-    padding: 0 0 9px;
-  }
-
-  .dashboard-filters label {
-    min-width: 158px;
   }
 
   .dashboard-kanban {
@@ -1695,27 +920,6 @@
     width: 100%;
   }
 
-  .dashboard-header > div:first-child {
-    max-width: 31%;
-  }
-
-  .dashboard-header-actions button {
-    min-width: 32px;
-    width: 32px;
-    height: 32px;
-  }
-
-  .dashboard-header-actions .new-demand {
-    width: 34px;
-  }
-
-  .dashboard-tabs button {
-    min-height: 40px;
-    height: 40px;
-    padding-inline: 9px;
-    font-size: 11px;
-  }
-
   .board-selector {
     min-width: 160px;
   }
@@ -1748,8 +952,7 @@
 
 .inbox-layout,
 .planner-layout,
-.indicators-layout,
-.companies-view {
+.indicators-layout{
   margin-top: 25px;
 }
 
@@ -1759,8 +962,7 @@
 .sla-panel,
 .rules-panel,
 .report-panel,
-.hr-indicators-panel,
-.companies-view .catalog-card {
+.hr-indicators-panel{
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-lg);
   background: var(--ui-surface);
@@ -1773,8 +975,7 @@
 .metrics-panel > header,
 .sla-panel > header,
 .rules-panel > header,
-.report-panel > header,
-.companies-view .catalog-card > header {
+.report-panel > header{
   min-height: 68px;
   padding: 13px 18px;
   border-color: var(--ui-border);
@@ -1785,8 +986,7 @@
 .metrics-panel > header strong,
 .sla-panel > header strong,
 .rules-panel > header strong,
-.report-panel > header strong,
-.companies-view .catalog-card > header strong {
+.report-panel > header strong{
   color: var(--ui-text);
   font-size: 13px;
 }
@@ -1796,8 +996,7 @@
 .metrics-panel > header span,
 .sla-panel > header span,
 .rules-panel > header span,
-.report-panel > header span,
-.companies-view .catalog-card > header span {
+.report-panel > header span{
   margin-top: 5px;
   color: var(--ui-text-soft);
   font-size: 12px;
@@ -1829,63 +1028,6 @@
   padding: 8px 10px 10px;
 }
 
-.inbox-item {
-  padding: 17px 12px;
-  grid-template-columns: 42px minmax(0, 1fr);
-  gap: 13px;
-  border-color: var(--ui-border);
-}
-
-.channel-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: var(--ui-radius-lg);
-}
-
-.channel-icon svg {
-  width: 19px;
-  height: 19px;
-  stroke-width: 1.9;
-}
-
-.inbox-item strong {
-  color: var(--ui-text);
-  font-size: 13px;
-  line-height: 1.35;
-}
-
-.inbox-item time {
-  flex: 0 0 auto;
-  color: var(--ui-text-soft);
-  font-size: 12px;
-}
-
-.inbox-item > div > span {
-  color: var(--ui-text-soft);
-  font-size: 12px;
-}
-
-.inbox-item p {
-  margin: 10px 0 12px;
-  color: var(--ui-text-soft);
-  font-size: 12px;
-  line-height: 1.55;
-}
-
-.inbox-item button {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--ui-primary);
-  font-size: 11px;
-}
-
-.inbox-item button svg {
-  width: 14px;
-  height: 14px;
-}
-
-.inbox-summary,
 .planner-focus {
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--ui-brand-soft) 76%, transparent);
@@ -1894,54 +1036,8 @@
   box-shadow: var(--ui-shadow-card);
 }
 
-.inbox-summary {
-  padding: 25px;
-}
-
-.inbox-summary > span,
 .planner-focus > span {
   color: var(--ui-accent-on-ink);
-  font-size: 12px;
-}
-
-.inbox-summary h2 {
-  margin: 14px 0 29px;
-  color: #fff;
-  font-size: 29px;
-  line-height: 1.08;
-}
-
-.inbox-summary ol {
-  gap: 21px;
-}
-
-.inbox-summary li {
-  grid-template-columns: 32px 1fr;
-  gap: 11px;
-}
-
-.inbox-summary li > b {
-  width: 30px;
-  height: 30px;
-  font-size: 12px;
-}
-
-.inbox-summary li strong {
-  color: #fff;
-  font-size: 12px;
-}
-
-.inbox-summary li p {
-  color: #a8b8c7;
-  font-size: 12px;
-}
-
-.inbox-converted strong {
-  font-size: 30px;
-}
-
-.inbox-converted span {
-  color: #a8b8c7;
   font-size: 12px;
 }
 
@@ -2378,145 +1474,8 @@
   font-size: 12px;
 }
 
-.companies-view {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.companies-toolbar,
-.companies-overview,
-.company-form,
-.metric-form {
+.company-form{
   grid-column: 1 / -1;
-}
-
-.companies-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-}
-
-.companies-toolbar > div:first-child strong,
-.companies-toolbar > div:first-child span {
-  display: block;
-}
-
-.companies-toolbar > div:first-child strong {
-  color: var(--ui-text);
-  font-size: 14px;
-}
-
-.companies-toolbar > div:first-child span {
-  margin-top: 4px;
-  color: var(--ui-text-soft);
-  font-size: 11px;
-}
-
-.companies-actions {
-  gap: 8px;
-}
-
-.companies-actions .primary-button,
-.companies-actions .secondary-button {
-  min-height: 40px;
-}
-
-.companies-overview {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.companies-overview article {
-  min-height: 92px;
-  padding: 16px;
-  display: flex;
-  align-items: center;
-  gap: 13px;
-  border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius-md);
-  background: var(--ui-surface);
-  box-shadow: var(--ui-shadow-card);
-}
-
-.companies-overview article > svg {
-  width: 38px;
-  height: 38px;
-  padding: 9px;
-  border-radius: var(--ui-radius-lg);
-  background: var(--ui-primary-soft);
-  color: var(--ui-primary);
-}
-
-.companies-overview strong,
-.companies-overview span {
-  display: block;
-}
-
-.companies-overview strong {
-  color: var(--ui-text);
-  font-size: 20px;
-}
-
-.companies-overview span {
-  margin-top: 4px;
-  color: var(--ui-text-soft);
-  font-size: 12px;
-}
-
-.companies-view .catalog-form label {
-  color: var(--ui-text-soft);
-  font-size: 12px;
-}
-
-.companies-view .catalog-form input,
-.companies-view .catalog-form select {
-  min-height: 42px;
-  border-color: var(--ui-border);
-  background: var(--ui-surface);
-  color: var(--ui-text);
-  font-size: 12px;
-}
-
-.companies-list > article,
-.metrics-list > article {
-  min-height: 70px;
-  padding: 12px 16px;
-  border-color: var(--ui-border);
-}
-
-.companies-list article strong,
-.metrics-list article strong {
-  color: var(--ui-text);
-  font-size: 11px;
-}
-
-.companies-list article small,
-.metrics-list article small,
-.companies-list article > span,
-.metrics-list article > span,
-.metrics-list article > b {
-  color: var(--ui-text-soft);
-  font-size: 12px;
-}
-
-.companies-list article button {
-  min-height: 32px;
-  padding-inline: 9px;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  border-color: color-mix(in srgb, var(--ui-danger) 25%, var(--ui-border));
-  border-radius: var(--ui-radius-md);
-  background: color-mix(in srgb, var(--ui-danger) 7%, var(--ui-surface));
-  color: var(--ui-danger);
-  font-size: 12px;
-}
-
-.companies-list article button svg {
-  width: 13px;
-  height: 13px;
 }
 
 .theme-dark .inbox-list-panel,
@@ -2525,9 +1484,7 @@
 .theme-dark .sla-panel,
 .theme-dark .rules-panel,
 .theme-dark .report-panel,
-.theme-dark .hr-indicators-panel,
-.theme-dark .companies-view .catalog-card,
-.theme-dark .companies-overview article {
+.theme-dark .hr-indicators-panel{
   border-color: var(--ui-border);
   background: var(--ui-surface);
   color: var(--ui-text);
@@ -2546,7 +1503,6 @@
     grid-template-columns: 1fr;
   }
 
-  .inbox-summary,
   .planner-focus {
     display: none;
   }
@@ -2576,21 +1532,12 @@
     grid-column: 1;
   }
 
-  .companies-view {
-    grid-template-columns: 1fr;
-  }
-
-  .companies-list,
-  .metrics-list {
-    grid-column: 1;
-  }
 }
 
 @media (max-width: 760px) {
   .inbox-layout,
   .planner-layout,
-  .indicators-layout,
-  .companies-view {
+  .indicators-layout{
     margin-top: 20px;
   }
 
@@ -2599,8 +1546,7 @@
   .metrics-panel > header,
   .sla-panel > header,
   .rules-panel > header,
-  .report-panel > header,
-  .companies-view .catalog-card > header {
+  .report-panel > header{
     min-height: 64px;
     padding: 12px 14px;
   }
@@ -2613,16 +1559,6 @@
 
   .inbox-list-panel > header button {
     width: 100%;
-  }
-
-  .inbox-item {
-    padding-inline: 8px;
-  }
-
-  .inbox-item > div > div {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 5px;
   }
 
   .planner-calendar > header {
@@ -2673,48 +1609,9 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .companies-toolbar {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .companies-actions {
-    width: 100%;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .companies-overview {
-    display: flex;
-    overflow-x: auto;
-    scroll-snap-type: x mandatory;
-  }
-
-  .companies-overview article {
-    min-width: min(78vw, 280px);
-    scroll-snap-align: start;
-  }
-
-  .companies-list > article,
-  .metrics-list > article {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 7px;
-  }
-
-  .companies-list article button {
-    justify-self: start;
-  }
 }
 
 @media (max-width: 420px) {
-  .inbox-item {
-    grid-template-columns: 38px minmax(0, 1fr);
-  }
-
-  .channel-icon {
-    width: 38px;
-    height: 38px;
-  }
 
   .hr-indicator-grid {
     grid-template-columns: 1fr;
@@ -2728,9 +1625,6 @@
     grid-template-columns: 92px minmax(0, 1fr) 22px;
   }
 
-  .companies-actions {
-    grid-template-columns: 1fr;
-  }
 }
 
 .integration-overview {
@@ -3160,52 +2054,22 @@
   font-family: var(--font-title);
 }
 
-.dashboard-sidebar {
-  background: var(--ui-rail);
-  padding: 20px 14px 14px;
-}
-
-.dashboard-brand { color: var(--ui-text); font-size: 20px; letter-spacing: -.045em; }
-.dashboard-brand strong { color: var(--ui-primary); }
-.dashboard-sidebar nav { margin-top: 30px; gap: 5px; }
 /* Esta linha redeclara o mesmo seletor de lá de cima e é ela que vale — o raio
    definido no bloco original nunca chegou à tela. */
-.dashboard-sidebar nav button { min-height: 45px; border-radius: var(--ui-radius-md); color: var(--ui-rail-text); font-weight: 600; }
-.dashboard-sidebar nav button > span { color: var(--ui-rail-icon); }
-.sidebar-workspace { border-top-color: var(--ui-rail-border); }
-.sidebar-workspace button { background: var(--ui-rail-context); border-radius: var(--ui-radius-lg); }
-.sidebar-account { border-top-color: var(--ui-rail-border); }
-.user-avatar, .header-profile > span { background: var(--ui-avatar-bg); color: var(--ui-avatar-text); }
 
-.dashboard-header { height: 72px; background: color-mix(in srgb, var(--ui-surface) 92%, transparent); }
-.dashboard-location { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dashboard-header-actions { min-width: 0; }
-.dashboard-header-actions .header-company-select {
-  min-width: min(240px, 21vw); height: 38px; display: inline-flex; align-items: center; gap: 7px;
-  padding: 0 10px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface); color: var(--ui-text-soft);
-}
-.header-company-select svg { width: 15px; height: 15px; color: var(--ui-primary); flex: 0 0 auto; }
-.header-company-select select { min-width: 0; width: 100%; border: 0; outline: 0; background: transparent; color: var(--ui-text); font-size: 11px; font-weight: 700; }
 /* Período (§13) ao lado da empresa, e com a mesma forma: são os dois recortes
    globais da Visão geral, e vesti-los diferente sugeriria hierarquias que não
    existem entre eles. Mais estreito porque o rótulo é curto e previsível. */
-.dashboard-header-actions .header-period-select {
-  min-width: min(172px, 15vw); height: 38px; display: inline-flex; align-items: center; gap: 7px;
-  padding: 0 10px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface); color: var(--ui-text-soft);
-}
+
 .header-period-select svg { width: 15px; height: 15px; color: var(--ui-primary); flex: 0 0 auto; }
 .header-period-select select { min-width: 0; width: 100%; border: 0; outline: 0; background: transparent; color: var(--ui-text); font-size: 11px; font-weight: 700; }
-.dashboard-header-actions .global-search-trigger { width: min(290px, 25vw); justify-content: flex-start; gap: 8px; padding: 0 10px; }
+
 .global-search-trigger span { overflow: hidden; color: var(--ui-text-soft); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .global-search-trigger kbd { margin-left: auto; padding: 2px 5px; border-radius: var(--ui-radius-md); background: var(--ui-surface-muted); color: var(--ui-text-soft); font-size: 11px; white-space: nowrap; }
-.dashboard-header-actions .header-profile { width: 38px; padding: 0; border: 0; background: transparent; }
-.header-profile > span { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; font-size: 12px; font-weight: 800; }
-.dashboard-header-actions .new-demand { border-color: var(--ui-brand); border-radius: var(--ui-radius-lg); background: var(--ui-brand); }
-.dashboard-header-actions .new-demand:hover { border-color: var(--ui-brand-soft); background: var(--ui-brand-soft); }
 
 .dashboard-content { max-width: 1680px; margin: 0 auto; padding: 34px clamp(20px, 3vw, 46px) 52px; }
 .dashboard-heading { margin-bottom: 26px; }
-.dashboard-eyebrow { color: var(--ui-accent-text, var(--ui-primary)); font-weight: 800; }
+
 .dashboard-heading h1 { letter-spacing: -.052em; }
 .dashboard-heading p { max-width: 620px; }
 
@@ -3239,25 +2103,9 @@
    `auto-fill` com mínimo de 250px em vez de um número fixo de colunas: a
    quantidade de processos varia com a permissão de cada pessoa, e três colunas
    fixas deixariam um buraco para quem alcança dois. */
-.workspace-processes { display: grid; gap: 13px; }
-.workspace-processes > header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; }
-.workspace-processes > header span { display: block; color: var(--ui-primary); font-size: 12px; font-weight: 850; letter-spacing: normal; }
-.workspace-processes > header h2 { margin: 4px 0 0; color: var(--ui-text); font-size: 17px; letter-spacing: -.03em; }
-.workspace-processes > header p { margin: 0; color: var(--ui-text-soft); font-size: 12px; }
-.workspace-process-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 13px; }
+
 /* O item da cascata precisa esticar: sem isto os cartões de uma linha ficam
    com alturas diferentes conforme o tamanho da descrição. */
-.workspace-process-grid > * { display: flex; }
-.workspace-process-grid > * > * { flex: 1 1 auto; min-height: 158px; }
-.workspace-process-pending {
-  margin-left: auto;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--ui-state-warn-bg);
-  color: var(--ui-state-warn-text);
-  font-size: 12px;
-  font-weight: 800;
-}
 
 /* A faixa passou de quatro cartões fixos para sete (§14), e quatro colunas
    fixas deixariam três órfãos numa segunda linha larga. `auto-fit` acomoda o
@@ -3413,16 +2261,7 @@
 .overview-panel header h2 { margin: 4px 0 0; color: var(--ui-text); font-size: 15px; letter-spacing: -.025em; }
 .overview-panel header > button { padding: 0; display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; color: var(--ui-accent-text, var(--ui-primary)); font-size: 12px; font-weight: 800; cursor: pointer; white-space: nowrap; }
 .overview-panel header > button svg { width: 13px; height: 13px; }
-.overview-attention-list { padding: 8px 14px 14px; display: grid; gap: 4px; }
-.overview-attention-card { width: 100%; min-height: 61px; padding: 10px 8px; display: grid; grid-template-columns: 4px minmax(0, 1fr) auto; align-items: center; gap: 10px; border: 0; border-radius: var(--ui-radius-lg); background: transparent; color: var(--ui-text); text-align: left; cursor: pointer; }
-.overview-attention-card:hover { background: var(--ui-surface-muted); }
-.overview-attention-card > i { width: 4px; height: 34px; border-radius: 99px; background: #F4A261; }
-.overview-attention-card.overdue > i { background: #d8544c; }
-.overview-attention-card strong, .overview-attention-card small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.overview-attention-card strong { font-size: 11px; }
-.overview-attention-card small { margin-top: 4px; color: var(--ui-text-soft); font-size: 12px; }
-.overview-attention-card em { color: var(--ui-warning); font-size: 12px; font-style: normal; font-weight: 800; }
-.overview-attention-card.overdue em { color: var(--ui-danger); }
+
 .overview-empty { min-height: 130px; padding: 24px; display: grid; place-content: center; justify-items: center; color: var(--ui-text-soft); text-align: center; }
 .overview-empty svg { width: 25px; height: 25px; margin-bottom: 9px; color: var(--ui-mint); }
 .overview-empty strong { color: var(--ui-text); font-size: 11px; }
@@ -3455,19 +2294,9 @@
 .board-preview-columns section > header { min-height: auto; padding: 0 0 9px; display: flex; justify-content: space-between; border: 0; color: var(--ui-text-soft); font-size: 12px; }
 .board-preview-columns section > header strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .board-preview-columns section > header b { min-width: 18px; height: 18px; display: grid; place-items: center; border-radius: 50%; background: var(--ui-surface); color: var(--ui-text-soft); font-size: 11px; }
-.mini-demand-card { width: 100%; min-height: 93px; margin-bottom: 7px; padding: 10px; display: flex; flex-direction: column; align-items: flex-start; border: 1px solid var(--ui-border); border-left: 3px solid var(--ui-mint); border-radius: var(--ui-radius-lg); background: var(--ui-surface); color: var(--ui-text); text-align: left; cursor: pointer; }
-.mini-demand-card.sla-warning { border-left-color: #F4A261; }
-.mini-demand-card.sla-overdue { border-left-color: #d8544c; }
-.mini-demand-card > span { color: var(--ui-primary); font-size: 11px; font-weight: 900; letter-spacing: normal; }
-.mini-demand-card strong { width: 100%; margin-top: 5px; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.mini-demand-card small { width: 100%; margin-top: 4px; overflow: hidden; color: var(--ui-text-soft); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.mini-demand-card em { margin-top: auto; color: var(--ui-text-soft); font-size: 11px; font-style: normal; }
-.mini-column-empty { margin: 14px 0; color: var(--ui-text-soft); font-size: 12px; text-align: center; }
+
 .recent-activity-list { padding: 4px 0 6px; }
 
-.dashboard-board-head { gap: 14px; }
-.dashboard-filters { align-items: end; flex-wrap: wrap; }
-.dashboard-filters label { min-width: 116px; }
 .dashboard-column { border-radius: var(--ui-radius-lg); background: color-mix(in srgb, var(--ui-surface) 72%, var(--ui-surface-muted)); }
 .dashboard-column > header { border-bottom-color: var(--ui-border); }
 .dashboard-task { position: relative; padding: 13px; border-radius: var(--ui-radius-lg); border-left: 3px solid var(--ui-mint); box-shadow: none; }
@@ -3528,23 +2357,18 @@
 .dashboard-sla.safe, .dashboard-sla.completed { color: #176c55; background: #e0f6ed; }
 
 @media (max-width: 1120px) {
-  .dashboard-header-actions .global-search-trigger { width: 40px; padding: 0; justify-content: center; }
+
   .global-search-trigger span, .global-search-trigger kbd { display: none; }
   .overview-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 780px) {
-  .dashboard-header { height: 62px; }
-  .dashboard-location { max-width: 32vw; font-size: 12px !important; }
-  .dashboard-header-actions .header-company-select { min-width: 38px; width: 38px; padding: 0; justify-content: center; }
-  .header-company-select select { display: none; }
-  .dashboard-header-actions .help-button, .dashboard-header-actions .header-profile { display: none; }
+
   .overview-kpis { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
   .overview-kpi { min-height: 100px; }
   .overview-kpi-value { font-size: 23px; }
   .board-preview-columns { grid-auto-columns: minmax(220px, 76vw); grid-auto-flow: column; overflow-x: auto; }
-  .dashboard-filters { flex-wrap: nowrap; }
-  .dashboard-filters label { min-width: 140px; }
+
 }
 
 .demand-detail-modal { width: min(920px, calc(100vw - 36px)); }
@@ -3563,10 +2387,7 @@
 .demand-sla-state.warning strong { color: #a75d21; }
 .demand-sla-state.overdue strong { color: var(--ui-danger); }
 .demand-sla-state.completed strong { color: var(--ui-success); }
-.demand-quick-actions { display: flex; flex-wrap: wrap; align-content: start; align-items: center; gap: 6px; }
-.demand-quick-actions button { min-height: 28px; padding: 0 8px; border: 1px solid var(--ui-border-strong); border-radius: var(--ui-radius-lg); background: var(--ui-surface); color: var(--ui-primary); font: 600 12px var(--font-title); cursor: pointer; }
-.demand-quick-actions .quick-complete { display: inline-flex; align-items: center; gap: 4px; border-color: var(--ui-mint); background: var(--ui-mint); color: var(--ui-on-mint); }
-.demand-quick-actions .quick-complete svg { width: 12px; height: 12px; }
+
 .demand-detail-modal .card-modal-body.single { padding: 18px 20px 22px; }
 .demand-detail-modal .card-dialog-tabs { padding-inline: 20px; background: var(--ui-surface); }
 .demand-detail-modal .card-choice-section:focus { outline: 3px solid color-mix(in srgb, var(--ui-mint) 52%, transparent); outline-offset: 3px; }
@@ -3574,7 +2395,7 @@
 @media (max-width: 760px) {
   .demand-detail-modal { width: 100%; }
   .demand-detail-summary { grid-template-columns: 1fr; }
-  .demand-quick-actions { min-height: auto !important; }
+
   .demand-detail-modal .card-modal-body.single { padding: 14px; }
   .demand-detail-modal .card-dialog-tabs { padding-inline: 14px; }
 }
@@ -3603,9 +2424,6 @@
 .company-profile-demands button > span { font-size: 12px; font-weight: 750; }
 .company-profile-demands button small { margin-top: 3px; color: var(--ui-text-soft); font-size: 11px; font-weight: 500; }
 .company-profile-demands button svg { width: 14px; height: 14px; color: var(--ui-primary); }
-.companies-list article { cursor: pointer; }
-.companies-list article.selected { background: color-mix(in srgb, var(--ui-mint) 11%, var(--ui-surface)); }
-.companies-list article:focus-visible { outline: 3px solid color-mix(in srgb, var(--ui-mint) 55%, transparent); outline-offset: -3px; }
 
 @media (max-width: 1050px) { .company-profile-data { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 600px) {
@@ -3641,30 +2459,11 @@
 .panel-error-boundary a { display: block; margin-top: 13px; color: var(--brand-strong); font-size: 12px; font-weight: 750; }
 
 /* Grupo empresarial and navigation clarity. */
-.dashboard-sidebar { display: flex; flex-direction: column; gap: 0; }
-.dashboard-brand { min-height: 42px; }
-.sidebar-group-context { margin: 16px 8px 4px; padding: 12px; border: 1px solid var(--ui-rail-border); border-radius: var(--ui-radius-lg); background: var(--ui-rail-context); }
-.sidebar-group-context > span, .sidebar-nav-section { display: block; color: var(--ui-rail-section); font-size: 11px; font-weight: 850; letter-spacing: normal; }
-.sidebar-group-context strong { display: block; margin-top: 5px; overflow: hidden; color: var(--ui-text); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.sidebar-group-context small { display: block; margin-top: 4px; overflow: hidden; color: var(--ui-text-soft); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+
 /* O menu passa a ter contextos (§17): antes era um rótulo só, "OPERAÇÃO",
    sobre treze itens — e Cadastros, Relatórios e Estado das integrações não são
    operação. O espaço entre grupos é maior que entre itens porque é ele que
    torna o agrupamento visível; sem isso o rótulo é decoração. */
-.dashboard-sidebar nav { margin-top: 20px; gap: 15px; }
-.sidebar-nav-group { display: flex; flex-direction: column; gap: 4px; }
-.sidebar-nav-section { margin: 0 10px 5px; }
-.sidebar-workspace { margin-top: auto; padding-bottom: 10px; }
-.sidebar-structure-summary { width: 100%; min-height: 48px; padding: 0 8px; display: flex; align-items: center; gap: 10px; border: 1px solid var(--ui-rail-border); border-radius: var(--ui-radius-lg); background: var(--ui-rail-context); color: var(--ui-text); }
-.sidebar-structure-summary > i { width: 28px; height: 28px; display: grid; place-items: center; flex: 0 0 auto; border-radius: var(--ui-radius-md); background: var(--ui-primary); color: #fff; font-style: normal; font-size: 12px; font-weight: 800; }
-.sidebar-structure-summary > span { display: grid; min-width: 0; }.sidebar-structure-summary strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }.sidebar-structure-summary small { color: var(--ui-text-soft); font-size: 12px; }
-.sidebar-workspace > span { margin-left: 8px; color: var(--ui-rail-section); font-size: 11px; font-weight: 850; letter-spacing: normal; }
-.sidebar-workspace button { min-height: 58px; align-items: center; }
-.sidebar-workspace button > span { min-width: 0; display: grid; gap: 3px; text-align: left; }
-.sidebar-workspace button > span strong, .sidebar-workspace button > span small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sidebar-workspace button > span strong { color: var(--ui-text); font-size: 12px; }
-.sidebar-workspace button > span small { color: var(--ui-text-soft); font-size: 11px; }
-.sidebar-collapsed .sidebar-group-context, .sidebar-collapsed .sidebar-nav-section { display: none; }
 
 /* ==========================================================================
    Navegação em dois níveis (§25, §64, §65, §66)
@@ -3678,69 +2477,10 @@
    destino ativo é um submódulo. Sem isso, entrar em "Pagamentos → Psicólogos"
    apagava a marca do processo e a pessoa perdia de vista em que contexto
    estava — que é o oposto do que a §69 pede. */
-.sidebar-process { display: flex; flex-direction: column; gap: 2px; }
-
-.sidebar-process-item.open {
-  border: 1px solid var(--ui-rail-border);
-  background: var(--ui-rail-context);
-  color: var(--ui-text);
-}
-
-.sidebar-process-item.open > span { color: var(--ui-rail-active-text); }
 
 /* Os submódulos recuam e ganham um fio à esquerda: o fio é o que os liga
    visualmente ao processo dono, e o recuo é o que os põe num segundo nível
    sem precisar de outro ícone. */
-.sidebar-process-views {
-  margin: 2px 0 4px 21px;
-  padding-left: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  border-left: 1px solid var(--ui-rail-border);
-}
-
-.sidebar-process-view {
-  min-height: 34px;
-  padding: 0 10px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border: 0;
-  border-radius: var(--ui-radius-md);
-  background: transparent;
-  color: var(--ui-rail-text);
-  cursor: pointer;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  text-align: left;
-  /* A cascata usa o índice que o React escreve em `--stagger-index`: os
-     submódulos aparecem em sequência quando o processo abre, o que mostra que
-     eles pertencem a ele em vez de surgirem do nada. */
-  animation: subNavEnter var(--motion-micro) var(--ease-enter) backwards;
-  animation-delay: calc(var(--stagger-index, 0) * 30ms);
-}
-
-.sidebar-process-view:hover { background: var(--ui-rail-hover); color: var(--ui-text); }
-
-.sidebar-process-view.active {
-  background: var(--ui-rail-active);
-  color: var(--ui-rail-active-text);
-  font-weight: 700;
-}
-
-.sidebar-process-view b {
-  min-width: 19px;
-  height: 19px;
-  margin-left: auto;
-  display: grid;
-  place-items: center;
-  border-radius: 999px;
-  background: var(--ui-danger);
-  color: var(--ui-on-accent);
-  font-size: 12px;
-}
 
 @keyframes subNavEnter {
   from { opacity: 0; transform: translateX(-4px); }
@@ -3749,17 +2489,12 @@
 
 /* Recolhida, a barra mostra só os ícones dos processos: o segundo nível não
    cabe em 76px e continua alcançável abrindo a barra ou pelo processo. */
-.sidebar-collapsed .sidebar-process-views { display: none; }
-.sidebar-collapsed .sidebar-process-item.open { border-color: transparent; }
 
 /* No trilho compacto, os submódulos sem ícone encolhiam para 19px: além de
    invisíveis, ficavam abaixo do alvo mínimo de 24px da WCAG 2.5.8. O processo
    continua levando ao primeiro módulo e os demais permanecem no cabeçalho
    contextual, já desenhado para esta largura. Este override fica depois da
    declaração-base de `.sidebar-process-views` para vencer a cascata. */
-@media (max-width: 1180px) and (min-width: 761px) {
-  .sidebar-process-views { display: none; }
-}
 
 /* ==========================================================================
    Cabeçalho contextual do processo (§70)
@@ -3820,22 +2555,9 @@
    discreto que eles: o atalho é conveniência, o processo é a estrutura. Se os
    dois pesassem igual, a barra passaria a ter duas listas concorrendo pelo
    mesmo olhar. */
-.sidebar-shortcuts { margin-bottom: 4px; padding-bottom: 8px; border-bottom: 1px solid var(--ui-border); }
-
-.sidebar-shortcut { position: relative; font-size: 12.5px; }
 
 /* A marca diz de onde o atalho veio — fixado por escolha ou visitado há pouco.
    Sem ela, os dois viram a mesma lista e a ordem parece arbitrária. */
-.sidebar-shortcut-mark {
-  width: 12px;
-  height: 12px;
-  margin-left: auto;
-  flex: 0 0 auto;
-  color: var(--ui-accent-text);
-  opacity: .72;
-}
-
-.sidebar-shortcut-recent .sidebar-shortcut-mark { color: var(--ui-text-muted); opacity: .6; }
 
 /* O botão que fixa, no cabeçalho do processo: é ali que a pessoa está quando
    descobre que volta sempre à mesma tela. */
@@ -3870,66 +2592,6 @@
 
 /* A faixa da home. Cartões pequenos, em linha, que rolam quando não cabem —
    é um atalho, não uma seção que merece empurrar o resto da página. */
-.workspace-shortcuts { margin-bottom: var(--layout-section-gap); }
-
-.workspace-shortcuts > header { margin-bottom: 10px; }
-.workspace-shortcuts > header span {
-  display: block;
-  color: var(--ui-accent-text);
-  font-size: 12px;
-  font-weight: 820;
-  letter-spacing: normal;
-}
-.workspace-shortcuts > header h2 { margin: 3px 0 0; font-size: 17px; letter-spacing: -.02em; }
-
-.workspace-shortcut-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.workspace-shortcut {
-  min-width: 168px;
-  min-height: 58px;
-  padding: 10px 14px;
-  display: grid;
-  grid-template-columns: 30px minmax(0, 1fr);
-  grid-template-rows: auto auto;
-  align-items: center;
-  column-gap: 10px;
-  border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius-md);
-  background: var(--ui-surface);
-  color: var(--ui-text);
-  text-align: left;
-  cursor: pointer;
-  transition: transform var(--motion-hover) var(--ease-standard),
-    border-color var(--motion-hover) var(--ease-standard),
-    background var(--motion-hover) var(--ease-standard);
-}
-
-.workspace-shortcut:hover { transform: translateY(-1px); border-color: var(--ui-border-strong); background: var(--ui-surface-elevated); }
-.workspace-shortcut:active { transform: scale(.985); }
-
-.workspace-shortcut > span {
-  grid-row: 1 / span 2;
-  width: 30px;
-  height: 30px;
-  display: grid;
-  place-items: center;
-  border-radius: var(--ui-radius-sm);
-  background: var(--ui-surface-muted);
-  color: var(--ui-accent-text);
-}
-
-.workspace-shortcut > span svg { width: 16px; height: 16px; }
-.workspace-shortcut strong { font-size: 13px; font-weight: 700; letter-spacing: -.01em; }
-.workspace-shortcut small { color: var(--ui-text-muted); font-size: 12px; font-weight: 700; letter-spacing: normal; }
-.workspace-shortcut[data-fixed="true"] > span { background: var(--ui-accent-soft); }
-
-@media (prefers-reduced-motion: reduce) {
-  .workspace-shortcut:hover, .workspace-shortcut:active { transform: none; }
-}
 
 .process-context-slot { flex: 1 1 100%; min-width: 0; padding-top: 12px; border-top: 1px solid var(--ui-border); }
 .process-context-slot:empty { display: none; }
@@ -3940,14 +2602,6 @@
   .process-context { padding: var(--layout-card-padding-compact); }
 }
 
-.companies-list article { grid-template-columns: 28px minmax(0, 1fr) minmax(120px, .6fr) auto; }
-.companies-list article > i { width: 23px; height: 23px; display: grid; place-items: center; border-radius: var(--ui-radius-md); background: var(--ui-surface-muted); color: var(--ui-primary); font-size: 12px; font-style: normal; font-weight: 850; }
-.companies-list article.principal { border-left: 3px solid var(--ui-mint); }
-.companies-list article.principal > i { background: var(--ui-mint); color: var(--ui-on-mint); }
-.companies-list article.subsidiary > i { margin-left: 5px; }
-.companies-list article strong em { margin-left: 6px; color: var(--ui-primary); font-size: 11px; font-style: normal; font-weight: 850; }
-
-.workspace-member-list article { grid-template-columns: 34px minmax(130px, 1fr) minmax(118px, .7fr) auto auto auto; align-items: center; }
 .member-company-access { min-width: 145px; position: relative; }
 .member-company-access summary { cursor: pointer; color: var(--ui-primary); font-size: 12px; font-weight: 750; list-style: none; }
 .member-company-access summary::after { content: "⌄"; margin-left: 5px; }
@@ -3960,58 +2614,21 @@
 .invite-company-scope legend { margin-bottom: 6px; color: var(--ui-text-soft); font-size: 12px; font-weight: 800; }
 .invite-company-scope > div { display: flex; flex-wrap: wrap; gap: 7px 12px; }
 
-@media (max-width: 1050px) {
-  .workspace-member-list article { grid-template-columns: 34px minmax(130px, 1fr) auto auto; }
-  .workspace-member-list article > .member-company-access, .workspace-member-list article > .member-company-summary { grid-column: 2 / -1; }
-  .companies-list article { grid-template-columns: 28px minmax(0, 1fr) auto; }
-  .companies-list article > span { display: none; }
-}
-
 @media (max-width: 780px) {
-  .sidebar-group-context { display: none; }
-  .sidebar-nav-section { display: none; }
+
   /* Nesta largura o menu vira barra inferior em `grid`. `display: contents`
      devolve os botões à grade: sem isso a grade posicionaria os quatro grupos,
      e a barra mostraria quatro colunas com os itens empilhados dentro.
      O invólucro de processo precisa do mesmo tratamento, senão o segundo nível
      reintroduz a coluna que o `contents` do grupo acabou de dissolver. */
-  .sidebar-nav-group, .sidebar-process { display: contents; }
+
   /* O segundo nível não existe na barra inferior: ela cabe em cinco alvos de
      toque, e todos os módulos continuam alcançáveis pelo botão "Mais". */
-  .sidebar-process-views { display: none; }
-  .companies-list article { grid-template-columns: 24px minmax(0, 1fr) auto; }
-  .companies-list article > i { width: 21px; height: 21px; }
+
   .invite-company-scope { min-width: 100%; }
 }
 
 /* Administração do grupo: settings navigation and access management. */
-.workspace-settings-modal {
-  width: min(1080px, calc(100vw - 32px));
-  max-height: min(820px, calc(100dvh - 32px));
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  border-color: color-mix(in srgb, var(--ui-primary) 42%, var(--ui-border));
-  border-radius: var(--ui-radius-lg);
-  background: var(--ui-surface);
-  box-shadow: 0 28px 80px rgba(8, 30, 28, .22);
-}
-
-.workspace-settings-modal > header {
-  min-height: 108px;
-  padding: 23px 27px;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 18px;
-  border-bottom: 1px solid var(--ui-border);
-  background: color-mix(in srgb, var(--ui-primary) 9%, var(--ui-surface));
-}
-
-.workspace-settings-modal > header span { color: var(--ui-primary); font-size: 12px; font-weight: 850; letter-spacing: normal; }
-.workspace-settings-modal > header h2 { margin: 7px 0 0; color: var(--ui-text); font-size: 24px; letter-spacing: -.05em; }
-.workspace-settings-modal > header p { margin: 7px 0 0; color: var(--ui-text-soft); font-size: 12px; }
-.workspace-settings-modal > header > button { width: 36px; height: 36px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface); color: var(--ui-text-soft); font-size: 21px; cursor: pointer; }
-.workspace-settings-modal > header > button:hover { border-color: var(--ui-primary); color: var(--ui-primary); }
 
 .workspace-settings-layout { min-height: 0; grid-template-columns: 254px minmax(0, 1fr); background: var(--ui-surface); }
 .settings-nav { min-height: 0; padding: 17px 11px; overflow-y: auto; border-right: 1px solid var(--ui-border); background: var(--ui-surface-muted); }
@@ -4033,43 +2650,9 @@
 .workspace-settings-content { padding: 23px 25px; overflow: auto; background: var(--ui-surface); }
 .workspace-name-form { padding: 15px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface-muted); }
 .workspace-name-form label::before { content: "IDENTIDADE DO GRUPO"; color: var(--ui-primary); font-size: 11px; font-weight: 850; letter-spacing: normal; }
-.workspace-account-summary { position: relative; min-height: 94px; padding: 27px 16px 15px; border-color: color-mix(in srgb, var(--ui-mint) 48%, var(--ui-border)); border-radius: var(--ui-radius-lg); background: color-mix(in srgb, var(--ui-mint) 9%, var(--ui-surface)); }
-.workspace-account-summary::before { content: "ADMINISTRADOR ATUAL"; position: absolute; top: 11px; left: 16px; color: var(--ui-primary); font-size: 11px; font-weight: 850; letter-spacing: normal; }
+
 .board-manager, .workspace-switcher { border-color: var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface); }
 
-.access-admin-hero { padding: 17px 18px; display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: 12px; border: 1px solid color-mix(in srgb, var(--ui-mint) 56%, var(--ui-border)); border-radius: var(--ui-radius-lg); background: color-mix(in srgb, var(--ui-mint) 10%, var(--ui-surface)); }
-.access-admin-hero > span { width: 40px; height: 40px; display: grid; place-items: center; border-radius: var(--ui-radius-lg); background: var(--ui-mint); color: var(--ui-on-mint); }
-.access-admin-hero svg { width: 19px; height: 19px; }
-.access-admin-hero strong { color: var(--ui-text); font-size: 12px; }
-.access-admin-hero p { margin: 4px 0 0; color: var(--ui-text-soft); font-size: 12px; line-height: 1.5; }
-.access-admin-hero b { padding: 7px 9px; border-radius: 99px; background: var(--ui-surface); color: var(--ui-primary); font-size: 11px; white-space: nowrap; }
-
-.workspace-team, .workspace-invite-form { border-color: var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface); }
-.workspace-team > header, .workspace-invite-form > header { padding: 16px 18px; border-bottom-color: var(--ui-border); }
-.workspace-team > header strong, .workspace-invite-form > header strong { color: var(--ui-text); font-size: 12px; }
-.workspace-team > header span, .workspace-invite-form > header span { color: var(--ui-text-soft); font-size: 12px; }
-.workspace-team > header > p { max-width: 350px; color: var(--ui-text-soft); font-size: 12px; line-height: 1.45; }
-.workspace-member-list { padding: 10px; gap: 7px; }
-.workspace-member-list article { min-height: 66px; padding: 10px; grid-template-columns: 34px minmax(150px, 1fr) minmax(108px, .55fr) minmax(145px, .7fr) minmax(135px, .66fr) auto 30px; gap: 9px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface-muted); }
-.workspace-member-list article > i { background: color-mix(in srgb, var(--ui-mint) 25%, var(--ui-surface)); color: var(--ui-primary); }
-.workspace-member-list article strong { color: var(--ui-text); font-size: 12px; }
-.workspace-member-list article small { color: var(--ui-text-soft); font-size: 11px; }
-.workspace-member-list article em { margin-left: 5px; padding: 3px 5px; border-radius: var(--ui-radius-md); background: var(--ui-mint); color: var(--ui-on-mint); font-size: 11px; font-style: normal; }
-.member-activation-status { width: max-content; margin-top: 5px; padding: 3px 6px; display: block; border-radius: 99px; font-size: 11px; font-weight: 850; }
-.member-activation-status.active { background: color-mix(in srgb, var(--ui-mint) 28%, var(--ui-surface)); color: var(--ui-success); }
-.member-activation-status.pending { background: #fff2e3; color: #a75d21; }
-.workspace-member-list article > select { border-color: var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface); color: var(--ui-text); font-size: 12px; }
-.member-department-status { display: inline-flex; align-items: center; gap: 4px; width: fit-content; margin-top: 5px; padding: 3px 6px; border-radius: var(--ui-radius-md); font-size: 11px; font-weight: 750; }
-.member-department-status svg { width: 11px; height: 11px; }
-.member-department-status.assigned { background: color-mix(in srgb, var(--ui-mint) 22%, var(--ui-surface)); color: var(--ui-primary); }
-.member-department-status.missing { background: var(--ui-state-danger-bg); color: var(--ui-danger); }
-.workspace-member-list article > .member-department-select { border-color: color-mix(in srgb, var(--ui-primary) 28%, var(--ui-border)); }
-.workspace-member-list .member-recovery-button { min-height: 30px; padding: 0 8px; border: 1px solid color-mix(in srgb, var(--ui-mint) 58%, var(--ui-border)); border-radius: var(--ui-radius-lg); background: transparent; color: var(--ui-primary); font-size: 11px; font-weight: 800; white-space: nowrap; }
-
-.workspace-invite-form > header { align-items: flex-start; }
-.workspace-invite-form > header > b { padding: 6px 8px; border-radius: var(--ui-radius-lg); background: var(--ui-primary-soft); color: var(--ui-primary); font-size: 11px; white-space: nowrap; }
-.workspace-invite-form > div { padding: 17px; display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 12px; }
-.workspace-invite-form .primary-button { min-height: 42px; }
 .invite-company-scope { padding: 9px 10px; border: 1px dashed color-mix(in srgb, var(--ui-primary) 36%, var(--ui-border)); border-radius: var(--ui-radius-lg); background: var(--ui-surface-muted); }
 .invite-company-scope legend { padding: 0 4px; color: var(--ui-primary); }
 .invite-company-scope label { min-height: 24px; padding: 0 7px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface); }
@@ -4078,33 +2661,26 @@
 .invite-module-scope legend { padding: 0 5px; color: var(--ui-primary); font-size: 12px; font-weight: 800; letter-spacing: .045em; text-transform: none; }
 .invite-module-scope > p { margin: 2px 0; color: var(--ui-text-soft); font-size: 12px; }
 .invite-module-scope > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.workspace-invite-form .invite-module-scope label { min-height: 52px; padding: 8px; display: flex; grid-template-columns: none; align-items: flex-start; gap: 8px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface); color: var(--ui-text); cursor: pointer; font-size: 12px; letter-spacing: 0; text-transform: none; transition: border-color .18s ease, background-color .18s ease; }
-.workspace-invite-form .invite-module-scope label:hover { border-color: var(--ui-primary); }
-.workspace-invite-form .invite-module-scope label[data-disabled] { cursor: not-allowed; opacity: .58; }
+
 .invite-module-scope input { flex: 0 0 auto; width: 15px !important; height: 15px !important; margin-top: 2px; accent-color: var(--ui-primary); }
 .invite-module-scope span, .invite-module-scope strong, .invite-module-scope small { display: block; }
 .invite-module-scope strong { color: var(--ui-text); font-size: 12px; }
 .invite-module-scope small { margin-top: 3px; color: var(--ui-text-soft); font-size: 11px; font-weight: 500; line-height: 1.35; }
-.workspace-invite-form > div > .primary-button { grid-column: 4; justify-self: stretch; }
+
 .member-company-access > div { border-color: var(--ui-border); box-shadow: 0 16px 36px rgba(11, 44, 40, .16); }
 .access-recovery-link { border-radius: var(--ui-radius-lg); }
 
 @media (max-width: 920px) {
-  .workspace-settings-modal { width: min(820px, calc(100vw - 24px)); }
+
   .workspace-settings-layout { grid-template-columns: 212px minmax(0, 1fr); }
   .settings-nav button small { display: none; }
-  .workspace-member-list article { grid-template-columns: 34px minmax(140px, 1fr) auto auto; }
-  .workspace-member-list article > .member-company-access, .workspace-member-list article > .member-company-summary { grid-column: 2 / -1; }
-  .workspace-invite-form > div { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
   .invite-module-scope > div { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .workspace-invite-form > div > .primary-button { grid-column: 2; }
+
 }
 
 @media (max-width: 700px) {
-  .workspace-settings-modal { width: 100%; max-height: 100dvh; border-radius: 0; }
-  .workspace-settings-modal > header { min-height: 92px; padding: 18px; }
-  .workspace-settings-modal > header h2 { font-size: 20px; }
-  .workspace-settings-modal > header p { max-width: 290px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
   .workspace-settings-layout { grid-template-columns: 1fr; }
   .settings-nav { padding: 9px 12px; display: flex; gap: 6px; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--ui-border); }
   .settings-nav-label { display: none; }
@@ -4112,16 +2688,9 @@
   .settings-nav button span { display: none; }
   .settings-nav button svg { width: 17px; height: 17px; }
   .workspace-settings-content { padding: 15px; }
-  .access-admin-hero { grid-template-columns: 38px minmax(0, 1fr); padding: 14px; }
-  .access-admin-hero > span { width: 38px; height: 38px; }
-  .access-admin-hero b { grid-column: 2; justify-self: start; }
-  .workspace-team > header, .workspace-invite-form > header { flex-direction: column; gap: 7px; }
-  .workspace-member-list article { grid-template-columns: 34px minmax(0, 1fr) auto; }
-  .workspace-member-list article > select, .workspace-member-list article > b, .workspace-member-list article > .member-company-access, .workspace-member-list article > .member-company-summary { grid-column: 2 / -1; }
-  .workspace-invite-form > header > b { white-space: normal; }
-  .workspace-invite-form > div { grid-template-columns: 1fr; }
+
   .invite-module-scope > div { grid-template-columns: 1fr; }
-  .workspace-invite-form > div > .primary-button { grid-column: 1; }
+
 }
 
 /* Processos operacionais: cada processo possui as próprias colunas do Kanban. */
@@ -4496,7 +3065,6 @@
   .payroll-live-totals > span:last-child { padding-bottom: 0; border-bottom: 0; }
 }
 
-
 /* Alvos interativos: mínimo de 24px (WCAG 2.2 AA — 2.5.8). Vários selects e
    botões de apoio do painel mediam 15px de altura, o que é difícil de acertar
    no toque e reprova na auditoria.
@@ -4511,8 +3079,6 @@
    especificidade: quem não pede altura recebe os 24px, quem pede fica com a
    sua. */
 :where(.dashboard-shell) :is(select, button):not(:where(.dashboard-sidebar button)) { min-height: 24px; }
-:where(.dashboard-shell) :is(a, button).text-action { display: inline-flex; align-items: center; min-height: 24px; }
-
 
 /* ==========================================================================
    Shell travado na viewport
@@ -4541,26 +3107,9 @@
     overflow: hidden;
   }
 
-  .dashboard-sidebar {
-    position: static;
-    height: 100%;
-    min-height: 0;
-    overflow: hidden;
-  }
-
   /* Com todos os módulos liberados a navegação passa da altura da janela. Quem
      rola é só ela: a marca e a conta continuam ancoradas, porque perder a
      identidade do grupo ao procurar um módulo desorienta. */
-  .dashboard-sidebar nav {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, .22) transparent;
-  }
-
-  .dashboard-sidebar > :not(nav) { flex: 0 0 auto; }
 
   .dashboard-main {
     display: grid;
@@ -4581,7 +3130,6 @@
     min-width: 0;
   }
 
-  .dashboard-header,
   .dashboard-content { min-width: 0; }
 
   .dashboard-content {
@@ -4647,91 +3195,10 @@
   --ui-shadow-modal: 0 28px 90px rgba(0, 0, 0, .58);
 }
 
-.theme-dark .dashboard-sidebar {
-  padding: 18px 14px 14px;
-  background: var(--ui-rail);
-}
-
-.theme-dark .sidebar-group-context {
-  margin-top: 14px;
-  border-color: var(--ui-rail-border);
-  background: var(--ui-rail-context);
-}
-
-.theme-dark .dashboard-sidebar nav {
-  margin-top: 24px;
-  gap: 4px;
-}
-
-.theme-dark .dashboard-sidebar nav button {
-  min-height: 43px;
-  border-radius: var(--ui-radius-md);
-  transition: background-color var(--motion-hover), color var(--motion-hover), border-color var(--motion-hover);
-}
-
-.theme-dark .dashboard-sidebar nav button:hover {
-  background: var(--ui-rail-hover);
-  color: var(--ui-rail-active-text);
-  transform: none;
-}
-
-.theme-dark .dashboard-sidebar nav button.active,
-.theme-dark .dashboard-sidebar nav button[aria-current="page"] {
-  background: var(--ui-rail-active);
-  color: var(--ui-rail-active-text);
-  box-shadow: inset 3px 0 0 #82a0ff;
-}
-
-.theme-dark .dashboard-sidebar nav button.active > span,
-.theme-dark .dashboard-sidebar nav button[aria-current="page"] > span {
-  color: #dbe5ff;
-}
-
-.theme-dark .dashboard-header {
-  height: 64px;
-  border-bottom-color: var(--ui-border);
-  background: color-mix(in srgb, #0a1728 94%, transparent);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, .025);
-}
-
-.theme-dark .dashboard-header-actions {
-  gap: 8px;
-}
-
-.theme-dark .dashboard-header-actions :is(.header-company-select, .header-period-select),
-.theme-dark .dashboard-header-actions button:not(.header-profile) {
-  border-color: var(--ui-border);
-  background: var(--ui-surface);
-}
-
-.theme-dark .dashboard-header-actions :is(.header-company-select, .header-period-select):hover,
-.theme-dark .dashboard-header-actions button:not(.header-profile):hover {
-  border-color: var(--ui-border-strong);
-  background: var(--ui-surface-elevated);
-  color: var(--ui-text);
-}
-
-.theme-dark .dashboard-header-actions .global-search-trigger {
-  width: min(340px, 28vw);
-  border-color: #29425f;
-  background: #0a182a;
-}
-
 .theme-dark .global-search-trigger kbd {
   border: 1px solid var(--ui-border);
   background: var(--ui-surface-muted);
   color: var(--ui-text-muted);
-}
-
-.theme-dark .dashboard-header-actions .new-demand,
-.theme-dark .dashboard-header-actions .new-demand:hover {
-  border-color: var(--ui-primary);
-  background: var(--ui-primary);
-  color: #ffffff;
-}
-
-.theme-dark .dashboard-header-actions .new-demand:hover {
-  background: var(--ui-primary-hover);
 }
 
 .theme-dark .dashboard-content {
@@ -4747,7 +3214,6 @@
   letter-spacing: -.035em;
 }
 
-.theme-dark .dashboard-stats article,
 .theme-dark .overview-panel,
 .theme-dark .dashboard-column,
 .theme-dark .dashboard-task {
@@ -4755,7 +3221,6 @@
   box-shadow: none;
 }
 
-.theme-dark .dashboard-stats article:hover,
 .theme-dark .overview-kpi:hover,
 .theme-dark .dashboard-task:hover {
   border-color: var(--ui-border-strong);
@@ -4780,15 +3245,6 @@
 .theme-dark :is(button, select):disabled {
   cursor: not-allowed;
 }
-
-@media (max-width: 1180px) {
-  .theme-dark .dashboard-header-actions .global-search-trigger {
-    width: 40px;
-    padding: 0;
-    justify-content: center;
-  }
-}
-
 
 /* ==========================================================================
    Destaque com foreground próprio
@@ -4841,7 +3297,6 @@
      dele dá 2,3:1. O que se lê sobre o preenchimento escurece junto. */
   --ui-on-danger: #2b0906;
 }
-
 
 /* ==========================================================================
    Cores de módulo e de superfície escura (§13)
@@ -4939,12 +3394,6 @@
 
 /* "Arquivados" ficava com fundo branco fixo e borda clara — no tema escuro o
    texto herdado dava 1.77:1. O botão passa a usar as superfícies do tema. */
-.board-mode-tabs .archive-trigger {
-  border-color: var(--ui-border);
-  background: var(--ui-surface);
-  color: var(--ui-text);
-}
-.board-mode-tabs .archive-trigger b { color: var(--ui-accent-text); }
 
 /* O rótulo da competência ficava em 4.08:1 sobre o painel da folha. */
 .payroll-toolbar > label,
@@ -4957,7 +3406,6 @@
    existe exatamente para este caso. */
 .payroll-toolbar > div > span,
 .payroll-entry-panel header span { color: var(--ui-accent-text); }
-
 
 /* ==========================================================================
    Movimento
@@ -5026,32 +3474,13 @@
 }
 
 /* --- Navegação lateral ---------------------------------------------------- */
-.dashboard-sidebar nav button {
-  transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease;
-}
+
 /* Sem deslocamento no hover: o menu é varrido com o ponteiro o dia todo, e
    item que se mexe sob o cursor atrapalha a mira. */
-.dashboard-sidebar nav button.active {
-  /* O traço do item ativo aparece pronto: ele marca onde a pessoa está, e
-     crescer a partir de escala zero a cada clique era movimento sem função. */
-  position: relative;
-}
-.dashboard-sidebar nav button.active::before {
-  position: absolute;
-  left: 0;
-  top: 50%;
-  width: 3px;
-  height: 60%;
-  border-radius: 0 3px 3px 0;
-  background: var(--ui-accent-on-ink, #E8AE5E);
-  content: "";
-  transform: translateY(-50%);
-}
 
 /* --- Cartões e superfícies ------------------------------------------------ */
 .dashboard-task,
-.overview-kpi,
-.dashboard-stats article {
+.overview-kpi{
   transition: transform var(--motion-fast) var(--motion-ease),
     box-shadow var(--motion-fast) ease, border-color var(--motion-fast) ease;
 }
@@ -5081,8 +3510,7 @@
 .inbox-modal,
 .archive-modal,
 .confirmation-modal,
-.demand-detail-modal,
-.workspace-settings-modal { animation: modalIn var(--motion-base) var(--motion-ease) both; }
+.demand-detail-modal{ animation: modalIn var(--motion-base) var(--motion-ease) both; }
 
 @keyframes backdropIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes modalIn {
@@ -5241,14 +3669,12 @@
   .module-launcher-grid button:active { transform: none; }
   .module-launcher-panel { animation: none; }
   .view-transition,
-  .dashboard-sidebar nav button.active::before,
   .workspace-modal-backdrop,
   .workspace-modal, .card-modal, .inbox-modal, .archive-modal,
-  .confirmation-modal, .demand-detail-modal, .workspace-settings-modal,
+  .confirmation-modal, .demand-detail-modal,
   .dashboard-shell [aria-busy="true"],
   .demand-drawer { animation: none !important; }
 
-  .dashboard-sidebar nav button:hover:not(.active),
   .dashboard-task:hover,
   .dashboard-shell button:active:not(:disabled) { transform: none; }
 
@@ -5267,45 +3693,12 @@
    são os estados que o servidor aceita, e o estado de cada uma é marcado por
    FORMA além de cor — ícone de concluída, anel na atual, contorno vazio no
    que falta —, para funcionar também para quem não distingue matiz. */
-.competence-flow { padding: 20px 24px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface); box-shadow: var(--ui-shadow-card); }
-.competence-flow > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
-.competence-flow > header > div:first-child { min-width: 0; }
-.competence-flow > header span { display: block; font-size: 12px; font-weight: 850; letter-spacing: normal; color: var(--ui-text-soft); }
-.competence-flow > header strong { display: block; margin-top: 6px; font-size: clamp(20px, 2vw, 26px); font-weight: 800; letter-spacing: -.03em; }
-.competence-flow > header p { margin: 6px 0 0; color: var(--ui-text-soft); font-size: 12.5px; line-height: 1.5; }
-.competence-flow-actions { display: flex; gap: 9px; align-items: center; flex: 0 0 auto; }
 
-.competence-flow-track { margin: 22px 0 0; padding: 0; list-style: none; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 0; }
-.competence-flow-track > li { position: relative; padding-top: 30px; text-align: center; }
 /* O fio entre as etapas é o que faz isto ser um fluxo e não cinco selos. Ele
    nasce depois do círculo de uma e morre antes do da seguinte. */
-.competence-flow-track > li::before { content: ""; position: absolute; top: 10px; left: calc(-50% + 15px); width: calc(100% - 30px); height: 2px; background: var(--ui-border); }
-.competence-flow-track > li:first-child::before { display: none; }
-.competence-flow-track > li[data-state="done"]::before,
-.competence-flow-track > li[data-state="current"]::before { background: var(--ui-done); }
 
-.competence-flow-track > li > i { position: absolute; top: 0; left: 50%; width: 22px; height: 22px; margin-left: -11px; display: grid; place-items: center; border: 2px solid var(--ui-border-strong); border-radius: 50%; background: var(--ui-surface); }
-.competence-flow-track > li > i svg { width: 12px; height: 12px; stroke-width: 3; color: #fff; }
-.competence-flow-track > li[data-state="done"] > i { border-color: var(--ui-done); background: var(--ui-done); }
 /* Anel na etapa atual: o círculo fica vazio e ganha um halo, para se distinguir
    da concluída sem depender da cor. */
-.competence-flow-track > li[data-state="current"] > i { border-color: var(--ui-primary); box-shadow: 0 0 0 3px var(--ui-primary-soft); }
-.competence-flow-track > li[data-state="current"] > i::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--ui-primary); }
-
-.competence-flow-track > li > span { display: block; padding: 0 6px; }
-.competence-flow-track > li strong { display: block; font-size: 12px; font-weight: 650; color: var(--ui-text-soft); }
-.competence-flow-track > li small { display: block; margin-top: 2px; font-size: 12px; color: var(--ui-text-soft); }
-.competence-flow-track > li[data-state="current"] strong { color: var(--ui-primary); font-weight: 750; }
-.competence-flow-track > li[data-state="done"] strong { color: var(--ui-text); }
-
-@media (max-width: 760px) {
-  .competence-flow-track { grid-auto-flow: row; grid-auto-columns: auto; gap: 2px; }
-  .competence-flow-track > li { padding: 4px 0 4px 34px; text-align: left; }
-  .competence-flow-track > li::before { top: -8px; left: 10px; width: 2px; height: 16px; }
-  .competence-flow-track > li > i { top: 6px; left: 0; margin-left: 0; }
-  .competence-flow-track > li > span { padding: 0; }
-  .competence-flow > header { flex-direction: column; }
-}
 
 /* ── Diagrama de conexões (Modelo 2, "Flow") ──────────────────────────────
    A marca no centro e os sistemas em volta. É uma <ul> de verdade: o arranjo
@@ -5313,54 +3706,19 @@
    estado e última sincronização em texto — um SVG de linhas seria ilegível
    para ele. O estado vem também na forma do traço, não só na cor: contínuo
    para conectado, tracejado para sem credencial, pontilhado para erro. */
-.connection-map { padding: 20px 24px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface); box-shadow: var(--ui-shadow-card); }
-.connection-map > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
-.connection-map > header span { display: block; font-size: 12px; font-weight: 850; letter-spacing: normal; color: var(--ui-text-soft); }
-.connection-map > header strong { display: block; margin-top: 5px; font-size: 19px; font-weight: 800; letter-spacing: -.025em; }
-.connection-map > header p { margin: 4px 0 0; color: var(--ui-text-soft); font-size: 12px; }
-
-.connection-map-graph { position: relative; margin-top: 18px; }
-.connection-map-hub { position: absolute; top: 50%; left: 50%; width: 44px; height: 44px; margin: -22px 0 0 -22px; display: grid; place-items: center; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface); box-shadow: var(--ui-shadow-card); z-index: 2; }
-.connection-map-graph > ul { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 88px; }
-.connection-map-graph > ul > li { position: relative; min-height: 40px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface); }
-.connection-map-graph > ul > li > button { width: 100%; min-height: 40px; padding: 7px 11px; display: flex; align-items: center; gap: 9px; border: 0; border-radius: inherit; background: transparent; color: inherit; text-align: left; cursor: pointer; }
-.connection-map-graph > ul > li > button:hover { background: var(--ui-surface-muted); }
-.connection-map-graph > ul > li > button:focus-visible { outline-offset: 2px; }
 
 /* O fio até o centro. Nasce na borda interna do cartão e morre antes do hub. */
-.connection-map-graph > ul > li::after { content: ""; position: absolute; top: 50%; width: 44px; height: 0; border-top: 2px solid var(--ui-border-strong); }
-.connection-map-graph > ul > li:nth-child(odd)::after { right: -46px; }
-.connection-map-graph > ul > li:nth-child(even)::after { left: -46px; }
-.connection-map-graph > ul > li[data-tone="ok"]::after { border-top-color: var(--ui-done); }
-.connection-map-graph > ul > li[data-tone="warn"]::after { border-top-style: dashed; border-top-color: var(--ui-warning); }
-.connection-map-graph > ul > li[data-tone="bad"]::after { border-top-style: dotted; border-top-color: var(--ui-danger); }
-
-.connection-map-graph > ul > li > button > i { width: 9px; height: 9px; flex: 0 0 auto; border-radius: 50%; border: 2px solid var(--ui-border-strong); }
-.connection-map-graph > ul > li[data-tone="ok"] > button > i { border-color: var(--ui-done); background: var(--ui-done); }
-.connection-map-graph > ul > li[data-tone="warn"] > button > i { border-color: var(--ui-warning); }
-.connection-map-graph > ul > li[data-tone="bad"] > button > i { border-color: var(--ui-danger); background: var(--ui-danger); }
-.connection-map-graph > ul > li > button > span { min-width: 0; }
-.connection-map-graph > ul > li strong { display: block; font-size: 12.5px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.connection-map-graph > ul > li small { display: block; font-size: 12px; color: var(--ui-text-soft); }
-
-.connection-map-empty h3 { font-size: 15px; font-weight: 750; }
-.connection-map-empty p { margin: 6px 0 12px; color: var(--ui-text-soft); font-size: 12.5px; max-width: 60ch; }
 
 @media (max-width: 900px) {
   /* Sem espaço para o hub no meio, o desenho vira o que ele já é por baixo:
      uma lista. Melhor lista honesta que diagrama espremido. */
-  .connection-map-hub { display: none; }
-  .connection-map-graph > ul { grid-template-columns: minmax(0, 1fr); gap: 8px; }
-  .connection-map-graph > ul > li::after { display: none; }
+
 }
 
 /* Acesso por módulo, dentro da ficha do membro.
    Fechado por padrão: a maioria das pessoas segue o papel, e abrir a matriz
    de todos os módulos para todo mundo transformaria a lista de membros numa
    parede. `details` nativo — teclado e leitor de tela funcionam sem estado. */
-.member-modules-details { grid-column: 1 / -1; margin-top: 8px; }
-.member-modules-details > summary { display: inline-flex; align-items: center; gap: 6px; padding: 4px 0; color: var(--ui-primary); font-size: 11.5px; font-weight: 650; cursor: pointer; }
-.member-modules-details > summary:hover { text-decoration: underline; }
 
 /* ==========================================================================
    Diagrama BPMN no tema escuro (§83)
@@ -5677,7 +4035,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-
 /* ==========================================================================
    ADMINISTRAÇÃO DO WORKSPACE (maquete 3)
    Tudo aqui é escopado por classe própria e usada só dentro da modal de
@@ -5760,7 +4117,6 @@
   .permission-table th[scope="row"] { max-width: 200px; }
 }
 
-
 /* A Administração no tema do produto — os restos medidos na tela.
  *
  * O escopo é `.workspace-settings-layout`, o corpo da Administração — e não a
@@ -5791,7 +4147,6 @@
 
 /* O "×" que remove alguem da lista de usuarios: #A14C4C sobre a superficie
    surda, 2,81:1 — e um controle destrutivo, o pior lugar para texto apagado. */
-.theme-dark .workspace-settings-layout .workspace-member-list article > button { color: var(--ui-state-danger-text); }
 
 /* "Dias uteis", a legenda do fieldset do calendario: #687689 sobre a superficie,
    3,68:1. As outras legendas da modal ja recebiam o token; esta ficou de fora
@@ -5809,14 +4164,11 @@
  *
  * `--ui-primary-soft` e o veu do proprio acento: e o par que a barra lateral e
  * o menu das configuracoes ja usam, e rende 7,98:1 com `--ui-accent-text`. */
-.theme-dark .workspace-settings-layout .workspace-account-summary em,
 .theme-dark .workspace-settings-layout .catalog-section > header > b,
-.theme-dark .workspace-settings-layout .field-catalog em,
-.theme-dark .workspace-settings-layout .workspace-member-list article > div strong em {
+.theme-dark .workspace-settings-layout .field-catalog em{
   background: var(--ui-primary-soft);
   color: var(--ui-accent-text, var(--ui-primary));
 }
-
 
 /* ==========================================================================
    A DEMANDA COMO GAVETA (maquete 4)
@@ -5907,7 +4259,6 @@
   .demand-drawer-complete { margin-left: 0; }
 }
 
-
 /* ==========================================================================
    A ADMINISTRAÇÃO COMO TELA (maquete 3)
    Ela era uma modal. O conteúdo das nove seções não mudou; o que muda aqui é a
@@ -5918,16 +4269,6 @@
    ========================================================================== */
 
 .admin-page-heading { align-items: flex-start; }
-.admin-breadcrumb { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
-.admin-breadcrumb button {
-  padding: 0; border: 0; background: transparent; cursor: pointer;
-  color: var(--ui-accent-text, var(--ui-primary)); font: inherit; font-size: 12px; font-weight: 800; letter-spacing: normal;
-}
-.admin-breadcrumb button:hover { text-decoration: underline; }
-.admin-breadcrumb button:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 2px; border-radius: var(--ui-radius-sm); }
-.admin-breadcrumb svg { width: 12px; height: 12px; color: var(--ui-text-soft); }
-.admin-breadcrumb span { color: var(--ui-text-soft); font-size: 12px; font-weight: 800; letter-spacing: normal; }
-.admin-page-description { margin: 6px 0 0; color: var(--ui-text-soft); font-size: 11px; }
 
 /* Fora da modal, o corpo das configurações deixa de ser uma caixa com altura
    mínima de diálogo e passa a ser a tela: a coluna das seções sobe com a
@@ -5942,7 +4283,6 @@
 .theme-dark .view-transition > .workspace-settings-layout { background: var(--ui-surface); }
 
 /* O grupo da Administração na barra lateral. */
-.sidebar-nav-group .sidebar-nav-item[aria-current="page"] { font-weight: 800; }
 
 @media (max-width: 1050px) {
   .view-transition > .workspace-settings-layout { grid-template-columns: minmax(0, 1fr); }
@@ -5981,8 +4321,6 @@
    precisando das abas e da barra do sistema. O que sai é o que já foi lido:
    a navegação lateral e o contexto do topo. */
 .dashboard-shell[data-focus="on"] { grid-template-columns: 0 minmax(0, 1fr); }
-.dashboard-shell[data-focus="on"] .dashboard-sidebar { display: none; }
-.dashboard-shell[data-focus="on"] .sidebar-group-context { display: none; }
 
 /* PRÓXIMO PASSO. A borda azul à esquerda é a mesma do cartão do quadro: quem
    leu a frase no cartão reconhece o campo que a escreve. */

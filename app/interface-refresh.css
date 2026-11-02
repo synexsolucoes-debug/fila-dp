@@ -113,31 +113,9 @@
  * o layout ainda depende da rolagem do documento, e sem ele a faixa superior
  * volta a subir junto.
  */
-.dashboard-sidebar {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, .22) transparent;
-  transition: width var(--motion-base) var(--motion-standard);
-}
-
-.dashboard-sidebar::-webkit-scrollbar { width: 8px; }
-.dashboard-sidebar::-webkit-scrollbar-thumb {
-  border: 2px solid transparent;
-  border-radius: 99px;
-  background: rgba(255, 255, 255, .18);
-  background-clip: content-box;
-}
-.dashboard-sidebar:hover::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .3); background-clip: content-box; }
 
 /* O cabeçalho do conteúdo gruda logo abaixo do topo, para que o contexto
  * ("Grupo / Demandas") não desapareça quando a lista é longa. */
-.dashboard-header {
-  position: sticky;
-  z-index: 25;
-  top: 0;
-  backdrop-filter: blur(14px);
-  transition: box-shadow var(--motion-base) var(--motion-standard);
-}
-
 
 /* ========================================================================== */
 /* 3. Entrada de módulos, modais e listas                                     */
@@ -173,11 +151,6 @@
 .search-palette,
 .workspace-modal-backdrop.search-backdrop { animation: none; }
 
-.workspace-toast {
-  animation: vin-pop var(--motion-base) var(--motion-enter) both;
-  box-shadow: var(--elevation-3);
-}
-
 /* ========================================================================== */
 /* 4. Estados e micro-interações                                              */
 /* ========================================================================== */
@@ -187,13 +160,9 @@
  * all` obriga o navegador a animar layout junto e é o caminho mais curto para
  * uma interface que engasga.
  */
-.dashboard-sidebar nav button,
-.dashboard-header-actions button,
 .primary-button,
 .secondary-button,
 .danger-button,
-.filter-chip,
-.dashboard-tabs button,
 .settings-nav button {
   transition:
     background-color var(--motion-fast) var(--motion-standard),
@@ -204,8 +173,7 @@
 }
 
 .primary-button:hover:not(:disabled),
-.secondary-button:hover:not(:disabled),
-.dashboard-header-actions .new-demand:hover:not(:disabled) {
+.secondary-button:hover:not(:disabled){
   transform: translateY(-1px);
   box-shadow: var(--elevation-2);
 }
@@ -214,8 +182,7 @@
  * botão parecer respondendo mesmo quando a requisição demora. */
 .primary-button:active:not(:disabled),
 .secondary-button:active:not(:disabled),
-.danger-button:active:not(:disabled),
-.dashboard-header-actions button:active:not(:disabled) {
+.danger-button:active:not(:disabled){
   transform: translateY(0) scale(.985);
   box-shadow: none;
   transition-duration: 60ms;
@@ -238,20 +205,6 @@
 }
 
 /* A marca do item ativo entra da esquerda em vez de piscar no lugar. */
-.dashboard-sidebar nav button::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 50%;
-  width: 3px;
-  height: 0;
-  border-radius: 0 3px 3px 0;
-  background: var(--ui-accent-on-ink);
-  transform: translateY(-50%);
-  transition: height var(--motion-base) var(--motion-enter);
-}
-
-.dashboard-sidebar nav button.active::before { height: 22px; }
 
 /* O anel de foco é o mesmo em toda a interface e nunca fica escondido atrás do
  * vizinho: sem o z-index ele some sob o cartão seguinte em listas densas. */
@@ -324,10 +277,6 @@
 /* O ícone do item ativo usava --ui-mint (#168CFD) sobre o realce do item:
  * 3.55:1 no claro e 4.02:1 no escuro. Agora usa o acento do painel — ocre
  * sobre a tinta —, que rende 9,74:1 sobre a barra. */
-.dashboard-sidebar nav button.active > span,
-.dashboard-sidebar nav a.active > span {
-  color: var(--ui-accent-on-ink);
-}
 
 /* Este arquivo é importado por último e vence no empate de especificidade: era
  * daqui que saía o azul da navegação, e não do bloco de tokens da barra. Mexer
@@ -335,34 +284,10 @@
  * enquanto o resto do painel já era ocre.
  * O realce sai do próprio token da barra, para que exista um lugar só onde a
  * cor do item ativo é decidida. */
-.dashboard-sidebar nav button.active,
-.dashboard-sidebar nav a.active {
-  background: var(--ui-rail-active);
-  color: var(--ui-rail-active-text);
-}
 
 /* Passar o mouse não é estar ali: o realce do ativo é ocre, o do passeio é só
  * um degrau de superfície. Antes os dois eram a mesma regra, e o item sob o
  * cursor ficava indistinguível do item aberto. */
-.dashboard-sidebar nav button:hover:not(.active),
-.dashboard-sidebar nav a:hover:not(.active) {
-  background: var(--ui-rail-hover);
-  color: var(--ui-text);
-}
-
-.dashboard-sidebar nav button:not(.active),
-.dashboard-sidebar nav a:not(.active) { color: var(--on-sidebar-text); }
-.dashboard-sidebar nav button:not(.active) > span,
-.dashboard-sidebar nav a:not(.active) > span { color: var(--on-sidebar-muted); }
-.sidebar-nav-section, .sidebar-workspace > span { color: var(--on-sidebar-section); }
-.sidebar-account small, .sidebar-workspace button span { color: var(--on-sidebar-muted); }
-.sidebar-group-context small { color: var(--on-sidebar-muted); }
-
-.dashboard-sidebar nav button b,
-.dashboard-sidebar nav a b {
-  background: var(--ui-badge-surface);
-  color: var(--ui-badge-text);
-}
 
 /*
  * "Entrar em outra conta" nunca teve reset: sem `background` e `border`
@@ -370,35 +295,15 @@
  * claro com borda, no meio do azul-marinho — e o ícone branco dentro dele ficava
  * em 1.15:1. É o caso mais visível do relato "não dá para ver os elementos".
  */
-.sidebar-account .switch-account-button,
-.sidebar-account form {
-  border: 0;
-  background: transparent;
-  padding: 0;
-  margin: 0;
-}
-
-.sidebar-account :is(.switch-account-button, .sign-out-button) {
-  color: var(--on-sidebar-muted);
-  opacity: 1;
-  transition: background-color var(--motion-fast) var(--motion-standard), color var(--motion-fast) var(--motion-standard);
-}
-
-.sidebar-account :is(.switch-account-button, .sign-out-button):hover {
-  background: color-mix(in srgb, var(--ui-primary) 26%, transparent);
-  color: #fff;
-}
 
 /* -- Texto de apoio em superfície clara ----------------------------------- */
 
 /* #758294 sobre branco dava 3.91:1; --ui-text-soft dá 6.15:1 e já acompanha o
  * tema, então o mesmo seletor serve para claro e escuro. */
 .dashboard-check,
-.dashboard-comments,
-.workspace-member-list article > div small { color: var(--ui-text-soft); }
+.dashboard-comments{ color: var(--ui-text-soft); }
 
 /* O papel do integrante (#647284 sobre #EEF2F8, 4.37:1) fica em 5.47:1. */
-.workspace-member-list article > b { color: var(--ui-text-soft); }
 
 /* Lista e Calendário só ficaram visíveis à auditoria depois que o seletor de
  * formato voltou à convenção de nome da varredura — até então as duas telas
@@ -410,22 +315,18 @@
  * pequeno (8px em 750), então a exigência é 4.5:1, não 3:1. O mesmo
  * `--ui-text-soft` das outras correções de apoio resolve, em 6.15:1. */
 .operational-ui .demand-table-view th,
-.operational-ui .demand-table-view td small,
-.operational-ui .calendar-weekdays span,
-.operational-ui .calendar-days article small { color: var(--ui-text-soft); }
+.operational-ui .demand-table-view td small{ color: var(--ui-text-soft); }
 
 /* -- Chips de estado ------------------------------------------------------ */
 
 .dashboard-sla.safe,
 .dashboard-sla.completed,
-.member-activation-status.active,
 .company-profile-card header em {
   background: var(--tone-safe-surface);
   color: var(--tone-safe-text);
 }
 
-.dashboard-sla.warning,
-.member-activation-status.pending {
+.dashboard-sla.warning{
   background: var(--tone-warn-surface);
   color: var(--tone-warn-text);
 }
@@ -479,15 +380,6 @@
 .theme-dark .search-results > button em.warning { background: var(--tone-warn-surface); color: var(--tone-warn-text); }
 .theme-dark .search-palette > footer { border-color: var(--ui-border); color: var(--ui-text-soft); }
 
-.theme-dark .workspace-toast {
-  border-color: var(--ui-border);
-  background: var(--ui-surface);
-  color: var(--ui-text);
-}
-.theme-dark .workspace-toast > span { background: color-mix(in srgb, var(--ui-primary) 24%, var(--ui-surface-muted)); color: var(--ui-accent-on-ink); }
-.theme-dark .workspace-toast.error > span { background: var(--tone-danger-surface); color: var(--tone-danger-text); }
-.theme-dark .workspace-toast button { color: var(--ui-text-soft); }
-
 .theme-dark .notification-list > button { color: var(--ui-text); }
 .theme-dark .notification-list > button p { color: var(--ui-text-soft); }
 .theme-dark .notification-list > button time { color: var(--ui-text-soft); }
@@ -498,12 +390,10 @@
 
 /* Elevação coerente: o cartão descansa em 1, o painel em 2, a modal em 3. */
 .overview-kpi,
-.dashboard-stats article,
 .dashboard-task { box-shadow: var(--elevation-1); }
 
 .overview-panel,
 .dashboard-column,
-.workspace-team,
 .security-sessions { box-shadow: var(--elevation-2); }
 
 /*
@@ -517,7 +407,6 @@ body:has(.dashboard-shell.theme-dark) { background: #0A100D; }
 body:has(.dashboard-shell:not(.theme-dark)) { background: var(--vin-bg); }
 
 /* O separador da barra lateral acompanha o tema em vez de ser branco fixo. */
-.sidebar-workspace, .sidebar-account { border-color: color-mix(in srgb, var(--ui-primary) 26%, transparent); }
 
 /* Operational refinement: content first, shared controls, restrained surfaces.
    Scoped to WorkspaceApp so the public site and platform console keep their layout. */
@@ -554,7 +443,7 @@ body:has(.dashboard-shell:not(.theme-dark)) { background: var(--vin-bg); }
 .operational-ui .dashboard-heading-meta { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; justify-content: flex-end; }
 .operational-ui .dashboard-sync-status { margin: 0; font-size: .75rem; }
 .operational-ui .dashboard-date strong { font-size: .75rem; font-weight: 500; }
-.operational-ui .dashboard-eyebrow { font-size: .75rem; }
+
 .operational-ui .process-context-compact {
   padding: 0 0 12px; margin-bottom: 18px; border: 0;
   border-bottom: 1px solid var(--ui-border); border-radius: 0;
@@ -564,29 +453,8 @@ body:has(.dashboard-shell:not(.theme-dark)) { background: var(--vin-bg); }
 .operational-ui .process-context-slot { padding: 0; border: 0; }
 .operational-ui .process-context [role="tablist"] { margin: 0; background: transparent; border: 0; padding: 0; }
 .operational-ui .process-context [role="tab"] { min-height: 38px; font-size: .875rem; }
-.operational-ui .dashboard-header { gap: 16px; padding-inline: 24px; backdrop-filter: none; background: var(--ui-rail); }
-.operational-ui .dashboard-header-actions { min-width: 0; gap: 8px; }
-.operational-ui .dashboard-location { flex: 0 1 320px; font-size: .75rem; }
-.operational-ui .header-company-select { flex: 0 1 280px; min-width: 140px; }
-.operational-ui .header-company-select select { width: 100%; min-width: 0; text-overflow: ellipsis; font-size: .8125rem; }
+
 .operational-ui .global-search-trigger { flex: 0 1 240px; min-width: 40px; }
-.operational-ui .dashboard-header .process-context-pin { flex: 0 0 36px; margin: 0; }
-.operational-ui .dashboard-header .new-demand { background: var(--vin-blue); border: 1px solid var(--vin-blue); color: white; box-shadow: none; font-size: .875rem; white-space: nowrap; }
-.operational-ui .dashboard-sidebar { min-width: 0; padding: 16px 12px 12px; }
-.operational-ui .dashboard-brand { margin-block: 8px 16px; }
-.operational-ui .sidebar-group-context { margin: 0; padding: 10px; background: transparent; border: 0; }
-.operational-ui .sidebar-group-context > span { font-size: .75rem; letter-spacing: .02em; }
-.operational-ui .sidebar-group-context strong { font-size: .875rem; }
-.operational-ui .sidebar-group-context small { display: none; }
-.operational-ui .dashboard-sidebar nav { overflow-x: hidden; scrollbar-width: thin; margin-top: 16px; gap: 12px; }
-.operational-ui .dashboard-sidebar nav button { min-height: 38px; font-size: .875rem; padding-inline: 10px; max-width: 100%; gap: 10px; }
-.operational-ui .dashboard-sidebar nav button:hover:not(.active) { transform: none; }
-.operational-ui .dashboard-sidebar nav button.active { background: var(--ui-rail-active); color: var(--ui-rail-active-text); box-shadow: none; }
-.operational-ui .dashboard-sidebar nav button.active::before { animation: none; }
-.operational-ui .sidebar-nav-section { font-size: .75rem; letter-spacing: .025em; }
-.operational-ui .sidebar-process-views { margin-left: 16px; }
-.operational-ui .sidebar-process-views button { font-size: .8125rem; }
-.operational-ui .sidebar-account { margin-top: 12px; }
 
 .operational-ui .dashboard-kanban { margin-top: 0; gap: 14px; }
 .operational-ui .dashboard-column { background: var(--ui-surface); }
@@ -658,17 +526,14 @@ body:has(.dashboard-shell:not(.theme-dark)) { background: var(--vin-bg); }
 .operational-ui .connection-summary-list [data-tone="bad"] small { color: var(--tone-danger-text); }
 
 @media (min-width: 761px) and (max-width: 1180px) {
-  .operational-ui .dashboard-location { display: none; }
-  .operational-ui .dashboard-header .global-search-trigger { flex: 0 0 40px; width: 40px; }
+
   .operational-ui .global-search-trigger :is(span, kbd) { display: none; }
 }
 @media (max-width: 760px) {
   .operational-ui .dashboard-content { padding: 16px 14px 96px; }
   .operational-ui .dashboard-heading { align-items: flex-start; flex-wrap: wrap; gap: 8px; }
   .operational-ui .dashboard-heading-meta { justify-content: flex-start; }
-  .operational-ui .dashboard-header { padding-inline: 12px; }
-  .operational-ui .dashboard-sidebar { padding: 0; }
-  .operational-ui .dashboard-sidebar nav { margin: 0; }
+
   .operational-ui .process-context-compact { margin-bottom: 14px; overflow-x: auto; }
   .operational-ui .card-form-section { grid-template-columns: minmax(0, 1fr); }
   .operational-ui .card-form-section :is(input, select, textarea) { font-size: 16px; }
@@ -843,87 +708,14 @@ body:has(.dashboard-shell.operational-ui:not(.theme-dark)) { background: #F7F9FD
 /* 6.1 Barra lateral                                                          */
 /* -------------------------------------------------------------------------- */
 
-.operational-ui .dashboard-sidebar {
-  padding: 18px 14px 14px;
-  background: var(--ui-rail);
-  border-right: 0;
-  color: var(--ui-rail-text);
-  scrollbar-color: rgba(255, 255, 255, .2) transparent;
-}
-
-.operational-ui .dashboard-brand { color: #FFFFFF; margin-block: 4px 14px; }
-
 /* O grupo operacional é um controle, e não um rótulo solto: é por ali que se
    confere em qual cliente o trabalho está sendo feito. A caixa existe para dar
    a ele a forma de coisa clicável que a maquete mostra. */
-.operational-ui .sidebar-group-context {
-  display: grid;
-  gap: 2px;
-  margin: 0 0 14px;
-  padding: 10px 12px;
-  border: 1px solid var(--ui-rail-border);
-  border-radius: var(--ui-radius-lg);
-  background: var(--ui-rail-context);
-}
-.operational-ui .sidebar-group-context > span { color: var(--ui-rail-section); font-size: .625rem; font-weight: 700; letter-spacing: normal; }
-.operational-ui .sidebar-group-context strong { color: #FFFFFF; font-size: .875rem; font-weight: 650; }
-
-.operational-ui .dashboard-sidebar nav { margin-top: 6px; gap: 14px; }
-.operational-ui .sidebar-nav-group { display: flex; flex-direction: column; gap: 2px; }
-.operational-ui .sidebar-nav-section {
-  margin: 6px 0 4px; padding-inline: 10px;
-  color: var(--ui-rail-section); font-size: .625rem; font-weight: 700; letter-spacing: normal;
-}
-
-.operational-ui .dashboard-sidebar nav button {
-  min-height: 40px; padding-inline: 10px; gap: 11px;
-  border-radius: var(--ui-radius-lg);
-  color: var(--ui-rail-text); font-size: .875rem; font-weight: 550;
-}
-.operational-ui .dashboard-sidebar nav button > span { color: var(--ui-rail-icon); }
-.operational-ui .dashboard-sidebar nav button:hover { background: var(--ui-rail-hover); color: #FFFFFF; }
-.operational-ui .dashboard-sidebar nav button:hover > span { color: #FFFFFF; }
 
 /* O item ativo é bloco cheio, e não só cor de texto: numa barra escura a cor
    sozinha some, e a forma continua legível para quem não distingue matiz. */
-.operational-ui .dashboard-sidebar nav button.active {
-  background: var(--ui-rail-active); color: var(--ui-rail-active-text);
-  font-weight: 650; box-shadow: none;
-}
-.operational-ui .dashboard-sidebar nav button.active > span { color: #FFFFFF; }
-.operational-ui .dashboard-sidebar nav button b { background: var(--ui-badge-surface); color: #FFFFFF; }
-
-.operational-ui .sidebar-process-views { margin-left: 30px; gap: 1px; }
-.operational-ui .sidebar-process-view {
-  min-height: 32px; padding: 0 10px; border-radius: var(--ui-radius-md);
-  color: var(--ui-rail-icon); font-size: .8125rem; text-align: left;
-}
-.operational-ui .sidebar-process-view:hover { background: var(--ui-rail-hover); color: #FFFFFF; }
-.operational-ui .sidebar-process-view.active { background: var(--ui-rail-hover); color: #FFFFFF; font-weight: 600; }
-
-.operational-ui .sidebar-toggle {
-  border-color: var(--ui-rail-border); background: transparent; color: var(--ui-rail-icon);
-}
-.operational-ui .sidebar-toggle:hover { background: var(--ui-rail-hover); color: #FFFFFF; }
 
 .operational-ui :is(.sidebar-workspace, .sidebar-account) { border-color: var(--ui-rail-border); }
-.operational-ui .sidebar-workspace > span { color: var(--ui-rail-section); font-size: .625rem; letter-spacing: normal; }
-.operational-ui .sidebar-structure-summary,
-.operational-ui .sidebar-workspace summary {
-  display: flex; align-items: center; gap: 10px;
-  min-height: 48px; padding: 0 10px;
-  border: 1px solid var(--ui-rail-border); border-radius: var(--ui-radius-lg);
-  background: var(--ui-rail-context); color: var(--ui-rail-text);
-}
-.operational-ui .sidebar-structure-summary i,
-.operational-ui .sidebar-workspace summary > i {
-  width: 28px; height: 28px; display: grid; place-items: center; flex: 0 0 28px;
-  border-radius: var(--ui-radius-md);
-  background: var(--ui-primary); color: #FFFFFF;
-  font-style: normal; font-size: .625rem; font-weight: 700;
-}
-.operational-ui .sidebar-structure-summary strong { color: #FFFFFF; font-size: .8125rem; }
-.operational-ui .sidebar-structure-summary small { color: var(--ui-rail-icon); font-size: .6875rem; }
 
 /* O seletor de grupo, quando há mais de um.
    Ele mora na barra escura, mas `dashboard-modern.css` o pinta com
@@ -935,66 +727,23 @@ body:has(.dashboard-shell.operational-ui:not(.theme-dark)) { background: #F7F9FD
    `.sidebar-group-context` e `.sidebar-structure-summary`; aqui ela alcança o
    último bolsão. Os tons abaixo são os da barra: 13,8:1, 5,5:1 e 8,0:1 sobre
    o menu suspenso. */
-.operational-ui .sidebar-workspace-switcher ul {
-  border-color: var(--ui-rail-border);
-  background: var(--ui-rail-context);
-}
-.operational-ui .sidebar-workspace-switcher li button { color: var(--ui-rail-text); }
-.operational-ui .sidebar-workspace-switcher li button:hover:not(:disabled) { background: var(--ui-rail-hover); }
+
 .operational-ui :is(.sidebar-workspace-switcher strong, .sidebar-workspace button > span strong) { color: #FFFFFF; }
 .operational-ui :is(.sidebar-workspace-switcher small, .sidebar-workspace button > span small) { color: var(--ui-rail-icon); }
-.operational-ui .sidebar-workspace-switcher i { background: var(--ui-primary); color: #FFFFFF; }
-.operational-ui .sidebar-workspace-switcher li b { color: var(--ui-accent-on-ink); }
-.operational-ui .sidebar-workspace-switcher summary > svg { color: var(--ui-rail-icon); }
 
 /* Mesma origem, outro canto: a marca de "visitado recentemente" é o único
    sinal que separa um atalho recente de um favorito, e `--ui-text-muted` sobre
    a barra rende 2,5:1 — abaixo dos 3:1 que a WCAG 1.4.11 pede de indicador
    não textual. */
-.operational-ui .sidebar-shortcut-mark { color: var(--ui-accent-on-ink); }
-.operational-ui .sidebar-shortcut-recent .sidebar-shortcut-mark { color: var(--ui-rail-icon); opacity: .85; }
 
 /* A conta fecha a barra: avatar da marca, nome, e as ações discretas ao lado. */
-.operational-ui .sidebar-account { padding-top: 12px; }
-.operational-ui .sidebar-account .user-avatar { background: var(--ui-primary); color: #FFFFFF; font-size: .75rem; }
-.operational-ui .sidebar-account strong { color: #FFFFFF; font-size: .8125rem; }
-.operational-ui .sidebar-account small { color: var(--ui-rail-icon); font-size: .6875rem; }
-.operational-ui .sidebar-account :is(.switch-account-button, .sign-out-button) { color: var(--ui-rail-icon); }
-.operational-ui .sidebar-account :is(.switch-account-button, .sign-out-button):hover { background: var(--ui-rail-hover); color: #FFFFFF; }
 
 /* -------------------------------------------------------------------------- */
 /* 6.2 Faixa superior                                                         */
 /* -------------------------------------------------------------------------- */
 
-.operational-ui .dashboard-header {
-  height: 64px;
-  border-bottom: 1px solid var(--ui-border);
-  background: var(--ui-surface);
-  box-shadow: none;
-}
-.operational-ui .dashboard-location { color: var(--ui-text-muted); font-size: .8125rem; }
-.operational-ui .dashboard-location strong { color: var(--ui-text); font-weight: 650; }
-
-.operational-ui .dashboard-header-actions button {
-  border-color: var(--ui-border); background: var(--ui-surface); color: var(--ui-text-muted);
-}
-.operational-ui .dashboard-header-actions button:hover {
-  border-color: var(--ui-border-strong); background: var(--ui-surface-muted); color: var(--ui-text); transform: none;
-}
-.operational-ui .header-company-select {
-  min-height: 38px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg);
-  background: var(--ui-surface); color: var(--ui-text-soft);
-}
-.operational-ui .header-company-select select { color: var(--ui-text); font-weight: 550; }
-
 /* Avatar da faixa: o mesmo par do avatar da barra, invertido para o fundo
    claro. Azul sobre o azul-suave rende 6.86:1. */
-.operational-ui .header-profile { border-color: var(--ui-border); background: var(--ui-surface); }
-.operational-ui .header-profile > span {
-  width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%;
-  background: var(--ui-avatar-bg); color: var(--ui-avatar-text); font-size: .6875rem; font-weight: 700;
-}
-.operational-ui .dashboard-header-actions button > i { background: var(--ui-badge-surface); }
 
 /* -------------------------------------------------------------------------- */
 /* 6.3 Título da página e ação primária                                       */
@@ -1062,18 +811,11 @@ body:has(.dashboard-shell.operational-ui:not(.theme-dark)) { background: #F7F9FD
 .operational-ui .board-summary-item > i {
   width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; align-self: center;
 }
-.operational-ui .board-summary-item.tone-danger > i { background: var(--ui-danger); }
-.operational-ui .board-summary-item.tone-warn > i { background: var(--ui-warning); }
 
 /* -------------------------------------------------------------------------- */
 /* 6.5 Recorte (abas) e formato (segmentado)                                  */
 /* -------------------------------------------------------------------------- */
 
-.operational-ui .dashboard-board-head {
-  display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between;
-  gap: 12px; margin: 0; padding: 0 0 0;
-  border-bottom: 1px solid var(--ui-border);
-}
 .operational-ui .board-scope-tabs { display: flex; align-items: center; gap: 4px; }
 .operational-ui .board-scope-tabs button {
   height: 42px; min-height: 42px; padding-inline: 12px;
@@ -1112,14 +854,6 @@ body:has(.dashboard-shell.operational-ui:not(.theme-dark)) { background: #F7F9FD
   font-weight: 650; box-shadow: var(--elevation-1);
 }
 /* Arquivados não é formato: fica no mesmo canto, mas fora do trilho. */
-.operational-ui .board-view-switch .archive-trigger {
-  margin-left: 6px; padding-left: 12px;
-  border-left: 1px solid var(--ui-border); border-radius: 0; background: transparent;
-}
-.operational-ui .board-view-switch .archive-trigger b {
-  min-width: 20px; height: 20px; display: inline-grid; place-items: center; margin-left: 2px;
-  border-radius: 999px; background: var(--ui-surface); color: var(--ui-text-soft); font-size: .6875rem;
-}
 
 /* -------------------------------------------------------------------------- */
 /* 6.6 Fileira de filtros                                                     */
@@ -1178,10 +912,7 @@ body:has(.dashboard-shell.operational-ui:not(.theme-dark)) { background: #F7F9FD
   border-radius: 999px; background: var(--ui-primary); color: var(--ui-on-accent);
   font-size: .6875rem; font-weight: 700;
 }
-.operational-ui .board-filter-bar .filter-clear {
-  min-height: 40px; padding: 0 12px; border: 0; border-radius: var(--ui-radius-lg);
-  background: transparent; color: var(--ui-accent-text); font-size: .875rem; font-weight: 600; cursor: pointer;
-}
+
 .operational-ui .board-filter-bar .board-filter-fields {
   position: absolute; z-index: 20; right: 0; width: max-content; min-width: 260px;
   margin-top: 6px; padding: 14px;
@@ -1273,16 +1004,10 @@ body:has(.dashboard-shell.operational-ui:not(.theme-dark)) { background: #F7F9FD
  * e não pela ordem: (0,4,x) não depende de quem foi carregado por último.
  */
 @media (min-width: 761px) {
-  .operational-ui.sidebar-collapsed .dashboard-sidebar nav button {
-    padding-inline: 0; justify-content: center; font-size: 0;
-  }
-  .operational-ui.sidebar-collapsed .dashboard-sidebar nav button > span { width: 22px; }
+
   .operational-ui.sidebar-collapsed :is(.sidebar-group-context, .sidebar-nav-section,
     .sidebar-workspace, .sidebar-process-views) { display: none; }
-  .operational-ui.sidebar-collapsed .sidebar-account > span:nth-child(2) { display: none; }
-  .operational-ui.sidebar-collapsed .dashboard-brand { justify-content: center; }
-  .operational-ui.sidebar-collapsed .dashboard-brand > .dashboard-brand-logo-full { display: none; }
-  .operational-ui.sidebar-collapsed .dashboard-brand > .dashboard-brand-logo-mark { display: inline-flex; }
+
 }
 
 /* A estrutura do grupo volta a aparecer no notebook.
@@ -1292,11 +1017,10 @@ body:has(.dashboard-shell.operational-ui:not(.theme-dark)) { background: #F7F9FD
    1440px, que é onde a operação trabalha, a única confirmação de qual grupo e
    quantas empresas estão em jogo. */
 @media (min-width: 1100px) {
-  .operational-ui .sidebar-workspace { display: block; }
+
   /* Junto com ela volta o nome de quem está logado: um avatar com uma letra,
      sozinho, não responde "com qual conta eu estou aqui?" — e é essa a única
      pergunta que o rodapé da barra existe para responder. */
-  .operational-ui .sidebar-account > span:nth-child(2) { display: block; }
 
   /* E o rodapé volta a ser uma grade que cabe.
      Duas coisas estavam erradas ao mesmo tempo, e só juntas explicam o que se
@@ -1310,13 +1034,6 @@ body:has(.dashboard-shell.operational-ui:not(.theme-dark)) { background: #F7F9FD
      coluna útil: com avatar, nome e três botões na mesma linha, sobrariam 60px
      para o nome — e um nome cortado em "Administra…" não responde com qual
      conta a pessoa está. A barra tem altura de sobra; largura, não. */
-  .operational-ui .sidebar-account {
-    grid-template-columns: 38px minmax(0, 1fr);
-    justify-items: stretch;
-    align-items: center;
-    row-gap: 8px;
-  }
-  .operational-ui .sidebar-account-actions { grid-column: 1 / -1; justify-content: flex-end; }
 
   /* E volta o rótulo do seletor de grupo.
      `access.css` reduz esse seletor ao símbolo de 1499px para baixo — decisão
@@ -1328,16 +1045,7 @@ body:has(.dashboard-shell.operational-ui:not(.theme-dark)) { background: #F7F9FD
      A lista também volta para dentro da coluna: `left: 100%` existia para ela
      não caber na barra estreita, e com a barra larga isso a jogava por cima do
      conteúdo. */
-  .operational-ui .sidebar-workspace-switcher summary { justify-content: flex-start; }
-  .operational-ui .sidebar-workspace-switcher summary > span { display: grid; gap: 2px; min-width: 0; }
-  .operational-ui .sidebar-workspace-switcher summary > svg {
-    display: block; width: 16px; height: 16px; flex: 0 0 16px; margin-left: auto; color: var(--ui-rail-icon);
-  }
-  .operational-ui .sidebar-workspace-switcher > span { display: block; }
-  .operational-ui .sidebar-workspace-switcher ul {
-    position: static; min-width: 0; margin: 6px 0 0;
-    border-color: var(--ui-rail-border); background: var(--ui-rail-context); box-shadow: none;
-  }
+
 }
 
 /* O acento sobre tinta nos dois cartões navy do conteúdo.
@@ -1348,8 +1056,6 @@ body:has(.dashboard-shell.operational-ui:not(.theme-dark)) { background: #F7F9FD
    `--ui-accent-on-ink` é o mesmo azul na versão que se lê sobre tinta: 8,89:1
    sobre o navy do cartão. O traço do círculo continua no vivo, que ali é
    indicador e não texto. */
-.operational-ui .inbox-summary li > b { color: var(--ui-accent-on-ink); }
-.operational-ui .inbox-converted strong { color: var(--ui-accent-on-ink); }
 
 @media (max-width: 1180px) {
   .operational-ui .board-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -1361,9 +1067,6 @@ body:has(.dashboard-shell.operational-ui:not(.theme-dark)) { background: #F7F9FD
    a marca e navegação fixa embaixo. A caixa do grupo operacional não cabe nessa
    faixa — `dashboard-modern.css` já a escondia ali, e a regra desta camada, que
    é carregada depois, a trazia de volta flutuando por cima do cabeçalho. */
-@media (max-width: 780px) {
-  .operational-ui .sidebar-group-context { display: none; }
-}
 
 @media (max-width: 780px) {
   /* A faixa superior a 390px tinha seis controles disputando 366px, e o
@@ -1375,14 +1078,12 @@ body:has(.dashboard-shell.operational-ui:not(.theme-dark)) { background: #F7F9FD
      no título da página — os dois seletores não têm segunda chance. Com ela
      fora, os dois dividem o espaço em partes iguais e nenhum encolhe abaixo do
      alvo. */
-  .operational-ui .dashboard-location { display: none; }
+
   /* O seletor de empresa volta a ser só o ícone, como `dashboard-modern.css`
      já decidia para esta largura. Esta camada tinha lhe dado `min-width: 140px`
      sem par para o celular, e o resultado era uma caixa de 140px exibindo um
      ícone de 15px — espaço tomado de quem precisava dele. */
-  .operational-ui .header-company-select {
-    flex: 0 0 38px; width: 38px; min-width: 38px; padding: 0; justify-content: center;
-  }
+
   .operational-ui .header-period-select { flex: 0 1 auto; min-width: 132px; }
   .operational-ui .header-period-select select { min-width: 88px; }
 }
@@ -1403,13 +1104,10 @@ body:has(.dashboard-shell.operational-ui:not(.theme-dark)) { background: #F7F9FD
      pesa (0,3,1), um degrau acima do seletor sem ela. Era esse o par que
      continuava acendendo o símbolo. `display: inline` também não escondia
      nada: item de flex tem o display blocado, e `inline` virava `block`. */
-  .operational-ui .dashboard-brand > .dashboard-brand-logo-full,
-  .operational-ui.sidebar-collapsed .dashboard-brand > .dashboard-brand-logo-full { display: inline-flex; }
-  .operational-ui .dashboard-brand > .dashboard-brand-logo-mark,
-  .operational-ui.sidebar-collapsed .dashboard-brand > .dashboard-brand-logo-mark { display: none; }
+
   .operational-ui .dashboard-heading-meta { width: 100%; }
   .operational-ui .new-demand { width: 100%; justify-content: center; }
-  .operational-ui .dashboard-board-head { flex-direction: column; align-items: stretch; }
+
   .operational-ui .board-scope-tabs { overflow-x: auto; scrollbar-width: none; }
   .operational-ui .board-view-switch { margin-bottom: 10px; overflow-x: auto; scrollbar-width: none; }
   .operational-ui .board-filter-bar > :is(.board-search, .board-field, .board-selector) { flex: 1 1 100%; max-width: none; }
@@ -1692,57 +1390,8 @@ body:has(.dashboard-shell.operational-ui:not(.theme-dark)) { background: #F7F9FD
 
 /* Painel de DP: as três visões aprovadas compartilham filtros e demandas.
    Escopo local para preservar as telas dos demais módulos e o tema escolhido. */
-.operational-ui .dp-demand-panel { min-width: 0; }
-.operational-ui .dp-model-switch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 22px; }
-.operational-ui .dp-model-switch > button { display: flex; align-items: center; gap: 12px; padding: 15px 16px; min-width: 0; text-align: left; border: 1px solid var(--ui-border); border-radius: 10px; background: var(--ui-surface); color: var(--ui-text); cursor: pointer; }
-.operational-ui .dp-model-switch > button:hover { background: var(--ui-surface-muted); }
-.operational-ui .dp-model-switch > button[aria-pressed=true] { border-color: var(--ui-primary); background: var(--ui-primary-soft); }
-.operational-ui .dp-model-switch > button > svg { width: 20px; height: 20px; flex: 0 0 20px; color: var(--ui-text-soft); }
-.operational-ui .dp-model-switch strong { display: block; font-size: .875rem; font-weight: 600; }
-.operational-ui .dp-model-switch small { display: block; color: var(--ui-text-muted); font-size: .75rem; line-height: 1.5; margin-top: 4px; }
-.operational-ui .dp-demand-panel .board-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border: 1px solid var(--ui-border); border-radius: 10px; background: var(--ui-surface); margin-bottom: 18px; overflow: hidden; }
-.operational-ui .dp-demand-panel .board-summary-item { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 4px; min-height: 112px; padding: 15px 20px; border: 0; border-right: 1px solid var(--ui-border); background: transparent; border-radius: 0; text-align: left; }
-.operational-ui .dp-demand-panel .board-summary-item:last-child { border-right: 0; }
-.operational-ui .dp-demand-panel .board-summary-item > strong { font-size: 1.9rem; line-height: 1.3; font-weight: 600; letter-spacing: -.04em; color: var(--ui-text); }
-.operational-ui .dp-demand-panel .board-summary-item > span { font-size: .8125rem; color: var(--ui-text-soft); }
-.operational-ui .dp-demand-panel .board-summary-item > small { font-size: .6875rem; line-height: 1.5; color: var(--ui-text-muted); }
-.operational-ui .dp-demand-panel .board-summary-item.tone-danger > strong { color: var(--tone-danger-text); }
-.operational-ui .dp-demand-panel .board-summary-item:hover, .operational-ui .dp-demand-panel .board-summary-item.active { background: var(--ui-surface-muted); }
-.operational-ui .dp-demand-panel .board-summary-item.active { box-shadow: inset 0 -3px var(--ui-primary); }
-.operational-ui .dp-demand-panel .dashboard-board-head { margin-bottom: 10px; border-bottom: 0; flex-wrap: wrap; }
-.operational-ui .dp-demand-panel .board-view-switch { background: transparent; border: 0; }
-.operational-ui .dp-demand-panel .board-filter-bar { padding: 12px 0; }
-.operational-ui .dp-demand-panel .board-search { flex: 1 1 250px; max-width: none; }
-.operational-ui .dp-demand-panel .dashboard-kanban { gap: 16px; grid-auto-columns: minmax(248px, 1fr); padding-top: 16px; }
-.operational-ui .dp-demand-panel .dashboard-column { min-width: 248px; min-height: 180px; background: transparent; border: 0; box-shadow: none; }
-.operational-ui .dp-demand-panel .dashboard-column > header { background: transparent; border: 0; padding: 0 2px 12px; height: auto; min-height: 44px; }
-.operational-ui .dp-demand-panel .dashboard-column > header > span { font-size: .8125rem; font-weight: 600; color: var(--ui-text); }
-.operational-ui .dp-demand-panel .dashboard-card-list { padding: 0; }
-.operational-ui .dp-demand-panel .dashboard-task { padding: 15px; border-radius: 9px; background: var(--ui-surface); border: 1px solid var(--ui-border); box-shadow: 0 1px 2px rgb(0 0 0 / 3%); margin-bottom: 12px; }
-.operational-ui .dp-demand-panel .dashboard-task.sla-overdue { border-left: 3px solid var(--tone-danger-text); }
-.operational-ui .dp-demand-panel .dashboard-task h2 { font-size: .875rem; line-height: 1.5; font-weight: 600; }
-.operational-ui .dp-demand-panel .dashboard-task p { overflow-wrap: anywhere; }
+
 .operational-ui .dp-card-next { border-top: 1px solid var(--ui-border); margin-top: 12px; padding-top: 10px; }
 .operational-ui .dp-card-next > span { color: var(--ui-text-muted); font-size: .6875rem; }
 .operational-ui .dp-card-next > p { color: var(--ui-text-soft); font-size: .75rem; line-height: 1.55; margin: 4px 0 0; }
-.operational-ui .dp-demand-panel .dashboard-task-bottom { margin-top: 12px; }
-.operational-ui .dp-demand-panel .dashboard-task-owner { max-width: 100%; }
-.operational-ui .dp-demand-panel .dashboard-kanban[data-density=compact] .dashboard-task,
-.operational-ui .dp-demand-panel [data-density=compact] .dashboard-task { padding: 10px; margin-bottom: 8px; }
-.operational-ui .dp-demand-panel .dashboard-kanban[data-density=compact] .dp-card-next,
-.operational-ui .dp-demand-panel [data-density=compact] .dp-card-next { margin-top: 8px; padding-top: 7px; }
-@media (max-width: 1000px) {
-  .operational-ui .dp-model-switch > button { padding: 12px; gap: 8px; }
-  .operational-ui .dp-model-switch small { font-size: .6875rem; }
-  .operational-ui .dp-demand-panel .board-summary-item { padding: 14px; }
-}
-@media (max-width: 760px) {
-  .operational-ui .dp-model-switch { grid-template-columns: 1fr; gap: 8px; margin-bottom: 16px; }
-  .operational-ui .dp-model-switch small { font-size: .75rem; }
-  .operational-ui .dp-demand-panel .board-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .operational-ui .dp-demand-panel .board-summary-item:nth-child(2) { border-right: 0; }
-  .operational-ui .dp-demand-panel .board-summary-item:nth-child(-n+2) { border-bottom: 1px solid var(--ui-border); }
-  .operational-ui .dp-demand-panel .dashboard-kanban { grid-auto-flow: row; grid-template-columns: minmax(0, 1fr); overflow-x: visible; }
-  .operational-ui .dp-demand-panel .dashboard-column { min-width: 0; }
-  .operational-ui .dp-demand-panel .board-view-switch { overflow: visible; flex-wrap: wrap; }
-}
+

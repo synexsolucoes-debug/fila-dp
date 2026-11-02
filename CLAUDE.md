@@ -46,6 +46,8 @@ Teste novo entra sozinho: basta o nome terminar em `.test.mts`.
 
 - Telas do painel: `app/painel/features/<módulo>/`. `app/painel/WorkspaceApp.tsx`
   é a raiz e já é grande demais — código novo de tela vai para `features/`.
+  Ao tirar uma tela de lá, acrescente o arquivo novo em `tests/painel-source.ts`:
+  os testes que conferem o texto do painel leem os arquivos juntos por ele.
 - Rotas: `app/api/**/route.ts`. Rota **nova** chama um serviço em `lib/` em vez
   de escrever SQL na própria rota.
 - Sessão e login: `lib/auth/session.ts`.

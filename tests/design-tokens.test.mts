@@ -34,7 +34,7 @@ const EXTERNOS: Record<string, URL> = {
 /** Teto de cor crua por módulo. Descer é livre; subir exige justificativa no diff. */
 const TETO: Record<string, number> = {
   saas: 36,
-  auxiliary: 15,
+  auxiliary: 12,
   /* De 14 para 3: a conversão da faixa do ciclo para a casca clara tirou o
      último bolsão do verde da marca antiga (#38d6a7 e parentes) e as cores de
      superfície escura que ela carregava. A catraca cobrou a descida — é para
@@ -42,7 +42,7 @@ const TETO: Record<string, number> = {
   operations: 3,
   access: 13,
   integrations: 10,
-  assistant: 8,
+  assistant: 4,
   registrations: 4,
   payments: 2,
   time: 1,

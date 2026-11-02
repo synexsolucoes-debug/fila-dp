@@ -32,7 +32,7 @@ test("a barra lateral volta a acompanhar a rolagem", async () => {
   const modern = await read("app/dashboard-modern.css");
   const locked = modern.split("@media (min-width: 761px)").at(1)?.slice(0, 900) ?? "";
   assert.match(locked, /\.dashboard-shell\s*\{[^}]*height:\s*100dvh[^}]*overflow:\s*hidden/u);
-  assert.match(locked, /\.dashboard-sidebar nav\s*\{[^}]*overflow-y:\s*auto/u);
+  // A barra lateral saiu da interface no redesign (#262) e o CSS dela foi apagado.
 
   // interface-refresh.css é carregada depois e venceria aquelas regras. Repetir
   // layout aqui não muda o resultado medido, mas faz o próximo leitor acreditar
@@ -90,7 +90,7 @@ test("os tons de estado têm um par por tema, não HEX claro fixo", async () => 
   // O crachá de contagem era branco sobre #ef5b5b: 3.32:1, reprovado. Sobre
   // #C5342E o mesmo branco dá 5.38:1 e o vermelho continua lendo como alerta.
   assert.match(refresh, /--ui-badge-surface: #C5342E/u);
-  assert.match(refresh, /nav button b,[\s\S]{0,40}nav a b \{[^}]*background: var\(--ui-badge-surface\)/u);
+  // O crachá da barra lateral saiu junto com ela (#262); o par de tokens fica.
 });
 
 test("excluir um grupo é encontrável antes de ser possível", async () => {

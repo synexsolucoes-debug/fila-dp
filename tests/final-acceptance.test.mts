@@ -2,12 +2,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { painelSource } from "./painel-source.ts";
 
 const read = (path: string) => readFile(new URL(path, import.meta.url), "utf8");
 const [workspace, overviewTests, processTypes, processView, processSanitizer, schema, linksRoute,
   processPanel, a11y, interfaceCheck, ci, panelRoutes, auth, isolation, upload, exportRoute,
   modeler, globalCss, navigationTests] = await Promise.all([
-  read("../app/painel/WorkspaceApp.tsx"), read("./overview-operational-center.test.mts"),
+  painelSource(), read("./overview-operational-center.test.mts"),
   read("../app/painel/features/processes/processes.types.ts"),
   read("../app/painel/features/processes/ProcessManagementView.tsx"),
   read("../lib/process-management.ts"), read("../db/schema.ts"),
@@ -144,7 +145,7 @@ accepts(93, "a Visão Geral começa pela operação, e é só operação", () =>
      de navegação depois. */
   assert.match(overviewTests, /a Visão geral é a central de operação da maquete/u);
   const layout = workspace.slice(workspace.indexOf('<div className="overview-layout">'),
-    workspace.indexOf("function MemberCompanyAccess"));
+    workspace.indexOf("Formatação usada pela Visão geral"));
   const indicadores = layout.indexOf('className="overview-kpis"');
   assert.ok(indicadores > 0, "a faixa de indicadores sumiu da Visão geral");
   for (const bloco of ["flows-panel", "obligations-panel", "status-panel", "activity-panel"]) {

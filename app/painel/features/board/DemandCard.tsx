@@ -88,9 +88,7 @@ export function DemandCard(props: DemandCardProps) {
           botão, a caixa de seleção e as ações rápidas ficariam dentro dele —
           controle dentro de controle, que o leitor de tela anuncia como um
           amontoado e o teclado percorre na ordem errada. */}
-      <button type="button" className={styles.cardTitle} onClick={() => props.onOpen(card)}
-        aria-keyshortcuts={props.draggable ? "Alt+ArrowLeft Alt+ArrowRight" : undefined}
-        title={props.draggable ? "Alt + ← / → move a demanda entre colunas" : undefined}>
+      <button type="button" className={styles.cardTitle} onClick={() => props.onOpen(card)}>
         {card.title}
       </button>
 

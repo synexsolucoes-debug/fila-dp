@@ -117,8 +117,9 @@
 .theirs svg { width: 14px; height: 14px; vertical-align: -2px; }
 
 .notice, .error { margin: 0; padding: 9px 15px; font-size: .78rem; line-height: 1.45; }
-.notice { border-top: 1px solid var(--ui-border, #dce3ed); background: #f2f7fe; color: #08529f; }
-.error { border-top: 1px solid var(--ui-border, #dce3ed); background: #fff2f1; color: #962016; }
+/* Tokens do tema: em fundo fixo claro, o aviso virava uma faixa branca no tema escuro. */
+.notice { border-top: 1px solid var(--ui-border, #dce3ed); background: var(--ui-primary-soft, #f2f7fe); color: var(--ui-accent-text, #08529f); }
+.error { border-top: 1px solid var(--ui-border, #dce3ed); background: var(--ui-state-danger-bg, #fff2f1); color: var(--ui-state-danger-text, #962016); }
 
 .composer { display: grid; grid-template-columns: minmax(0, 1fr) 42px; gap: 8px; padding: 11px; border-top: 1px solid var(--ui-border, #dce3ed); }
 .composer textarea {

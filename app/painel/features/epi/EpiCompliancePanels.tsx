@@ -6,7 +6,7 @@ import {
   PackageCheck, Pencil, Plus, RefreshCw, ShieldCheck, Users, XCircle,
 } from "lucide-react";
 import { epiComplianceStatusLabels, type EpiComplianceStatus } from "@/lib/epi-compliance";
-import { EmptyState, PanelHeader, StatusPill } from "../shared";
+import { competenceLabel, EmptyState, PanelHeader, StatusPill } from "../shared";
 import { currency, dateLabel } from "./epi.api";
 import type {
   EmployeeOption, EpiCatalogOption, EpiDashboard, EpiEmployeeCompliance, EpiProduct, EpiRequirement,
@@ -92,7 +92,7 @@ export function EpiDashboardPanel({ dashboard, month, onMonth, onPeople, onRequi
 
     <div className={styles.dashboardColumns}>
       <section className={styles.chartPanel}>
-        <header><div><span>Utilização em {month}</span><h3>EPIs mais entregues</h3></div><BarChart3 aria-hidden="true" /></header>
+        <header><div><span>Utilização em {competenceLabel(month)}</span><h3>EPIs mais entregues</h3></div><BarChart3 aria-hidden="true" /></header>
         {dashboard.utilization.length ? <div className={styles.usageList}>
           {dashboard.utilization.map((item) => <div key={item.productId} className={styles.usageRow}>
             <div><strong>{item.productName}</strong><small>{contagem(item.delivered, "entregue", "entregues")} · {contagem(item.returned, "devolvido", "devolvidos")} · saldo {item.availableQuantity}</small></div>

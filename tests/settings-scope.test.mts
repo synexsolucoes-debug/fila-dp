@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { painelSource } from "./painel-source.ts";
 
 /**
  * §35: as configurações do painel.
@@ -27,7 +28,7 @@ import test from "node:test";
  * pendurada num ramo que nada alcança.
  */
 
-const source = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+const source = await painelSource();
 
 /** As seções declaradas no tipo. É esta lista que manda. */
 const declaradas = (() => {

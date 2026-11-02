@@ -5,6 +5,7 @@ import test from "node:test";
 import { parseBpmnGraph } from "../lib/bpmn-graph.ts";
 import { durationLabel, orderedSteps, summarizeSteps } from "../lib/process-usage.ts";
 import type { ProcessStepConfig, PublishedProcessVersion } from "../lib/process-instances.ts";
+import { painelSource } from "./painel-source.ts";
 
 /* A leitura textual do processo existe para que ninguém precise interpretar um
    BPMN para trabalhar (§43). Estes testes protegem o que a torna confiável: a
@@ -180,7 +181,7 @@ test("a ficha operacional não desenha BPMN (§43)", async () => {
 });
 
 test("a linha do tempo da demanda reconhece processo e automação (§45)", async () => {
-  const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+  const app = await painelSource();
   for (const event of ["process.instance_started", "process.step_advanced", "integration.demand_created"]) {
     assert.ok(app.includes(`"${event}"`), `o histórico não sabe explicar ${event}`);
   }
