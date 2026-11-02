@@ -54,8 +54,8 @@ export function AdvanceActionDialog({
     || (action.kind === "resolve_pending" && !payload.approvedAmount.trim());
 
   return (
-    <div className={styles.drawerBackdrop} role="dialog" aria-modal="true" aria-label={titulos[action.kind]}>
-      <form className={styles.drawer} onSubmit={(event) => { event.preventDefault(); if (!faltando) onSubmit(payload); }}>
+    <div className={styles.drawerBackdrop}>
+      <form className={styles.drawer} role="dialog" aria-modal="true" aria-label={titulos[action.kind]} onSubmit={(event) => { event.preventDefault(); if (!faltando) onSubmit(payload); }}>
         <div className={styles.drawerHead}>
           <div>
             <h2>{titulos[action.kind]}</h2>

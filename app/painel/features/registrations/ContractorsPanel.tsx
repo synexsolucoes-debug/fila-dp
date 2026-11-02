@@ -536,8 +536,8 @@ function ContractorEditor({ mode, current, busy, onClose, onSubmit, dialogRef }:
   const reais = (cents: number | null | undefined) => (cents === null || cents === undefined ? "" : (cents / 100).toFixed(2));
 
   return (
-    <div className={styles.drawerOverlay} role="dialog" aria-modal="true" aria-label={mode === "new" ? "Novo prestador PJ" : "Editar contrato"}>
-      <div className={styles.employeeDrawer} ref={dialogRef}>
+    <div className={styles.drawerOverlay}>
+      <div className={styles.employeeDrawer} role="dialog" aria-modal="true" aria-label={mode === "new" ? "Novo prestador PJ" : "Editar contrato"} ref={dialogRef}>
         <header className={styles.drawerHeader}>
           <div><span>Prestador PJ</span><h2>{mode === "new" ? "Novo prestador" : current?.legalName}</h2></div>
           <button type="button" className={styles.closeButton} onClick={onClose} aria-label="Fechar"><X aria-hidden="true" /></button>
@@ -642,8 +642,8 @@ function FixedItemDrawer({ busy, onClose, onSubmit }: {
   busy: boolean; onClose: () => void; onSubmit: (form: FormData) => void;
 }) {
   return (
-    <div className={styles.drawerOverlay} role="dialog" aria-modal="true" aria-label="Novo valor recorrente">
-      <div className={styles.employeeDrawer}>
+    <div className={styles.drawerOverlay}>
+      <div className={styles.employeeDrawer} role="dialog" aria-modal="true" aria-label="Novo valor recorrente">
         <header className={styles.drawerHeader}>
           <div><span>Valor recorrente</span><h2>Novo lançamento fixo</h2></div>
           <button type="button" className={styles.closeButton} onClick={onClose} aria-label="Fechar"><X aria-hidden="true" /></button>
@@ -707,8 +707,8 @@ function MovementDrawer({ busy, initialType, onClose, onSubmit }: {
   const [movementType, setMovementType] = useState(initialType ?? "base_change");
   const isTermination = movementType === "termination";
   return (
-    <div className={styles.drawerOverlay} role="dialog" aria-modal="true" aria-label={isTermination ? "Demitir ou encerrar PJ" : "Registrar movimentação"}>
-      <div className={styles.employeeDrawer}>
+    <div className={styles.drawerOverlay}>
+      <div className={styles.employeeDrawer} role="dialog" aria-modal="true" aria-label={isTermination ? "Demitir ou encerrar PJ" : "Registrar movimentação"}>
         <header className={styles.drawerHeader}>
           <div><span>Movimentação</span><h2>{isTermination ? "Demitir / Encerrar PJ" : "Registrar movimentação"}</h2></div>
           <button type="button" className={styles.closeButton} onClick={onClose} aria-label="Fechar"><X aria-hidden="true" /></button>

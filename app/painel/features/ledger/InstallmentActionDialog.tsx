@@ -99,9 +99,9 @@ export function InstallmentActionDialog({
     || (spec.needsCompetence && !payload.competence.trim());
 
   return (
-    <div className={styles.drawerBackdrop} role="dialog" aria-modal="true" aria-label={spec.title}>
+    <div className={styles.drawerBackdrop}>
       <form
-        className={styles.drawer}
+        className={styles.drawer} role="dialog" aria-modal="true" aria-label={spec.title}
         onSubmit={(event) => { event.preventDefault(); if (!faltando) onSubmit(payload); }}
       >
         <div className={styles.drawerHead}>

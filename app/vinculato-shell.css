@@ -857,3 +857,71 @@
   .center-toast[data-state="closing"] { animation-name: center-toast-fade; animation-direction: reverse; }
 }
 @keyframes center-toast-fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* ========================================================================== */
+/* 10. Janelas de criar e editar no centro, em vidro                           */
+/* ========================================================================== */
+/* Toda janela modal do painel (nova demanda, novo usuário, editar, lançar,
+   importar…) abre no centro da tela, em vidro fosco, crescendo de leve; o fundo
+   escurece e desfoca. Antes umas deslizavam da direita e outras abriam no meio,
+   cada uma com o desenho do seu módulo.
+   Os seletores são por papel (`role="dialog"` + `aria-modal`), e não por nome de
+   classe: classes de CSS module mudam de nome no build de produção. Ficam de
+   fora a busca e a janela de módulos (já centradas), as notificações (painel
+   lateral de consulta) e a pré-visualização de anexo (ocupa a tela). */
+.dashboard-shell :has(> [role="dialog"][aria-modal="true"]:not(.search-palette, .notification-drawer, .module-launcher, .attachment-preview-modal)) {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 150 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 24px !important;
+  background: rgb(15 23 42 / 34%) !important;
+  -webkit-backdrop-filter: blur(6px) !important;
+  backdrop-filter: blur(6px) !important;
+  animation: center-dialog-fade 200ms ease-out both !important;
+}
+.dashboard-shell [role="dialog"][aria-modal="true"]:not(.search-palette, .notification-drawer, .module-launcher, .attachment-preview-modal) {
+  position: relative !important;
+  inset: auto !important;
+  max-width: calc(100vw - 32px) !important;
+  height: auto !important;
+  max-height: min(90dvh, 980px) !important;
+  margin: 0 !important;
+  overflow: auto !important;
+  border: 1px solid color-mix(in srgb, var(--ui-surface, #fff) 60%, var(--ui-border, #d8e0e7)) !important;
+  border-radius: 16px !important;
+  background: color-mix(in srgb, var(--ui-surface-elevated, var(--ui-surface, #fff)) 90%, transparent) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(160%) !important;
+  backdrop-filter: blur(22px) saturate(160%) !important;
+  box-shadow: 0 30px 80px rgb(15 23 42 / 26%), 0 4px 14px rgb(15 23 42 / 10%), inset 0 1px 0 rgb(255 255 255 / 40%) !important;
+  transform-origin: center !important;
+  animation: center-dialog-in 260ms cubic-bezier(.2, .9, .3, 1.1) both !important;
+}
+.dashboard-shell [role="dialog"][aria-modal="true"][data-state="closing"]:not(.search-palette, .notification-drawer, .module-launcher, .attachment-preview-modal) {
+  animation: center-dialog-out 200ms cubic-bezier(.4, 0, 1, 1) both !important;
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .dashboard-shell [role="dialog"][aria-modal="true"]:not(.search-palette, .notification-drawer, .module-launcher, .attachment-preview-modal) {
+    background: var(--ui-surface-elevated, var(--ui-surface, #fff)) !important;
+  }
+}
+@keyframes center-dialog-in {
+  from { opacity: 0; transform: translateY(10px) scale(.96); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes center-dialog-out {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(6px) scale(.97); }
+}
+@keyframes center-dialog-fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-shell [role="dialog"][aria-modal="true"]:not(.search-palette, .notification-drawer, .module-launcher, .attachment-preview-modal) {
+    animation: center-dialog-fade 160ms ease-out both !important;
+  }
+}
+@media (max-width: 640px) {
+  .dashboard-shell :has(> [role="dialog"][aria-modal="true"]:not(.search-palette, .notification-drawer, .module-launcher, .attachment-preview-modal)) { padding: 10px !important; }
+  .dashboard-shell [role="dialog"][aria-modal="true"]:not(.search-palette, .notification-drawer, .module-launcher, .attachment-preview-modal) { max-height: 94dvh !important; }
+}
