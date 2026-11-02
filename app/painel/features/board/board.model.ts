@@ -732,3 +732,59 @@ export function applyAssigneeOptimistically(
     })),
   };
 }
+
+/**
+ * Mover uma demanda na tela antes de o servidor responder, como no Trello: o
+ * cartão cai onde foi solto na hora, e o snapshot do servidor confirma depois.
+ * Se a gravação falhar, quem chamou devolve o snapshot anterior.
+ *
+ * `beforeCardId` é a demanda que fica logo acima; `afterCardId`, a que fica
+ * logo abaixo. Sem nenhum dos dois, a demanda vai para o fim da coluna.
+ */
+export function applyMoveOptimistically(
+  snapshot: WorkspaceSnapshot,
+  cardId: string,
+  toListId: string,
+  neighbours: { beforeCardId?: string; afterCardId?: string } = {},
+): WorkspaceSnapshot {
+  const moving = snapshot.lists.flatMap((list) => list.cards).find((card) => card.id === cardId);
+  if (!moving || !snapshot.lists.some((list) => list.id === toListId)) return snapshot;
+  const moved = { ...moving, listId: toListId };
+  return {
+    ...snapshot,
+    lists: snapshot.lists.map((list) => {
+      const rest = list.cards.filter((card) => card.id !== cardId);
+      if (list.id !== toListId) return rest.length === list.cards.length ? list : { ...list, cards: rest };
+      let index = rest.length;
+      if (neighbours.afterCardId) {
+        const at = rest.findIndex((card) => card.id === neighbours.afterCardId);
+        if (at >= 0) index = at;
+      } else if (neighbours.beforeCardId) {
+        const at = rest.findIndex((card) => card.id === neighbours.beforeCardId);
+        if (at >= 0) index = at + 1;
+      }
+      return { ...list, cards: [...rest.slice(0, index), moved, ...rest.slice(index)] };
+    }),
+  };
+}
+
+/** A partir de quantos dias sem movimento a demanda aberta ganha o aviso. */
+export const STALE_AFTER_DAYS = 5;
+
+/**
+ * Há quantos dias a demanda está parada, ou `null` quando não interessa.
+ *
+ * Parada é diferente de atrasada (§17 de docs/engenharia-reversa-trello.md):
+ * uma demanda dentro do prazo que ninguém toca há uma semana é a que vai
+ * estourar sem aviso. Concluída e pausada não contam — a primeira terminou, a
+ * segunda está esperando alguém de fora de propósito.
+ */
+export function staleDays(card: Pick<Card, "updatedAt" | "slaStatus">, now = new Date()): number | null {
+  if (card.slaStatus === "completed" || card.slaStatus === "paused") return null;
+  const raw = String(card.updatedAt ?? "").trim();
+  if (!raw) return null;
+  const updated = new Date(raw.includes("T") ? raw : `${raw.replace(" ", "T")}Z`);
+  if (Number.isNaN(updated.getTime())) return null;
+  const days = Math.floor((now.getTime() - updated.getTime()) / 86_400_000);
+  return days >= STALE_AFTER_DAYS ? days : null;
+}

@@ -37,7 +37,10 @@ test("o snapshot usa as consultas compartilhadas e informa o total de arquivadas
     "a consulta antiga trazia o arquivo inteiro");
   assert.match(db, /archived: \{ loaded: archivedCardRows\.length, total:/u);
   const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
-  assert.match(app, /Ver arquivo \(\{archivedTotal\}\)/u, "a contagem mostra o total, não só as carregadas");
+  /* O aviso mora no quadro por etapa (KanbanBoard), que recebe o total do painel. */
+  const quadro = await readFile(new URL("../app/painel/features/board/KanbanBoard.tsx", import.meta.url), "utf8");
+  assert.match(quadro, /Ver arquivo \(\{props\.archivedTotal\}\)/u, "a contagem mostra o total, não só as carregadas");
+  assert.match(app, /archivedTotal=\{archivedTotal\}/u, "o painel entrega ao quadro o total, não só as carregadas");
   assert.match(app, /title: "Restaurar demanda arquivada\?"/u, "arquivada fora da janela é alcançável pela busca");
 });
 

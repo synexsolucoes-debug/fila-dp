@@ -779,13 +779,20 @@ Vinculato · **×** não copiar.
 
 ### Roadmap priorizado
 
+**Desenho do quadro por etapa (feito).** O modo "Situação" passou a seguir o
+Trello na forma (`app/painel/features/board/KanbanBoard.tsx`): colunas de
+largura fixa com rolagem lateral, cartão curto com etiquetas no topo e selos
+embaixo, "Adicionar demanda" na própria coluna (título + tipo de processo),
+soltar entre duas demandas, Alt + setas para mover pelo teclado, menu da
+coluna e coluna recolhida.
+
 | # | Item | Por quê | Tamanho |
 | --- | --- | --- | --- |
 | 0 | ~~Corrigir a menção por trecho do nome (§18)~~ — **feito** (§4.43 de `docs/arquitetura-operacional.md`) | Avisava a pessoa errada | P |
 | 1 | ~~**Importador de quadro do Trello (JSON)**~~ — **feito** (§4.43 de `docs/arquitetura-operacional.md`). — prévia antes de gravar: lista → coluna (com `kind`/`sla_behavior` escolhidos), etiqueta → etiqueta do workspace, membro → membro (confirmado à mão), checklist → itens, campo → campo, comentários das ações, anexos como link; tipo de processo e empresa por regra (etiqueta → empresa, lista → processo) ou em lote na prévia | É o que tira o cliente do Trello; sem ele a migração é digitação | G |
 | 2 | Botões de demanda (sequência nomeada de ações, por quadro) | A automação que o DP usa de fato no Butler | M |
 | 3 | Seguir demanda + notificação a quem segue | Solicitante acompanha sem menção a cada passo | P |
-| 4 | Filtro por etiqueta e por inatividade | Achar a demanda esquecida dentro do prazo | P |
+| 4 | Filtro por etiqueta e por inatividade — **em parte**: o cartão já mostra "Parada há N dias" (≥ 5 dias sem alteração, só aberta); falta o filtro | Achar a demanda esquecida dentro do prazo | P |
 | 5 | Novas ações de regra: atribuir, comentar com modelo, definir prazo, preencher campo | Fecha a lacuna do executor (§11.3) | M |
 | 6 | Atalhos de teclado do quadro, com `?` mostrando a lista | Velocidade de quem vive no quadro | P |
 | 7 | Campo caixa de seleção | Tipo mais usado em Trello de DP; simplifica o importador | P |
@@ -793,7 +800,7 @@ Vinculato · **×** não copiar.
 | 9 | Checklists nomeadas e converter item em demanda | Organização das admissões grandes | M |
 | 10 | Linha do tempo | Prazos de admissão e rescisão em barras | M |
 | 11 | `GET /v1/demands` e atividade na API v1 | BI e integrações do cliente | M |
-| 12 | Renormalização de posição | Necessária quando houver arraste dentro da coluna | P |
+| 12 | ~~Renormalização de posição~~ — **feito**: arrastar solta entre vizinhos e renumera a coluna quando o meio-termo esgota (`lib/card-position.ts`) | Necessária quando houver arraste dentro da coluna | P |
 
 ---
 

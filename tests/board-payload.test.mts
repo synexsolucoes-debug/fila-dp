@@ -173,9 +173,13 @@ test("o cartão do quadro tem hierarquia: número legível, título maior, respo
   /* Demanda sem prazo não é boa notícia. */
   assert.match(css, /\.dashboard-sla\.safe:not\(\.has-due\)/u);
 
-  const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
-  assert.match(app, /card\.dueAt \? " has-due" : ""/u,
+  /* O cartão do quadro por etapa passou para features/board/KanbanBoard.tsx
+     (desenho do Trello); as duas regras continuam valendo lá. */
+  const quadro = await readFile(new URL("../app/painel/features/board/KanbanBoard.tsx", import.meta.url), "utf8");
+  const estilo = await readFile(new URL("../app/painel/features/board/kanban.module.css", import.meta.url), "utf8");
+  assert.match(quadro, /data-empty=\{!card\.dueAt \|\| undefined\}/u,
     "sem o marcador, a regra do prazo neutro atingiria também quem está no prazo");
-  assert.match(app, /\{dono && <span className="dashboard-mini-avatar">/u,
+  assert.match(estilo, /\.due\[data-empty\] \{ color: var\(--ui-text-muted\)/u, "sem prazo não pode parecer em dia");
+  assert.match(quadro, /pessoas\.length === 0\s*\? <span className=\{styles\.orphan\}>Sem responsável<\/span>/u,
     "avatar com inicial ao lado de 'Sem responsável' afirma que há alguém");
 });

@@ -1,0 +1,434 @@
+/*
+ * Quadro por etapa, no desenho do Trello (KanbanBoard.tsx).
+ *
+ * Nenhuma cor fixa: tudo sai dos tokens `--ui-*`, redefinidos no tema escuro.
+ * A coluna é uma "bandeja" em `--ui-surface-muted` e o cartão é papel em
+ * `--ui-surface-elevated` por cima dela — o mesmo contraste de planos do Trello,
+ * que é o que faz o cartão parecer pegável.
+ */
+
+.board {
+  --kanban-column: 284px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  padding: 2px 2px 14px;
+  scroll-snap-type: x proximity;
+}
+.board[data-density="compact"] { --kanban-column: 256px; gap: 10px; }
+
+/* ── Coluna ──────────────────────────────────────────────────────────────── */
+
+.column {
+  flex: 0 0 var(--kanban-column);
+  display: flex;
+  flex-direction: column;
+  max-height: max(420px, calc(100dvh - 300px));
+  border-radius: 12px;
+  background: var(--ui-surface-muted);
+  border: 1px solid var(--ui-border);
+  scroll-snap-align: start;
+  transition: box-shadow .14s ease, border-color .14s ease;
+}
+.column[data-drop] { border-color: var(--ui-primary); box-shadow: 0 0 0 2px var(--ui-primary-soft); }
+
+.columnHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 8px 6px 12px;
+}
+.columnHeader h3 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ui-text);
+  font-size: 14px;
+  font-weight: 700;
+}
+.kindDot { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; background: var(--ui-status-doing); }
+.kindDot[data-kind="new"] { background: var(--ui-info); }
+.kindDot[data-sla="paused"] { background: var(--ui-warning); }
+.kindDot[data-sla="completed"], .kindDot[data-kind="done"] { background: var(--ui-success); }
+.count {
+  min-width: 22px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--ui-surface-elevated);
+  color: var(--ui-text-soft);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.iconButton {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ui-text-soft);
+  cursor: pointer;
+}
+.iconButton:hover { background: var(--ui-surface-elevated); color: var(--ui-text); }
+.iconButton:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 1px; }
+.iconButton svg { width: 16px; height: 16px; }
+
+.menuWrap { position: relative; }
+.menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 4px);
+  right: 0;
+  display: grid;
+  min-width: 220px;
+  padding: 6px;
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  background: var(--ui-surface-elevated);
+  box-shadow: var(--ui-shadow-modal);
+}
+.menu strong {
+  padding: 6px 8px 8px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--ui-border);
+  color: var(--ui-text-soft);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+.menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ui-text);
+  font: inherit;
+  font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.menu button:hover, .menu button:focus-visible { background: var(--ui-surface-muted); outline: none; }
+.menu svg { width: 15px; height: 15px; color: var(--ui-text-soft); }
+
+.archiveNote { margin: 0 12px 6px; color: var(--ui-text-soft); font-size: 12px; }
+.archiveNote button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ui-primary);
+  font: inherit;
+  font-weight: 650;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 12px;
+  padding: 2px 8px 4px;
+  overflow-y: auto;
+}
+
+.slot { display: grid; gap: 8px; }
+.slot[data-hidden] { display: none; }
+
+.dropLine {
+  display: block;
+  height: 3px;
+  border-radius: 3px;
+  background: var(--ui-primary);
+}
+
+.empty {
+  margin: 4px 0;
+  padding: 14px 8px;
+  border: 1px dashed var(--ui-border-strong);
+  border-radius: 8px;
+  color: var(--ui-text-muted);
+  font-size: 12.5px;
+  text-align: center;
+}
+
+.addCard {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 8px 8px;
+  padding: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ui-text-soft);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.addCard:hover { background: var(--ui-surface-elevated); color: var(--ui-text); }
+.addCard:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: -2px; }
+.addCard svg { width: 16px; height: 16px; }
+
+.addColumn {
+  flex: 0 0 var(--kanban-column);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px dashed var(--ui-border-strong);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--ui-text-soft);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.addColumn:hover { background: var(--ui-surface-muted); color: var(--ui-text); }
+.addColumn svg { width: 16px; height: 16px; }
+
+/* Coluna recolhida: uma tira vertical com o nome, como no Trello. */
+.collapsed { flex: 0 0 44px; scroll-snap-align: start; }
+.collapsed button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 44px;
+  min-height: 180px;
+  padding: 10px 0;
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  background: var(--ui-surface-muted);
+  color: var(--ui-text);
+  font: inherit;
+  cursor: pointer;
+}
+.collapsed button:hover { border-color: var(--ui-border-strong); }
+.collapsed span { writing-mode: vertical-rl; font-size: 13.5px; font-weight: 700; }
+.collapsed b { color: var(--ui-text-soft); font-size: 12px; }
+.collapsed svg { width: 15px; height: 15px; color: var(--ui-text-soft); }
+
+/* ── Cartão ──────────────────────────────────────────────────────────────── */
+
+.card {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  padding: 9px 10px 8px;
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  background: var(--ui-surface-elevated);
+  box-shadow: var(--ui-shadow-card);
+  cursor: grab;
+  transition: border-color .12s ease, box-shadow .12s ease;
+}
+.card:hover { border-color: var(--ui-border-strong); }
+.card:focus-within { border-color: var(--ui-primary); }
+.card:active { cursor: grabbing; }
+/* Faixa à esquerda só para o que pede atenção; a cor nunca vem sozinha, o selo
+   de prazo diz o mesmo em texto. */
+.card[data-sla="overdue"] { box-shadow: inset 3px 0 0 var(--ui-danger), var(--ui-shadow-card); }
+.card[data-sla="warning"] { box-shadow: inset 3px 0 0 var(--ui-warning), var(--ui-shadow-card); }
+
+.labels { display: flex; flex-wrap: wrap; gap: 4px; padding-right: 24px; }
+.labels:empty { display: none; }
+.process, .priority, .label, .labelMore {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  max-width: 100%;
+  padding: 1px 7px;
+  border-radius: 4px;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.process { background: var(--ui-primary-soft); color: var(--ui-primary); }
+.priority { background: var(--ui-state-warn-bg); color: var(--ui-state-warn-text); }
+.priority[data-level="urgent"] { background: var(--ui-state-danger-bg); color: var(--ui-state-danger-text); }
+.labelMore { background: var(--ui-state-neutral-bg); color: var(--ui-state-neutral-text); }
+
+.title {
+  display: -webkit-box;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: none;
+  color: var(--ui-text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+.title:hover { text-decoration: underline; text-underline-offset: 2px; }
+.title:focus-visible { outline: none; text-decoration: underline; }
+
+.who {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  margin: 0;
+  color: var(--ui-text-soft);
+  font-size: 12px;
+}
+.reference { color: var(--ui-text-muted); font-variant-numeric: tabular-nums; font-weight: 650; }
+.company { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.detail { display: grid; gap: 4px; font-size: 12px; }
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: 2px;
+  color: var(--ui-text-soft);
+  font-size: 12px;
+}
+.badges svg { width: 13px; height: 13px; flex: 0 0 auto; }
+.badge, .due, .stale { display: inline-flex; align-items: center; gap: 4px; }
+.due { padding: 1px 6px; border-radius: 4px; font-weight: 650; }
+.due[data-sla="overdue"] { background: var(--ui-state-danger-bg); color: var(--ui-state-danger-text); }
+.due[data-sla="warning"] { background: var(--ui-state-warn-bg); color: var(--ui-state-warn-text); }
+.due[data-sla="completed"] { background: var(--ui-state-ok-bg); color: var(--ui-state-ok-text); }
+.due[data-sla="paused"] { background: var(--ui-state-neutral-bg); color: var(--ui-state-neutral-text); }
+/* Sem prazo não é boa notícia: fica neutro, não verde. */
+.due[data-empty] { color: var(--ui-text-muted); padding-left: 0; }
+.badge[data-done] { padding: 1px 6px; border-radius: 4px; background: var(--ui-state-ok-bg); color: var(--ui-state-ok-text); }
+.stale { padding: 1px 6px; border-radius: 4px; background: var(--ui-state-warn-bg); color: var(--ui-state-warn-text); font-weight: 650; }
+
+.people { display: inline-flex; margin-left: auto; }
+.avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-left: -5px;
+  border: 2px solid var(--ui-surface-elevated);
+  border-radius: 50%;
+  background: var(--ui-avatar-bg);
+  color: var(--ui-avatar-text);
+  font-size: 10px;
+  font-weight: 800;
+}
+.avatar:first-child { margin-left: 0; }
+.avatar[data-more] { background: var(--ui-state-neutral-bg); color: var(--ui-state-neutral-text); }
+.orphan { color: var(--ui-state-warn-text); font-size: 11.5px; font-weight: 650; }
+
+.edit {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--ui-surface-muted);
+  color: var(--ui-text-soft);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity .12s ease;
+}
+.edit svg { width: 14px; height: 14px; }
+.card:hover .edit { opacity: 1; }
+.edit:hover { color: var(--ui-text); }
+
+.board[data-density="compact"] .card { gap: 4px; padding: 7px 9px 6px; }
+.board[data-density="compact"] .who,
+.board[data-density="compact"] .detail { display: none; }
+
+/* ── Novo cartão na coluna ───────────────────────────────────────────────── */
+
+.composer { display: grid; gap: 8px; margin: 4px 8px 8px; }
+.composer textarea {
+  width: 100%;
+  min-height: 60px;
+  padding: 8px 10px;
+  resize: vertical;
+  border: 1px solid var(--ui-primary);
+  border-radius: 8px;
+  background: var(--ui-surface-elevated);
+  box-shadow: var(--ui-shadow-card);
+  color: var(--ui-text);
+  font: inherit;
+  font-size: 14px;
+}
+.composer textarea:focus { outline: 2px solid var(--ui-primary-soft); }
+.composerProcess { display: flex; align-items: center; gap: 8px; color: var(--ui-text-soft); font-size: 12px; font-weight: 650; }
+.composerProcess select {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  background: var(--ui-surface-elevated);
+  color: var(--ui-text);
+  font: inherit;
+  font-size: 12.5px;
+}
+.composerActions { display: flex; align-items: center; gap: 4px; }
+.composerSubmit {
+  min-height: 32px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--ui-primary);
+  color: var(--ui-on-accent);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.composerSubmit:hover:not(:disabled) { background: var(--ui-primary-hover); }
+.composerSubmit:disabled { opacity: .55; cursor: not-allowed; }
+.composerMore {
+  margin-left: auto;
+  padding: 4px 6px;
+  border: 0;
+  background: none;
+  color: var(--ui-primary);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.composerMore:hover { text-decoration: underline; }
+
+/* ── Telefone: uma coluna por vez, deslizando ────────────────────────────── */
+
+@media (max-width: 640px) {
+  .board { --kanban-column: calc(100vw - 56px); scroll-snap-type: x mandatory; }
+  .edit { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .column, .card, .edit { transition: none; }
+}

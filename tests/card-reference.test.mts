@@ -93,8 +93,8 @@ test("o prefixo DM- vive na apresentação, não no banco", async () => {
 test("demanda sem número não vira #DM-0 na tela", async () => {
   /* Banco anterior à 0070 devolve null. Exibir "#DM-0" seria inventar uma
      demanda que ninguém encontra. */
-  const tela = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
-  assert.match(tela, /referenceLabel\(card\) && <span className="dashboard-card-reference">/u,
+  const quadro = await readFile(new URL("../app/painel/features/board/KanbanBoard.tsx", import.meta.url), "utf8");
+  assert.match(quadro, /\{referencia && <span className=\{styles\.reference\}>/u,
     "o cartão só mostra o número quando ele existe");
   const tipos = await readFile(new URL("../lib/fila-dp-types.ts", import.meta.url), "utf8");
   assert.match(tipos, /referenceNumber: number \| null;/u,

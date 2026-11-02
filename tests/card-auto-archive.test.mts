@@ -82,6 +82,6 @@ test("a migration cria a configuração com 7 dias e a data de arquivamento", as
 
 test("a coluna de concluídas avisa para onde as demandas vão", async () => {
   const painel = await read("app/painel/WorkspaceApp.tsx");
-  assert.match(painel, /Vão para o Arquivo após/u);
+  assert.match(await read("app/painel/features/board/KanbanBoard.tsx"), /Vão para o Arquivo após/u);
   assert.match(painel, /resource: "card-archive"/u);
 });

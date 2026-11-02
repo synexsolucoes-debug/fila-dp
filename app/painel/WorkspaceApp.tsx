@@ -36,9 +36,7 @@ import { LayoutGrid, Settings,
   Inbox,
   LayoutDashboard,
   ListChecks,
-  MessageCircle,
 
-  MoreHorizontal,
   Paperclip,
   Plus,
   RefreshCw,
@@ -69,7 +67,6 @@ import { CompanyPicker } from "./features/shared/CompanyPicker";
 import { AccountMenu } from "./features/shared/AccountMenu";
 import { initialsOf } from "@/lib/initials";
 import { PRIORITY_LABELS } from "@/lib/work-items";
-import { demandNextAction } from "@/lib/demand-dashboard";
 import {
   THEME_COOKIE, THEME_COOKIE_MAX_AGE, THEME_SYSTEM_COOKIE,
   type ResolvedTheme, type ThemePreference,
@@ -85,13 +82,13 @@ import { RequestError, requestErrorFrom, supportReference } from "./request-erro
 import { contractorSections, isContractorSection, type ContractorSectionId } from "./features/payments/contractor-sections";
 import { DemandDeadlineView } from "./features/work/DemandViews";
 import {
-  BoardIndicators, BoardToolbar, BulkBar, QueueBoard, TeamBoard,
-  activeFilterCount, canRespondForDemands, demandIndicators, filterDemands, operationalAlerts,
+  BoardIndicators, BoardToolbar, BulkBar, KanbanBoard, QueueBoard, TeamBoard,
+  activeFilterCount, applyMoveOptimistically, canRespondForDemands, demandIndicators, filterDemands, operationalAlerts,
   applyAssigneeOptimistically, boardViewModes, parseSavedViews, readBoardFilters,
   responsibleColumns, slaReading, toggleIndicator, writeBoardFilters,
   SAVED_VIEWS_LIMIT,
   type BoardAlert, type BoardContext, type BulkAction, type DemandFilters, type DemandSort,
-  type IndicatorId, type SavedBoardView,
+  type IndicatorId, type KanbanDrop, type SavedBoardView,
 } from "./features/board";
 import { contagem } from "./features/shared/plural";
 
@@ -757,34 +754,6 @@ function groupObligations(items: readonly WorkspaceSnapshot["upcomingObligations
   return [...grupos.values()];
 }
 
-/**
- * O prazo em distância, e não em data.
- *
- * "12 set" obriga quem lê a fazer a conta contra o dia de hoje, cartão por
- * cartão — e é justamente a conta que decide o que fazer agora. "Vence em 3
- * dias" já é a resposta. A data exata não some: vai no `title` do elemento,
- * para quem precisa dela ao passar o mouse.
- *
- * Compara o *dia*, não o instante: um prazo às 23h de hoje e outro às 8h de
- * hoje vencem os dois "hoje", e arredondar por 24h corridas diria "amanhã"
- * para o primeiro.
- */
-function relativeDue(value: string | null) {
-  if (!value || typeof value !== "string") return null;
-  const prazo = new Date(value.includes("T") ? value : `${value}T12:00:00`);
-  if (Number.isNaN(prazo.getTime())) return null;
-  const hoje = new Date();
-  const diaPrazo = new Date(prazo.getFullYear(), prazo.getMonth(), prazo.getDate()).getTime();
-  const diaHoje = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate()).getTime();
-  const dias = Math.round((diaPrazo - diaHoje) / 86400000);
-  if (dias === 0) return "Vence hoje";
-  if (dias === 1) return "Vence amanhã";
-  if (dias === -1) return "1 dia em atraso";
-  if (dias < -1) return `${Math.abs(dias)} dias em atraso`;
-  if (dias <= 30) return `Vence em ${dias} dias`;
-  return formatDue(value);
-}
-
 /** Prazo como número ordenável. Sem prazo vai para o fim, nunca para o topo. */
 function dueValue(card: Card) {
   if (!card.dueAt) return Number.POSITIVE_INFINITY;
@@ -1022,9 +991,6 @@ export function WorkspaceApp({
   const [boardGroupBy, setBoardGroupBy] = useState<BoardGroupBy>("none");
   const [boardSort, setBoardSort] = useState<BoardSort>("position");
   const boardPreferencesLoaded = useRef(false);
-  /* A coluna sob o cartão arrastado. Sem isto o alvo é adivinhado: todas as
-     colunas acendem juntas e a pessoa solta sem saber onde vai cair. */
-  const [dragOverListId, setDragOverListId] = useState<string | null>(null);
   const [cardTab, setCardTab] = useState<CardTab>("details");
   /** Segurança continua sendo a abertura padrão; administradores também podem
    * alcançar daqui o cadastro hierárquico de usuários do Workspace. */
@@ -1035,7 +1001,6 @@ export function WorkspaceApp({
   const [error, setError] = useState("");
   const [startupFailure, setStartupFailure] = useState<unknown>(null);
   const [toast, setToast] = useState("");
-  const [draggedCardId, setDraggedCardId] = useState<string | null>(null);
   const [cardModalOpen, setCardModalOpen] = useState(false);
   /* Os processos publicados que podem originar uma demanda (§10).
      Carregados quando a modal de criação abre, e não no snapshot de abertura:
@@ -1160,8 +1125,6 @@ export function WorkspaceApp({
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const sidebarPreferenceLoaded = useRef(false);
   const realtimeCursorRef = useRef("");
-  const touchCardMoveRef = useRef<{ cardId: string; x: number; y: number } | null>(null);
-  const suppressCardOpenRef = useRef<string | null>(null);
 
   /**
    * Tema (§7).
@@ -2410,17 +2373,44 @@ export function WorkspaceApp({
     await mutate(`/api/cards/${cardId}/move`, { method: "POST", body: JSON.stringify({ toListId }) }, "Demanda movida. Regras de SLA recalculadas.");
   }
 
-  function moveCardByDirection(cardId: string, direction: -1 | 1) {
-    const card = allCards.find((item) => item.id === cardId);
-    if (!card || !snapshot) return;
-    const orderedLists = [...snapshot.lists].sort((a, b) => a.position - b.position);
-    const currentIndex = orderedLists.findIndex((list) => list.id === card.listId);
-    const nextList = orderedLists[currentIndex + direction];
-    if (!nextList) {
-      setToast(direction < 0 ? "Esta demanda já está na primeira coluna." : "Esta demanda já está na última coluna.");
-      return;
+  /**
+   * Arrastar no quadro: a demanda cai na tela na hora (como no Trello) e o
+   * servidor confirma depois. Se a gravação falhar, o quadro volta ao que era.
+   */
+  async function moveCardTo(drop: KanbanDrop) {
+    if (!canEdit || !snapshot) return;
+    const card = allCards.find((item) => item.id === drop.cardId);
+    if (!card) return;
+    const anterior = snapshot;
+    const mudouDeColuna = card.listId !== drop.toListId;
+    setSnapshot(applyMoveOptimistically(snapshot, drop.cardId, drop.toListId, drop));
+    setError("");
+    try {
+      const next = await requestSnapshot(`/api/cards/${drop.cardId}/move`, {
+        method: "POST",
+        body: JSON.stringify({ toListId: drop.toListId, beforeCardId: drop.beforeCardId ?? "", afterCardId: drop.afterCardId ?? "" }),
+      });
+      applySnapshot(next, mudouDeColuna ? "Demanda movida. Regras de SLA recalculadas." : undefined);
+    } catch (cause) {
+      setSnapshot(anterior);
+      setError(cause instanceof Error ? `Não foi possível mover a demanda. ${cause.message}` : "Não foi possível mover a demanda.");
     }
-    void moveCard(cardId, nextList.id);
+  }
+
+  /** O "Adicionar demanda" da coluna: título e processo, criada ali mesmo. */
+  async function quickCreateCard(input: { listId: string; title: string; processType: string }) {
+    if (!canEdit || !snapshot) return false;
+    const next = await mutate("/api/cards", {
+      method: "POST",
+      body: JSON.stringify({
+        title: input.title,
+        processType: input.processType,
+        listId: input.listId,
+        boardId: snapshot.board.id,
+        companyId: companyFilter === "all" ? "" : companyFilter,
+      }),
+    }, "Demanda criada.");
+    return next !== null;
   }
 
   function completeSelectedCard() {
@@ -3224,157 +3214,47 @@ export function WorkspaceApp({
         </div>
   </> : null;
 
-  /* O cartão e a coluna saem do JSX e viram função.
-     Não é organização por organização: com raias, a mesma coluna é desenhada
-     uma vez por grupo, e o mesmo cartão precisa do mesmo comportamento em
-     qualquer uma delas. Enquanto o desenho estava embutido no laço, manter as
-     duas cópias iguais dependia de alguém lembrar. */
-  const renderDemandCard = (card: Card) => {
-    const concluidas = card.checklist.filter((item) => item.completed).length;
+  /* O que o cartão do quadro mostra além do básico: a etapa do processo com o
+     progresso, e o fluxo entre áreas. Os dois dependem de dados do painel
+     (`flowByCard`, o catálogo de áreas), por isso são desenhados aqui e
+     entregues ao `KanbanBoard`. Sem fluxo carregado, a etapa não aparece —
+     demanda fora do teto de fluxos não ganha etapa inventada. */
+  const renderCardDetail = (card: Card) => {
     const flow = flowByCard.get(card.id);
-    const dono = card.assignees[0]?.name || card.assigneeName;
-    const cnpj = card.companyId ? snapshot.companies.find((company) => company.id === card.companyId)?.taxId : null;
-    /* O rodapé diz a distância até o prazo; a data exata fica no `title`.
-       Pausado e concluído não têm distância que interesse: o primeiro não está
-       correndo, o segundo já chegou. */
-    const prazo = card.slaStatus === "paused" ? "Aguardando retorno"
-      : card.slaStatus === "completed" ? "Concluída"
-      : relativeDue(card.dueAt) ?? "Sem prazo";
-    return (
-      <article
-        className={`dashboard-task priority-${card.priority} sla-${card.slaStatus}${draggedCardId === card.id ? " dragging" : ""}`}
-        key={card.id}
-        draggable={canEdit}
-        tabIndex={0}
-        role="button"
-        aria-label={`Abrir demanda ${card.title}`}
-        onDragStart={() => setDraggedCardId(card.id)}
-        onDragEnd={() => { setDraggedCardId(null); setDragOverListId(null); }}
-        onTouchStart={(event) => {
-          if (canEdit) touchCardMoveRef.current = { cardId: card.id, x: event.touches[0]?.clientX ?? 0, y: event.touches[0]?.clientY ?? 0 };
-        }}
-        onTouchEnd={(event) => {
-          const start = touchCardMoveRef.current;
-          touchCardMoveRef.current = null;
-          const end = event.changedTouches[0];
-          if (!canEdit || !start || start.cardId !== card.id || !end) return;
-          const deltaX = end.clientX - start.x;
-          const deltaY = end.clientY - start.y;
-          if (Math.abs(deltaX) > 96 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
-            suppressCardOpenRef.current = card.id;
-            moveCardByDirection(card.id, deltaX > 0 ? -1 : 1);
-          }
-        }}
-        onClick={() => {
-          if (suppressCardOpenRef.current === card.id) { suppressCardOpenRef.current = null; return; }
-          openCard(card);
-        }}
-        onKeyDown={(event) => {
-          if (event.altKey && event.key === "ArrowLeft" && canEdit) { event.preventDefault(); moveCardByDirection(card.id, -1); return; }
-          if (event.altKey && event.key === "ArrowRight" && canEdit) { event.preventDefault(); moveCardByDirection(card.id, 1); return; }
-          if (event.key === "Enter" || event.key === " ") openCard(card);
-        }}
-      >
-        <div className="dashboard-task-labels">
-          {referenceLabel(card) && <span className="dashboard-card-reference">{referenceLabel(card)}</span>}
-          <span className={processColors[card.processType] ?? "gray"}>{card.processType}</span>
-          {card.priority === "urgent" && <span className="urgent">Urgente</span>}
-          {/* Duas etiquetas, não uma. Uma só fazia a segunda existir sem
-              aparecer — e quem etiqueta com duas cores está dizendo duas
-              coisas. Acima de duas, o cartão vira legenda. */}
-          {card.labels.slice(0, 2).map((label) => <span className="custom-label" style={{ color: label.color, backgroundColor: `${label.color}18` }} key={label.id}>{label.name}</span>)}
-          {card.labels.length > 2 && <span className="dashboard-label-more" title={card.labels.slice(2).map((label) => label.name).join(", ")}>+{card.labels.length - 2}</span>}
-        </div>
-        <h2>{card.title}</h2>
-        <p>{card.company || "Sem empresa informada"}{cnpj ? <small> • {cnpj}</small> : null}</p>
-        <DemandAreaFlow card={card} areas={snapshot.areas} />
-        {/* Processo, etapa e progresso — as três coisas que a especificação pede
-            no cartão e que já existiam calculadas no servidor, sem chegar à
-            tela. Processo e etapa são coisas diferentes e ficam em linhas
-            diferentes: o processo diz *que trabalho é este*, a etapa diz *onde
-            ele está*. O progresso conta as tarefas já instanciadas — as das
-            etapas percorridas —, não as do processo inteiro.
-            Sem processo, quem mede o avanço é o checklist: ele é a única
-            contagem que a demanda tem, e estava reduzida a "1/4" no rodapé,
-            onde nada indica se isso é perto ou longe do fim. */}
-        {flow ? <CardProcessLine flow={flow} />
-          : card.checklist.length > 0 && <span className="dashboard-card-progress" title="Itens do checklist concluídos">
-            <i><b style={{ width: `${Math.round((concluidas / card.checklist.length) * 100)}%` }} /></i>
-            {concluidas} de {card.checklist.length} no checklist
-          </span>}
-        {card.customValues.matricula && <small className="dashboard-card-employee">Colaborador: {card.customValues.matricula}</small>}
-        <div className="dp-card-next"><span>Próximo passo</span><p>{demandNextAction(card)}</p></div>
-        <div className="dashboard-task-bottom">
-          <span className={`dashboard-sla ${card.slaStatus}${card.dueAt ? " has-due" : ""}`}
-            title={card.dueAt ? `Prazo: ${formatDue(card.dueAt)}` : "Sem prazo definido"}>
-            <Clock3 aria-hidden="true" /> {prazo}
-          </span>
-          {/* Contadores só quando contam alguma coisa: "0 anexos" ocupa o mesmo
-              espaço de uma informação e não é uma. */}
-          {card.checklist.length > 0 && <span className="dashboard-check" title="Checklist concluído"><ListChecks aria-hidden="true" /> {concluidas}/{card.checklist.length}</span>}
-          {card.attachments.length > 0 && <span className="dashboard-comments" title="Anexos"><Paperclip aria-hidden="true" /> {card.attachments.length}</span>}
-          {card.comments.length > 0 && <span className="dashboard-comments" title="Comentários"><MessageCircle aria-hidden="true" /> {card.comments.length}</span>}
-          {/* Avatar com inicial ao lado de "Sem responsável" é contradição: o
-              círculo afirma que há alguém. Sem responsável, fica só o texto. */}
-          <span className="dashboard-task-owner" title={dono || "Sem responsável"}>
-            {dono && <span className="dashboard-mini-avatar">{initials(dono)}</span>}
-            <b className={dono ? "" : "dashboard-owner-none"}>{dono || "Sem responsável"}</b>
-            {card.assignees.length > 1 && <small className="avatar-more">+{card.assignees.length - 1}</small>}
-          </span>
-        </div>
-      </article>
-    );
+    const areaFlow = card.requesterAreaId || card.responsibleAreaId;
+    if (!flow && !areaFlow) return null;
+    return <>
+      {flow ? <CardProcessLine flow={flow} /> : null}
+      <DemandAreaFlow card={card} areas={snapshot.areas} />
+    </>;
   };
 
-  const renderBoardColumn = (list: WorkspaceSnapshot["lists"][number], cards: Card[], laneKey: string) => {
-    const alvo = `${laneKey}:${list.id}`;
-    return (
-      <section
-        className={`dashboard-column${draggedCardId ? " drop-ready" : ""}${dragOverListId === alvo ? " drop-target" : ""}`}
-        key={alvo}
-        onDragOver={(event) => { event.preventDefault(); if (draggedCardId) setDragOverListId(alvo); }}
-        /* `relatedTarget` fora da coluna: sem esta guarda, passar por cima de um
-           cartão filho dispara `dragleave` na coluna e o realce pisca. */
-        onDragLeave={(event) => {
-          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-            setDragOverListId((atual) => atual === alvo ? null : atual);
-          }
-        }}
-        onDrop={(event) => {
-          event.preventDefault();
-          if (canEdit && draggedCardId) void moveCard(draggedCardId, list.id);
-          setDraggedCardId(null);
-          setDragOverListId(null);
-        }}
-      >
-        <header>
-          <span><i className={list.kind} />{list.name}</span>
-          <b>{cards.length}</b>
-          <button aria-label={`Opções de ${list.name}`} onClick={() => setToast(`${list.name}: ${plural(cards.length, "demanda visível", "demandas visíveis")}.`)}><MoreHorizontal aria-hidden="true" /></button>
-        </header>
-        {/* A coluna de concluídas diz para onde as demandas vão: sem isto, a
-            demanda que some depois de alguns dias parece ter sido apagada. */}
-        {(list.kind === "done" || list.slaBehavior === "completed") && <p className="dashboard-column-archive-note">
-          {(snapshot.settings.completedArchiveDays ?? 7) > 0
-            ? <>Vão para o Arquivo após {plural(snapshot.settings.completedArchiveDays ?? 7, "dia", "dias")}.</>
-            : <>Ficam aqui até serem arquivadas.</>}
-          {" "}<button type="button" onClick={() => setArchiveOpen(true)}>Ver arquivo ({archivedTotal})</button>
-        </p>}
-        <div className="dashboard-card-list">
-          {cards.map(renderDemandCard)}
-          {/* Coluna vazia não é a mesma coisa que coluna que não carregou. O
-              recorte ativo muda a frase porque muda a causa: sem filtro, não há
-              demanda nesta etapa; com filtro, pode haver e o recorte esconde. */}
-          {cards.length === 0 && <p className="dashboard-column-empty">
-            {activeBoardFilters > 0 || boardQuery.trim()
-              ? "Nenhuma demanda desta etapa no recorte atual."
-              : "Nada nesta etapa por enquanto."}
-          </p>}
-          {canEdit && boardGroupBy === "none" && <button className="dashboard-add-card" onClick={() => { setCardForm({ ...emptyCardForm, boardId: snapshot.board.id, listId: list.id }); setSelectedCardId(null); setCardTab("details"); setCardModalOpen(true); }}><Plus aria-hidden="true" /> Adicionar demanda</button>}
-        </div>
-      </section>
-    );
-  };
+  const renderKanban = (cardsByList: ReadonlyMap<string, Card[]>, laneKey: string, grouped: boolean) => <KanbanBoard
+    lists={snapshot.lists}
+    cardsByList={cardsByList}
+    laneKey={laneKey}
+    canEdit={canEdit}
+    reorderable={boardSort === "position" && !grouped}
+    composer={!grouped}
+    density={boardDensity}
+    filtered={activeBoardFilters > 0 || Boolean(boardQuery.trim())}
+    now={boardNow}
+    processTypes={processTypeOptions}
+    archiveDays={snapshot.settings.completedArchiveDays ?? 7}
+    archivedTotal={archivedTotal}
+    onOpen={openCard}
+    onMove={(drop) => void moveCardTo(drop)}
+    onQuickCreate={quickCreateCard}
+    onOpenFullForm={({ listId, title, processType }) => {
+      setCardForm({ ...emptyCardForm, boardId: snapshot.board.id, listId, title, processType });
+      setSelectedCardId(null);
+      setCardTab("details");
+      setCardModalOpen(true);
+    }}
+    onOpenArchive={() => setArchiveOpen(true)}
+    onManageColumns={isAdmin ? () => { setSettingsSection("columns"); openWorkspaceSettings(); } : undefined}
+    renderCardDetail={renderCardDetail}
+  />;
 
   /* Casca clara, barra escura.
      O painel rodava em `theme-dark` desde a direção "central de comando", e a
@@ -3681,9 +3561,7 @@ export function WorkspaceApp({
                   arrasto que move de coluna. Ele não foi substituído: "em que
                   pé está" é uma pergunta legítima, só não é a primeira. */}
               {boardMode === "kanban" && (boardGroupBy === "none"
-                ? <div className="dashboard-kanban" data-density={boardDensity}>
-                    {snapshot.lists.map((list) => renderBoardColumn(list, boardLanes[0]?.cardsByList.get(list.id) ?? [], "todas"))}
-                  </div>
+                ? renderKanban(boardLanes[0]?.cardsByList ?? new Map(), "todas", false)
                 : <div className="board-lanes" data-density={boardDensity}>
                     {boardLanes.map((lane) => <details className="board-lane" key={lane.key} open>
                       <summary>
@@ -3691,9 +3569,7 @@ export function WorkspaceApp({
                         <strong>{lane.label}</strong>
                         <b>{lane.total}</b>
                       </summary>
-                      <div className="dashboard-kanban">
-                        {snapshot.lists.map((list) => renderBoardColumn(list, lane.cardsByList.get(list.id) ?? [], lane.key))}
-                      </div>
+                      {renderKanban(lane.cardsByList, lane.key, true)}
                     </details>)}
                     {boardLanes.length === 0 && <p className="dashboard-column-empty board-lanes-empty">Nenhuma demanda no recorte atual.</p>}
                   </div>
