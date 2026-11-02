@@ -67,7 +67,13 @@ export async function GET(request: Request) {
 
     const access = await getCompanyAccessScope(d1, workspace.id, user.id, workspace.role);
     const companyIds = access.unrestricted ? null : [...access.companyIds];
-    const allowed = workItemSources.filter((source) => hasCapability(workspace, source.capability));
+    /* `fora=quadro`: o painel "Comigo fora do quadro" (§4.44). A demanda já
+       está no quadro, no filtro "Minhas"; aqui ela sai do conjunto inteiro —
+       lista, contadores e agrupamento —, e não só da lista. Recortar só a
+       lista deixava "3 comigo" no contador ao lado de uma lista vazia. */
+    const outsideBoard = parameter("fora") === "quadro";
+    const allowed = workItemSources.filter((source) => hasCapability(workspace, source.capability)
+      && !(outsideBoard && source.key === "card"));
 
     const shared = {
       sources: allowed, workspaceId: workspace.id, userId: user.id, companyIds,

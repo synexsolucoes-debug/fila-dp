@@ -519,3 +519,14 @@ test("a urgência do SQL e a do TypeScript classificam a mesma coisa", async () 
     }, "2026-01-05").tone, "critical");
   }
 });
+
+test("o painel Comigo tira a demanda do conjunto inteiro, e não só da lista (§4.44)", async () => {
+  const [rota, tela] = await Promise.all([
+    readFile(new URL("../app/api/work/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/work/WorkCenterView.tsx", import.meta.url), "utf8"),
+  ]);
+  // Contadores, lista e agrupamento leem `allowed`: recortar ali é recortar tudo.
+  assert.match(rota, /const outsideBoard = parameter\("fora"\) === "quadro";/u);
+  assert.match(rota, /&& !\(outsideBoard && source\.key === "card"\)/u);
+  assert.match(tela, /if \(outsideBoard\) search\.set\("fora", "quadro"\);/u);
+});

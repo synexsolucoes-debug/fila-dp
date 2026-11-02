@@ -8,7 +8,6 @@ import {
 import { EmptyState, ErrorBanner, LoadingState, PanelHeader } from "../shared";
 import { ActionCenter } from "../action-center";
 import type { ActionTarget } from "@/lib/action-center";
-import { workItemSources } from "@/lib/work-items";
 import { dueLabel, formatDateTime, normalizeWorkPayload, requestJson } from "./work.api";
 import type { WorkItem, WorkPayload } from "./work.types";
 import styles from "./work.module.css";
@@ -63,18 +62,12 @@ const PRIORITIES = [
   { key: "low", label: "Baixa" },
 ];
 
-/**
- * Fontes de tudo o que não é demanda.
- *
- * No painel "Comigo", ao lado do quadro (§4.44), a demanda já está na tela —
- * no filtro "Minhas". Mostrá-la de novo ao lado era a repetição que a
- * consolidação existe para acabar; o painel mostra só o que o quadro não mostra.
- */
-const OUTSIDE_BOARD = workItemSources.map((source) => source.key).filter((key) => key !== "card").join(",");
-
 function buildQuery(filters: Filters, cursor: string, outsideBoard = false) {
   const search = new URLSearchParams();
-  if (outsideBoard && !filters.source) search.set("fontes", OUTSIDE_BOARD);
+  /* No painel "Comigo", ao lado do quadro (§4.44), a demanda já está na tela —
+     no filtro "Minhas". O servidor tira a demanda do conjunto inteiro, lista
+     e contadores, para o painel mostrar só o que o quadro não mostra. */
+  if (outsideBoard) search.set("fora", "quadro");
   search.set("escopo", filters.scope);
   if (filters.sort) search.set("ordem", filters.sort);
   if (filters.group) search.set("agrupar", filters.group);
