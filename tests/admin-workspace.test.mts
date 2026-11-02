@@ -187,7 +187,8 @@ test("a administração não mantém uma paleta própria", async () => {
      em todo o resto a marca é latão. */
   const css = await readFile(new URL("../app/access.css", import.meta.url), "utf8");
   const bloco = css.slice(css.indexOf(".theme-dark .workspace-modal > header {"),
-    css.indexOf(".theme-dark .workspace-member-list article > button"));
+    // O fim do bloco era a lista de membros antiga, apagada por falta de uso.
+    css.indexOf("@media (max-width: 1050px)", css.indexOf(".theme-dark .workspace-modal > header {")));
   assert.ok(bloco.length > 400, "o recorte do bloco escuro da modal ficou vazio");
   const hexes = [...bloco.matchAll(/#[0-9a-f]{6}\b/gu)].map((match) => match[0]);
   assert.deepEqual(hexes, [],

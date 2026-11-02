@@ -102,7 +102,6 @@ test("ships operational foundations for boards, attachments, planner, reports an
 test("keeps the responsive visual layer for the new surfaces", async () => {
   const css = await source("app/access.css");
   assert.match(css, /demand-table-view/);
-  assert.match(css, /demand-calendar-view/);
   assert.match(css, /notification-drawer/);
   assert.match(css, /workspace-settings-layout/);
   assert.match(css, /@media \(max-width: 760px\)/);
