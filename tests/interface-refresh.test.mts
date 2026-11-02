@@ -114,7 +114,7 @@ test("a exclusão relata o que foi apagado, com os números do servidor", async 
   // O servidor conta antes de apagar justamente para que a operação possa ser
   // conferida depois; esconder o número na interface joga fora essa prova.
   assert.match(clients, /const \{ rows, tables, orphanUsers \} = payload\.deleted/u);
-  assert.match(clients, /registro\(s\) em \$\{tables\} tabela\(s\)/u);
+  assert.match(clients, /\$\{contagem\(rows, "registro", "registros"\)\} em \$\{contagem\(tables, "tabela", "tabelas"\)\}/u);
 
   const route = await read("app/api/platform/workspaces/[id]/delete/route.ts");
   assert.match(route, /rows: totalRows \+ orphanIds\.length/u);

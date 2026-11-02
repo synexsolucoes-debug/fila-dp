@@ -26,7 +26,7 @@ test("a página e todas as APIs globais aplicam autorização de plataforma no s
     assert.match(route, /requirePlatformAdmin\(auth\.user\)/u, `${paths[index]} sem 403 de plataforma`);
   }
   const page = await source("app/plataforma/page.tsx");
-  assert.match(page, /requireChatGPTUser\("\/plataforma"\)/u);
+  assert.match(page, /requireSessionUser\("\/plataforma"\)/u);
   assert.match(page, /isPlatformAdmin\(user\)/u);
   assert.match(page, /redirect\("\/painel\?platform=forbidden"\)/u);
 });

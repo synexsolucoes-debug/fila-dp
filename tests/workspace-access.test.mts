@@ -111,7 +111,7 @@ test("entrar em outra conta encerra a sessão sem reabrir logout por GET", async
   assert.match(login, /<form method="post" action="\/api\/auth\/logout">/u);
   // Com `trocar=1` a tela não pode oferecer "continuar" com a identidade antiga.
   assert.match(login, /const switching = query\.trocar === "1"/u);
-  assert.match(login, /const user = switching \? null : await getChatGPTUser\(\)/u);
+  assert.match(login, /const user = switching \? null : await getSessionUser\(\)/u);
 });
 
 test("o painel separa sair de entrar em outra conta", async () => {

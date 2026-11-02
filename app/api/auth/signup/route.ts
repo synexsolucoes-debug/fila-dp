@@ -1,4 +1,4 @@
-import { hashPassword } from "@/app/chatgpt-auth";
+import { hashPassword } from "@/lib/auth/session";
 import { getD1 } from "@/db";
 import { apiError } from "@/lib/fila-dp-api";
 import { clientAddress, consumePublicAuthRateLimit } from "@/lib/auth-rate-limit";

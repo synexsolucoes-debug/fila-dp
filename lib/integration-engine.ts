@@ -1,18 +1,18 @@
 import { createHash } from "node:crypto";
 import { getD1 } from "@/db";
-import { prepareAgentOutcome } from "./agent-scheduler";
-import { prepareActivity } from "./fila-dp-db";
-import { ApiError } from "./api-errors";
-import { computeSlaStatus } from "./fila-dp-api";
-import { addBusinessDays } from "./fila-dp-relations";
-import { workingDayMinutes } from "./fila-dp-sla";
-import { admissionIsComplete } from "./admissions";
-import { completeIntegrationEvent, recordIntegrationEvent } from "./integration-events";
-import { log } from "./observability";
-import { preparePortfolioAssignment } from "./portfolio-assignment";
-import { prepareCutoffEvaluation } from "./dp-cutoff-service";
-import { admissionTaskDraft as solidesTaskDraft, normalizeSolidesAdmission, solidesAdmissionsUrl, solidesAuthorization } from "./solides";
-import { admissionTaskDraft as tangerinoTaskDraft, normalizeTangerinoAdmission, tangerinoAuthorization, tangerinoEmployeesUrl, tangerinoErpReadiness, tangerinoRecords, tangerinoSkipReason } from "./tangerino";
+import { prepareAgentOutcome } from "./agent-scheduler.ts";
+import { prepareActivity } from "./fila-dp-db.ts";
+import { ApiError } from "./api-errors.ts";
+import { computeSlaStatus } from "./fila-dp-api.ts";
+import { addBusinessDays } from "./fila-dp-relations.ts";
+import { workingDayMinutes } from "./fila-dp-sla.ts";
+import { admissionIsComplete } from "./admissions.ts";
+import { completeIntegrationEvent, recordIntegrationEvent } from "./integration-events.ts";
+import { log } from "./observability.ts";
+import { preparePortfolioAssignment } from "./portfolio-assignment.ts";
+import { prepareCutoffEvaluation } from "./dp-cutoff-service.ts";
+import { admissionTaskDraft as solidesTaskDraft, normalizeSolidesAdmission, solidesAdmissionsUrl, solidesAuthorization } from "./solides.ts";
+import { admissionTaskDraft as tangerinoTaskDraft, normalizeTangerinoAdmission, tangerinoAuthorization, tangerinoEmployeesUrl, tangerinoErpReadiness, tangerinoRecords, tangerinoSkipReason } from "./tangerino.ts";
 import {
   mappingDirection,
   mappingResource,
@@ -23,7 +23,7 @@ import {
   stableJson,
   validateConnectorEndpoint,
   type MappingField,
-} from "./integrations";
+} from "./integrations.ts";
 
 type Database = ReturnType<typeof getD1>;
 type CredentialRow = {

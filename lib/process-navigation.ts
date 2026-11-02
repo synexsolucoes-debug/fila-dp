@@ -106,7 +106,10 @@ export const processGroups: readonly ProcessGroup[] = [
   },
   {
     id: "pagamentos",
-    label: "Pagamentos e competências",
+    /* "Folha e benefícios": o nome antigo, "Pagamentos e competências",
+       ficava ao lado de "Pagamento PJ" no seletor de módulos e os dois se
+       confundiam. */
+    label: "Folha e benefícios",
     description: "Psicólogos, benefícios, folha, adiantamentos e descontos: da apuração ao encerramento.",
     kind: "process",
     views: ["psychologistPayments", "auxiliary", "payroll", "payrollLedger"],

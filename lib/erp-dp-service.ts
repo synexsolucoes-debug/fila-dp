@@ -1,6 +1,6 @@
-import { getCompanyAccessScope, requireCompanyAccess } from "./fila-dp-db";
-import type { WorkspaceRole } from "./fila-dp-types";
-import { competenceOf, processedCycleStatuses, retroactivityTitle } from "./erp-dp";
+import { getCompanyAccessScope, requireCompanyAccess } from "./fila-dp-db.ts";
+import type { WorkspaceRole } from "./fila-dp-types.ts";
+import { competenceOf, processedCycleStatuses, retroactivityTitle } from "./erp-dp.ts";
 
 /**
  * ERP DP: o recorte de empresa que toda leitura do modo ERP aplica.

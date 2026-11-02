@@ -13,6 +13,7 @@ import type {
 import type { ContractorSectionId } from "./contractor-sections";
 import { EmptyState } from "../shared";
 import styles from "./payments.module.css";
+import { contagem } from "../shared/plural";
 
 /**
  * Os nove recortes do Pagamento PJ.
@@ -136,14 +137,14 @@ function OverviewSection({ overview, money, statusLabels, competence, competence
                 {invoiceSummary.approvedCount} de {invoiceSummary.requiredCount} notas aprovadas
               </h3>
               <p>
-                {invoiceSummary.receivedCount} recebida(s) · {invoiceSummary.awaitingReviewCount} aguardando conferência ·
-                {" "}{invoiceSummary.rejectedCount + invoiceSummary.correctionCount} rejeitada(s) ·
-                {" "}{invoiceSummary.pendingCount} pendente(s) em {competenceLabel(competence)}.
+                {contagem(invoiceSummary.receivedCount, "recebida", "recebidas")} · {invoiceSummary.awaitingReviewCount} aguardando conferência ·
+                {" "}{contagem(invoiceSummary.rejectedCount + invoiceSummary.correctionCount, "rejeitada", "rejeitadas")} ·
+                {" "}{contagem(invoiceSummary.pendingCount, "pendente", "pendentes")} em {competenceLabel(competence)}.
               </p>
             </div>
           </header>
           <p className={styles.fixedItemsEmpty}>
-            {invoiceSummary.readyCount} prestador(es) apto(s) para pagamento; {money(invoiceSummary.approvedAmount)} de
+            {contagem(invoiceSummary.readyCount, "prestador apto", "prestadores aptos")} para pagamento; {money(invoiceSummary.approvedAmount)} de
             {" "}{money(invoiceSummary.expectedAmount)} cobertos por nota aprovada.
           </p>
         </section>
@@ -156,7 +157,7 @@ function OverviewSection({ overview, money, statusLabels, competence, competence
             <p>
               {closings.length === 0
                 ? `Nenhum fechamento apurado em ${competenceLabel(competence)}.`
-                : `${pending} de ${closings.length} fechamento(s) ainda não concluído(s) em ${competenceLabel(competence)}.`}
+                : `${pending} de ${contagem(closings.length, "fechamento", "fechamentos")} ainda não concluído(s) em ${competenceLabel(competence)}.`}
             </p>
           </div>
         </header>
@@ -502,7 +503,7 @@ function ContractorApprovalPanel({ rows, permissions, busy, competence, competen
               <input type="checkbox" checked={allSelected} onChange={(event) => setSelected(event.target.checked ? new Set(pending.map((row) => row.id)) : new Set())} />
               Selecionar todos ({pending.length})
             </label>
-            <span>{selectedPending.size} selecionado(s)</span>
+            <span>{contagem(selectedPending.size, "selecionado", "selecionados")}</span>
             {permissions?.manage ? (
               <>
                 <button type="button" className={styles.secondaryButton} disabled={busy || selectedPending.size === 0}

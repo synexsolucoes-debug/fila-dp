@@ -62,3 +62,43 @@ jobs:
             echo "Disparando o worker Sankhya pelo token efêmero do workflow."
             gh workflow run sankhya-worker.yml --repo "${GITHUB_REPOSITORY}" --ref main
           fi
+
+      # Monitor de saúde. `/api/health` já separa "o schema está em dia" de "a
+      # operação parou" (a varredura que morreu com `syntax error at or near
+      # "grant"` respondia 200 enquanto parada) — mas ninguém o consultava. Fica
+      # neste workflow, e não num agendamento próprio, para não gastar minutos
+      # de Actions além dos que a varredura já usa.
+      #
+      # Reprova (e o GitHub avisa por e-mail quem mantém o agendamento) quando
+      # o veredito é crítico, o banco não responde ou há migration pendente.
+      # "Degradado" vira aviso no resumo da execução: pode ser só capacidade
+      # opcional sem configuração, e reprovar por isso todo dia ensinaria a
+      # ignorar o alerta.
+      - name: Conferir a saúde da produção
+        if: always()
+        run: |
+          set -uo pipefail
+          codigo=$(curl -sS -o saude.json -w "%{http_code}" --max-time 60 "https://vinculato.vercel.app/api/health" || echo "000")
+          echo "HTTP ${codigo}"
+          if [ "${codigo}" = "000" ] || ! jq -e . saude.json > /dev/null 2>&1; then
+            echo "::error title=Vinculato fora do ar::/api/health não respondeu (HTTP ${codigo})."
+            exit 1
+          fi
+          gravidade=$(jq -r '.severity // "desconhecida"' saude.json)
+          banco=$(jq -r '.database // "desconhecido"' saude.json)
+          pendentes=$(jq -r '.pendingMigrations // 0' saude.json)
+          detalhe=$(jq -r '[.detail, .operation.detail] | map(select(. != null)) | join(" ")' saude.json)
+          echo "Gravidade: ${gravidade} · banco: ${banco} · migrations pendentes: ${pendentes}"
+          echo "${detalhe}"
+          {
+            echo "### Saúde da produção: ${gravidade}"
+            echo
+            echo "${detalhe}"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "${gravidade}" = "critico" ] || [ "${banco}" != "ok" ] || [ "${pendentes}" != "0" ]; then
+            echo "::error title=Vinculato crítico::${detalhe}"
+            exit 1
+          fi
+          if [ "${gravidade}" = "degradado" ]; then
+            echo "::warning title=Vinculato degradado::${detalhe}"
+          fi

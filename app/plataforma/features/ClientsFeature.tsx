@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { AlertTriangle, Archive, Ban, Building2, CheckCircle2, ChevronRight, Plus, Search, Settings2, Trash2, UserRoundCheck } from "lucide-react";
 import styles from "../platform.module.css";
 import { AdminAction, AdminActionDialog, Empty, ErrorState, FeatureHeader, FeatureProps, Loading, Notice, Panel, Row, Status, date, number, platformRequest, text, usePlatformResource } from "./core";
+import { contagem } from "../../painel/features/shared/plural";
 
 /** Estados em que a exclusão definitiva é aceita pelo servidor. */
 const DELETABLE = new Set(["archived", "canceled"]);
@@ -35,8 +36,8 @@ function deleteWorkspaceAction(
       // transforma "excluído" em algo que a pessoa consegue conferir depois.
       const { rows, tables, orphanUsers } = payload.deleted;
       onDeleted(
-        `${workspace.name} foi excluído: ${rows} registro(s) em ${tables} tabela(s)`
-        + `${orphanUsers > 0 ? ` e ${orphanUsers} identidade(s) sem outro vínculo` : ""}.`
+        `${workspace.name} foi excluído: ${contagem(rows, "registro", "registros")} em ${contagem(tables, "tabela", "tabelas")}`
+        + `${orphanUsers > 0 ? ` e ${contagem(orphanUsers, "identidade", "identidades")} sem outro vínculo` : ""}.`
         + " O registro da exclusão permanece na auditoria global.",
       );
     },

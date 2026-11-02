@@ -1,10 +1,10 @@
-import { getChatGPTUser } from "@/app/chatgpt-auth";
-import { ApiError, apiErrorResponse } from "./api-errors";
+import { getSessionUser } from "@/lib/auth/session";
+import { ApiError, apiErrorResponse } from "./api-errors.ts";
 
-export { ApiError } from "./api-errors";
+export { ApiError } from "./api-errors.ts";
 
 export async function getApiUser() {
-  const user = await getChatGPTUser();
+  const user = await getSessionUser();
   if (!user) {
     return {
       user: null,

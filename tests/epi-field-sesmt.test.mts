@@ -128,7 +128,9 @@ test("decisão sobre registro existente não entra na fila; estoque entra com id
 
   const flows = await readFile(new URL("../app/campo/SesmtFlows.tsx", import.meta.url), "utf8");
   assert.doesNotMatch(flows, /submitOperation\(\{\s*kind: "(sanitization|disposal)/u);
-  assert.match(flows, /window\.confirm\(`Confirmar o descarte/u, "descarte é definitivo e pede confirmação");
+  // A pergunta é a folha do próprio app (ConfirmSheet), não a caixa do navegador.
+  assert.match(flows, /action === "confirm" && !\(await askConfirm\(\{\s*title: "Confirmar o descarte\?"/u, "descarte é definitivo e pede confirmação");
+  assert.doesNotMatch(flows, /window\.confirm\(/u, "o Campo não usa a caixa nativa do navegador");
 });
 
 test("o app de campo se instala no iPhone e abre direto nos vencimentos", async () => {

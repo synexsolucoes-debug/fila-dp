@@ -373,6 +373,8 @@ export type WorkspaceSnapshot = {
     comments: { loaded: number; total: number };
     inbox: { loaded: number; total: number };
     activity: { loaded: number; total: number };
+    /** Arquivadas: o snapshot traz só as mais recentes; a busca alcança as demais. */
+    archived: { loaded: number; total: number };
   };
 };
 

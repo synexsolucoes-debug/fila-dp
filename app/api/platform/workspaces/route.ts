@@ -1,7 +1,7 @@
 import { getD1, getPlatformScopedD1 } from "@/db";
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { ApiError } from "@/lib/api-errors";
-import { hashPassword } from "@/app/chatgpt-auth";
+import { hashPassword } from "@/lib/auth/session";
 import { provisionWorkspaceDefaults } from "@/lib/fila-dp-db";
 import { requirePlatformAdmin } from "@/lib/platform-authorization";
 import { withPlatformContext } from "@/lib/platform-context";

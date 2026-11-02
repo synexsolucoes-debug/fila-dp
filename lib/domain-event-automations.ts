@@ -41,7 +41,7 @@
  *   `employeeId` — os únicos campos genéricos o bastante para valer para
  *   qualquer evento do catálogo. Mapeamento mais rico é trabalho de UI futuro.
  */
-import type { getD1 } from "../db";
+import type { getD1 } from "../db/index.ts";
 
 import { ApiError } from "./api-errors.ts";
 import { matchesDomainEventRule } from "./domain-event-conditions.ts";

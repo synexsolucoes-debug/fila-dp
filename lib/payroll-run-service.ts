@@ -1,5 +1,5 @@
 import { ApiError } from "./api-errors.ts";
-import { prepareAuditEvent } from "./fila-dp-db";
+import { prepareAuditEvent } from "./fila-dp-db.ts";
 import { lastDayOfCompetence } from "./erp-dp.ts";
 import { ledgerCategoryLabels, type LedgerCategory } from "./payroll-ledger.ts";
 import { variableAverage, type PayrollLine } from "./payroll-calc.ts";

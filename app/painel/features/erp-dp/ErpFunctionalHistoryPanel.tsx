@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, CalendarClock, Info, RefreshCw } from "lucide-react";
 import { EmptyState, ErrorBanner, LoadingState, StatusPill } from "../shared";
 import styles from "./erp-record.module.css";
+import { contagem } from "../shared/plural";
 
 type RecordType = "situation" | "assignment" | "schedule";
 
@@ -118,7 +119,7 @@ export function ErpFunctionalHistoryPanel({ employeeId }: { employeeId: string }
 
   const types: RecordType[] = ["situation", "assignment", "schedule"];
   return <div className={styles.employeePanel}>
-    <header className={styles.sectionTitle}><h3>Vida funcional</h3><span>{data.records.length} registro(s) com validade</span></header>
+    <header className={styles.sectionTitle}><h3>Vida funcional</h3><span>{contagem(data.records.length, "registro", "registros")} com validade</span></header>
     <label className={styles.historyDate}><span>Data-base</span>
       <input type="date" value={at || data.at} onChange={(event) => setAt(event.target.value)} /></label>
 

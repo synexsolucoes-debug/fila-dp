@@ -9,6 +9,7 @@ import {
 import type { Connector, IntegrationEditor, Mapping, RunDetail, StandardConnectorConfig } from "./integrations.types";
 import { runStatusLabel, StatusPill } from "../shared";
 import styles from "./integrations.module.css";
+import { contagem } from "../shared/plural";
 
 type Props = {
   editor: NonNullable<IntegrationEditor>;
@@ -255,8 +256,8 @@ function RunDetailPanel({ detail, loading, error }: { detail: RunDetail | null; 
   if (!detail) return null;
   return <div className={styles.detailBody}>
     <div className={styles.detailSummary}><StatusMark status={detail.run.status} /><div><span>Execução · {channelLabel(detail.run.channel)}</span><strong>{detail.run.displayName}</strong><small>{detail.run.resourceType} · {detail.run.direction} · mapeamento v{detail.run.mappingVersion}</small></div><b>Tentativa {detail.run.attempt}</b></div>
-    <section className={styles.detailSection}><header><strong>Tarefas na fila</strong><span>{detail.jobs.length} registro(s)</span></header>{detail.jobs.length ? detail.jobs.map((job) => <article key={job.id}><CircleDot aria-hidden="true" /><div><strong>{job.jobType}</strong><span>{job.lastErrorCode ? `${job.lastErrorCode} · ${job.lastErrorMessage}` : `Disponível em ${formatDate(job.availableAt)}`}</span></div><StatusMark status={job.status} /><b>{job.attempt}/{job.maxAttempts}</b></article>) : <p>Nenhuma tarefa na fila.</p>}</section>
-    <section className={styles.detailSection}><header><strong>Itens processados</strong><span>{detail.items.length} registro(s), sem payload bruto</span></header>{detail.items.length ? detail.items.map((item, index) => <article key={item.id}><span className={styles.itemIndex}>{String(index + 1).padStart(2, "0")}</span><div><strong>{item.targetType || "Item externo"}</strong><span>{item.errorCode ? `${item.errorCode} · ${item.errorMessage}` : item.metadataFields.length ? `Metadados: ${item.metadataFields.join(", ")}` : "Sem metadados públicos"}</span></div><StatusMark status={item.status} /><time>{formatDate(item.processedAt || item.createdAt)}</time></article>) : <p>Nenhum item processado até agora.</p>}</section>
+    <section className={styles.detailSection}><header><strong>Tarefas na fila</strong><span>{contagem(detail.jobs.length, "registro", "registros")}</span></header>{detail.jobs.length ? detail.jobs.map((job) => <article key={job.id}><CircleDot aria-hidden="true" /><div><strong>{job.jobType}</strong><span>{job.lastErrorCode ? `${job.lastErrorCode} · ${job.lastErrorMessage}` : `Disponível em ${formatDate(job.availableAt)}`}</span></div><StatusMark status={job.status} /><b>{job.attempt}/{job.maxAttempts}</b></article>) : <p>Nenhuma tarefa na fila.</p>}</section>
+    <section className={styles.detailSection}><header><strong>Itens processados</strong><span>{contagem(detail.items.length, "registro", "registros")}, sem payload bruto</span></header>{detail.items.length ? detail.items.map((item, index) => <article key={item.id}><span className={styles.itemIndex}>{String(index + 1).padStart(2, "0")}</span><div><strong>{item.targetType || "Item externo"}</strong><span>{item.errorCode ? `${item.errorCode} · ${item.errorMessage}` : item.metadataFields.length ? `Metadados: ${item.metadataFields.join(", ")}` : "Sem metadados públicos"}</span></div><StatusMark status={item.status} /><time>{formatDate(item.processedAt || item.createdAt)}</time></article>) : <p>Nenhum item processado até agora.</p>}</section>
   </div>;
 }
 

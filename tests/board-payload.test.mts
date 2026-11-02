@@ -141,7 +141,7 @@ test("o total previsto usa a mesma stepChecklist da execução", async () => {
      documentos da etapa e deduplica. Somar em SQL daria um número próximo e
      errado — e um progresso de "20 de 18". */
   const db = await readFile(new URL("../lib/fila-dp-db.ts", import.meta.url), "utf8");
-  assert.match(db, /import \{ stepChecklist, stepConfigOf \} from "\.\/process-instances"/u);
+  assert.match(db, /import \{ stepChecklist, stepConfigOf \} from "\.\/process-instances(?:\.ts)?"/u);
   /* Pela linha inteira, lida pelo mesmo `stepConfigOf` da execução. Montar aqui
      uma configuração parcial "só com o que a contagem usa" já custou as duas
      coisas: o total certo — a parcial procurava o checklist em `settings_json`,

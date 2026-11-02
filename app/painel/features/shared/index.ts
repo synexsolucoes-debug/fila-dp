@@ -11,7 +11,7 @@ export {
   StaggerContainer, StaggerItem, useDialogFocus, useExitTransition, usePrefersReducedMotion,
   type AnimatedTab,
 } from "./motion";
-export { ProcessTabsProvider, ProcessTabsSlot, useProcessTabsTarget } from "./process-tabs";
+export { ProcessTabsProvider, ProcessTabsSlot, useProcessTabsTarget, ViewPaneActiveContext } from "./process-tabs";
 export {
   findModuleWindow,
   moduleWindowRegistry,

@@ -1,4 +1,4 @@
-import type { getD1 } from "../db";
+import type { getD1 } from "../db/index.ts";
 import { ApiError } from "./api-errors.ts";
 import type { Capability } from "./authorization.ts";
 import { cleanText } from "./clean-text.ts";

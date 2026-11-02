@@ -1,4 +1,4 @@
-import { clearAuthSession } from "@/app/chatgpt-auth";
+import { clearAuthSession } from "@/lib/auth/session";
 import { getD1 } from "@/db";
 import { getApiUser } from "@/lib/fila-dp-api";
 

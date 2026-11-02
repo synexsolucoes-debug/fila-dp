@@ -11,6 +11,7 @@ import { brl } from "@/lib/payroll-calc";
 import { ErpBankAccountForm } from "./ErpObligationsPanel";
 import { ErpPortalLinks } from "./ErpPortalLinks";
 import styles from "./erp-record.module.css";
+import { contagem } from "../shared/plural";
 
 type Payload = { admissionDate: string; records: Remuneration[]; current: Remuneration | null; currentMonthlySalary: number | null; gaps: string[] };
 
@@ -70,7 +71,7 @@ export function ErpRemunerationPanel({ employeeId, canManage }: { employeeId: st
       <article><small>Jornada</small><strong>{current.monthlyHours} h/mês</strong><span>Desde {dateLabel(current.validFrom)}</span></article>
       <article><small>Dependentes IRRF</small><strong>{current.irrfDependents}</strong><span>Dedução por dependente na base</span></article>
       <article><small>Natureza</small><strong>{current.proLabore ? "Pró-labore" : "Salário"}</strong>
-        <span>{current.familyAllowanceChildren ? `${current.familyAllowanceChildren} filho(s) no salário-família` : "Sem salário-família"}{current.alimonyPercent ? ` · pensão ${String(current.alimonyPercent).replace(".", ",")}%` : ""}</span></article>
+        <span>{current.familyAllowanceChildren ? `${contagem(current.familyAllowanceChildren, "filho", "filhos")} no salário-família` : "Sem salário-família"}{current.alimonyPercent ? ` · pensão ${String(current.alimonyPercent).replace(".", ",")}%` : ""}</span></article>
       <article><small>Vale-transporte</small><strong>{current.transportVoucherCents ? brl(current.transportVoucherCents) : "Não usa"}</strong>
         <span>{current.transportVoucherCents ? "Desconto de até 6% do salário-base" : "—"}</span></article>
       <article><small>Adicional</small><strong>{current.hazardous ? "Periculosidade 30%" : current.unhealthyPercent ? `Insalubridade ${current.unhealthyPercent}%` : "Nenhum"}</strong>

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
-import { chatGPTSignOutPath, requireChatGPTUser } from "../../chatgpt-auth";
+import { signOutPath, requireSessionUser } from "@/lib/auth/session";
 import { WorkspaceApp } from "../WorkspaceApp";
 import { panelPath, parsePanelPath } from "@/lib/panel-routes";
 import {
@@ -32,7 +32,7 @@ type PanelPageProps = {
  * hidratação. A diferença aparece na prática: com efeito, quem abre o link de
  * uma demanda vê a visão geral piscar antes da demanda.
  *
- * Autorização não muda de lugar. `requireChatGPTUser` continua sendo a porta, e
+ * Autorização não muda de lugar. `requireSessionUser` continua sendo a porta, e
  * cada rota de dados continua recusando o que a pessoa não pode ver — um
  * endereço é um pedido, nunca uma permissão.
  */
@@ -55,7 +55,7 @@ export default async function DashboardPage({ params, searchParams }: PanelPageP
   if (aba) consulta.set("aba", aba);
   const location = parsePanelPath(pathname, consulta.toString());
 
-  const user = await requireChatGPTUser(panelPath(location));
+  const user = await requireSessionUser(panelPath(location));
 
   /* O tema entra pronto, pelo mesmo motivo que o caminho entra: o que se
      resolve depois da hidratação pisca. Aqui o lampejo seria a tela inteira
@@ -67,7 +67,7 @@ export default async function DashboardPage({ params, searchParams }: PanelPageP
   return (
     <WorkspaceApp
       user={{ displayName: user.displayName, email: user.email, fullName: user.fullName }}
-      signOutPath={chatGPTSignOutPath("/")}
+      signOutPath={signOutPath("/")}
       initialLocation={location}
       initialThemePreference={themePreference}
       initialTheme={resolveTheme(themePreference, systemTheme)}

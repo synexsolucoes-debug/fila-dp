@@ -1,6 +1,6 @@
-import type { getD1 } from "../db";
-import { ApiError } from "./api-errors";
-import { cleanText } from "./clean-text";
+import type { getD1 } from "../db/index.ts";
+import { ApiError } from "./api-errors.ts";
+import { cleanText } from "./clean-text.ts";
 
 type Database = ReturnType<typeof getD1>;
 

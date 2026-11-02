@@ -28,7 +28,7 @@
  *   * **Espera crescente e degradação** — `consecutive_failures` no conector,
  *     lido por `backoffMinutes` e `agentHealth`.
  */
-import type { getD1 } from "../db";
+import type { getD1 } from "../db/index.ts";
 
 import { ApiError } from "./api-errors.ts";
 import {

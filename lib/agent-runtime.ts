@@ -22,7 +22,7 @@
  * Vinculato ir buscar. Por isso o canal traz um `kind`, e por isso a tela
  * mostra o Teams com execução vazia em vez de fingir que ele tem uma.
  */
-import type { getD1 } from "../db";
+import type { getD1 } from "../db/index.ts";
 
 import {
   agentIsConfigured, agentState, agentStateLabels, canRunNow, isVisibleChannel, productAgentByChannel,
