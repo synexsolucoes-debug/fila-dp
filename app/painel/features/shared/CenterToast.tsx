@@ -16,12 +16,14 @@ import { DialogPortal, useExitTransition } from "./motion";
  * já tinha); aqui só se anima a entrada e a saída. A mensagem fica guardada
  * durante a saída, senão o aviso sumiria vazio.
  */
-export function CenterToast({ message, tone = "success", onClose }: {
+export function CenterToast({ message, tone = "success", onClose, action }: {
   /** Texto do aviso; vazio ou nulo esconde. */
   message: string | null | undefined;
   tone?: "success" | "error";
   /** Mostra o botão de fechar. Erros devem ter, porque não somem sozinhos. */
   onClose?: () => void;
+  /** Ação de uma palavra ao lado do texto, como "Desfazer". */
+  action?: { label: string; onClick: () => void };
 }) {
   const open = Boolean(message);
   const { mounted, state } = useExitTransition(open, 220);
@@ -38,6 +40,7 @@ export function CenterToast({ message, tone = "success", onClose }: {
           role={shown.tone === "error" ? "alert" : "status"} aria-live={shown.tone === "error" ? "assertive" : "polite"}>
           <Icon aria-hidden="true" />
           <span>{shown.message}</span>
+          {action && <button type="button" className="center-toast-action" onClick={action.onClick}>{action.label}</button>}
           {onClose && <button type="button" onClick={onClose} aria-label="Fechar aviso"><X aria-hidden="true" /></button>}
         </div>
       </div>

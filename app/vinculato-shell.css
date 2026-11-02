@@ -958,3 +958,13 @@
    busca e os filtros para fora da tela. */
 .board-shell { grid-template-columns: minmax(0, 1fr); }
 .board-shell > * { min-width: 0; }
+
+/* Ação no aviso central ("Desfazer"): texto, não ícone. */
+.center-toast > .center-toast-action {
+  width: auto;
+  padding: 0 10px;
+  font: inherit;
+  font-weight: 700;
+  color: var(--ui-accent-text, var(--ui-primary));
+  white-space: nowrap;
+}

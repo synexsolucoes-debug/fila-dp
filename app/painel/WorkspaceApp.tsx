@@ -1034,6 +1034,11 @@ export function WorkspaceApp({
   const [error, setError] = useState("");
   const [startupFailure, setStartupFailure] = useState<unknown>(null);
   const [toast, setToast] = useState("");
+  /* "Desfazer" do aviso: mover e atribuir são as ações mais repetidas do
+     quadro, e um arrasto errado não deveria custar reabrir a demanda. */
+  const [undo, setUndo] = useState<{ message: string; run: () => void } | null>(null);
+  /* Só vale para o aviso de que ele nasceu: outro aviso logo depois não herda o botão. */
+  const undoAtual = undo && undo.message === toast ? undo : null;
   const [draggedCardId, setDraggedCardId] = useState<string | null>(null);
   const [cardModalOpen, setCardModalOpen] = useState(false);
   /* Os processos publicados que podem originar uma demanda (§10).
@@ -1689,9 +1694,10 @@ export function WorkspaceApp({
 
   useEffect(() => {
     if (!toast) return;
-    const timeout = window.setTimeout(() => setToast(""), 3500);
+    // Com "Desfazer", o aviso fica o dobro do tempo: dá para ler e decidir.
+    const timeout = window.setTimeout(() => setToast(""), undoAtual ? 7000 : 3500);
     return () => window.clearTimeout(timeout);
-  }, [toast]);
+  }, [toast, undoAtual]);
 
   useEffect(() => {
     if (!cardModalOpen && !inboxModalOpen && !searchOpen && !notificationsOpen && !archiveOpen && !confirmation && !attachmentPreview) return;
@@ -2368,7 +2374,15 @@ export function WorkspaceApp({
         method: "POST",
         body: JSON.stringify({ assigneeIds: userId ? [userId] : [] }),
       });
-      applySnapshot(next, name ? `Demanda atribuída a ${name}.` : "Demanda devolvida para a fila comum.");
+      const mensagem = name ? `Demanda atribuída a ${name}.` : "Demanda devolvida para a fila comum.";
+      applySnapshot(next, mensagem);
+      // Todos os responsáveis de antes, não só o primeiro: a demanda pode ter vários.
+      const anteriores = card.assignees.map((assignee) => assignee.userId).filter(Boolean);
+      // Mesmo motivo do desfazer de mover: direto no servidor, sem o retrato antigo.
+      setUndo({
+        message: mensagem,
+        run: () => void mutate(`/api/cards/${cardId}/assignee`, { method: "POST", body: JSON.stringify({ assigneeIds: anteriores }) }, "Atribuição desfeita."),
+      });
     } catch (cause) {
       setSnapshot(anterior);
       setError(cause instanceof Error
@@ -2443,7 +2457,16 @@ export function WorkspaceApp({
   async function moveCard(cardId: string, toListId: string) {
     const card = allCards.find((item) => item.id === cardId);
     if (!card || card.listId === toListId) return;
-    await mutate(`/api/cards/${cardId}/move`, { method: "POST", body: JSON.stringify({ toListId }) }, "Demanda movida. Regras de SLA recalculadas.");
+    const origem = card.listId;
+    const mensagem = "Demanda movida. Regras de SLA recalculadas.";
+    const next = await mutate(`/api/cards/${cardId}/move`, { method: "POST", body: JSON.stringify({ toListId }) }, mensagem);
+    /* O desfazer chama o servidor direto. Passar por `moveCard` de novo usaria
+       o retrato do quadro guardado neste fechamento — com a demanda ainda na
+       coluna de origem — e a função concluiria que não há nada a mover. */
+    if (next) setUndo({
+      message: mensagem,
+      run: () => void mutate(`/api/cards/${cardId}/move`, { method: "POST", body: JSON.stringify({ toListId: origem }) }, "Movimentação desfeita."),
+    });
   }
 
   function moveCardByDirection(cardId: string, direction: -1 | 1) {
@@ -3282,6 +3305,9 @@ export function WorkspaceApp({
         key={card.id}
         draggable={canEdit}
         tabIndex={0}
+        /* O atalho existe só aqui, no quadro por situação: Equipe e Minha
+           fila usam outro cartão, sem colunas para onde mover. */
+        aria-keyshortcuts={canEdit ? "Alt+ArrowLeft Alt+ArrowRight" : undefined}
         role="button"
         aria-label={`Abrir demanda ${card.title}`}
         onDragStart={() => setDraggedCardId(card.id)}
@@ -3789,7 +3815,8 @@ export function WorkspaceApp({
 
       {/* Avisos no centro da tela, em vidro (CenterToast), iguais em todas as telas. */}
       <CenterToast message={error} tone="error" onClose={() => setError("")} />
-      <CenterToast message={toast} />
+      <CenterToast message={toast}
+        action={undoAtual ? { label: "Desfazer", onClick: () => { const pendente = undoAtual; setUndo(null); setToast(""); pendente.run(); } } : undefined} />
       {/* O teto de favoritos precisa ser dito: sem o recado, marcar o nono
           simplesmente não faria nada, e a pessoa concluiria que o botão está
           quebrado. */}
