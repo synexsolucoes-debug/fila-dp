@@ -492,9 +492,12 @@
   color: var(--ui-on-accent);
 }
 
-/* No celular a faixa já está cheia: fica só o ícone, no mesmo tamanho das
-   outras portas, e o rótulo continua no aria-label. */
-@media (max-width: 640px) {
+/* Com a faixa cheia fica só o ícone, no mesmo tamanho das outras portas, e o
+   rótulo continua no aria-label e na dica. Era só no celular; em 1280 e 1366,
+   as larguras de notebook mais comuns, as três portas com texto empurravam a
+   faixa 7px e 73px para fora da coluna (a verificação de navegador acusava
+   desde a #257). */
+@media (max-width: 1400px) {
   .operational-ui .dashboard-header-actions button.erp-mode-toggle {
     width: 34px;
     min-width: 34px;
@@ -5872,6 +5875,41 @@
 
 .board-shell { display: grid; gap: 12px; min-width: 0; }
 
+/* Entrada e Agenda ao lado do quadro (§4.44), como os painéis do Trello.
+   O quadro encolhe e continua rolando na horizontal; o painel tem largura
+   fixa para a leitura de uma solicitação ou de um dia não mudar de forma. */
+.board-side-toggles { display: flex; flex-wrap: wrap; gap: 8px; }
+.board-side-toggles button {
+  display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 0 12px;
+  border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm, 8px);
+  background: var(--ui-surface); color: var(--ui-text); font: inherit; font-size: .82rem; font-weight: 700; cursor: pointer;
+}
+.board-side-toggles button svg { width: 16px; height: 16px; }
+.board-side-toggles button[data-active] { border-color: var(--ui-accent); color: var(--ui-accent-text); box-shadow: inset 0 0 0 1px var(--ui-accent); }
+.board-side-toggles b {
+  min-width: 20px; padding: 1px 6px; border-radius: 999px;
+  background: var(--ui-accent); color: var(--ui-surface); font-size: .7rem; text-align: center;
+}
+.board-workspace { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; min-width: 0; }
+.board-workspace[data-panel] { grid-template-columns: minmax(0, 1fr) minmax(320px, 400px); align-items: start; }
+/* "Comigo" lista itens de vários módulos, com filtros: precisa de mais espaço. */
+.board-workspace[data-panel="comigo"] { grid-template-columns: minmax(0, 1fr) minmax(360px, 520px); }
+.board-side-panel {
+  position: sticky; top: 12px; display: grid; gap: 10px; min-width: 0; max-height: calc(100vh - 120px); overflow: auto;
+  padding: 12px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md, 10px); background: var(--ui-surface);
+}
+.board-side-panel > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.board-side-panel > header strong { font-size: .92rem; }
+/* Dentro do painel, a Inbox e a Agenda perdem a coluna explicativa e viram
+   uma coluna só: o painel é para agir, não para ler como funciona. */
+.board-side-panel .inbox-layout,
+.board-side-panel .planner-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; margin-top: 0; }
+.board-side-panel .inbox-summary { display: none; }
+@media (max-width: 1100px) {
+  .board-workspace[data-panel] { grid-template-columns: minmax(0, 1fr); }
+  .board-side-panel { position: static; max-height: none; }
+}
+
 /* Modo foco: o quadro fica com a largura da janela.
    Não é tela cheia do navegador — quem trabalha a fila o dia inteiro continua
    precisando das abas e da barra do sistema. O que sai é o que já foi lido:
@@ -5985,3 +6023,6 @@
 .theme-dark .demand-detail-modal .card-dialog-tabs button.active { color: var(--ui-accent-text, var(--ui-primary)); }
 .theme-dark .demand-detail-modal .card-form-actions .danger-link,
 .theme-dark .demand-drawer-actions .danger-link { color: var(--ui-state-danger-text); }
+
+/* Painel da gestão do DP no topo dos Relatórios (§4.44). */
+.indicators-dp-panel { margin-top: 18px; min-width: 0; }

@@ -9,6 +9,7 @@ import {
 import type { WorkspaceRole } from "@/lib/fila-dp-types";
 import { competenceWindow, EmptyState, ErrorBanner, PageSkeleton, PanelHeader, StatusPill } from "../shared";
 import { OperationDialog } from "./OperationDialogs";
+import { AlertsTab, CalendarTab, OccurrencesTab } from "../dp";
 import {
   normalizeCompany, normalizeEmployee, normalizeMovement, normalizeOverview, normalizeProcess, normalizeVersion, requestJson,
 } from "./operations.api";
@@ -22,6 +23,9 @@ type Row = Record<string, unknown>;
 
 const tabs: Array<{ id: OperationTab; label: string; icon: typeof Gauge }> = [
   { id: "overview", label: "Visão da competência", icon: Gauge },
+  /* O calendário do mês, as ocorrências fora do corte e os alertas do Sankhya
+     moravam no "DP Operacional", outra janela sobre o mesmo mês (§4.44). */
+  { id: "calendario", label: "Calendário", icon: CalendarClock },
   { id: "movements", label: "Movimentações", icon: UsersRound },
   { id: "approvals", label: "Aprovações", icon: UserCheck },
   { id: "closing", label: "Fechamento", icon: ClipboardCheck },
@@ -44,12 +48,18 @@ const isoDate = (value: string) => { if (!value) return "—"; const date = new 
 const competenceLabel = (value: string) => { const [year, month] = value.split("-"); if (!year || !month) return value; return new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(new Date(Number(year), Number(month) - 1, 1)); };
 const daysUntil = (value: string) => value ? Math.ceil((new Date(`${value.slice(0, 10)}T12:00:00`).getTime() - Date.now()) / 86400000) : null;
 
-export function OperationsView({ role }: { role: WorkspaceRole }) {
+export function OperationsView({ role, initialTab = "", canManageDp = false }: {
+  role: WorkspaceRole;
+  /** Aba pedida pelo endereço (`?aba=`) ou por uma tela que foi absorvida. */
+  initialTab?: string;
+  /** Pode mexer no calendário, nas ocorrências e nos alertas do DP. */
+  canManageDp?: boolean;
+}) {
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
   const [companyId, setCompanyId] = useState("");
   const [competence, setCompetence] = useState(currentCompetence);
   const [data, setData] = useState<OverviewPayload | null>(null);
-  const [tab, setTab] = useState<OperationTab>("overview");
+  const [tab, setTab] = useState<OperationTab>(() => tabs.find((item) => item.id === initialTab)?.id ?? "overview");
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [versions, setVersions] = useState<ProcessVersion[]>([]);
   const [libraryProcesses, setLibraryProcesses] = useState<ProcessDefinition[]>([]);
@@ -252,7 +262,17 @@ export function OperationsView({ role }: { role: WorkspaceRole }) {
         {tab === "approvals" && <ApprovalsPanel approvals={data?.approvals ?? []} canDecide={Boolean(data?.permissions.decideApprovals)} onDecide={(approval) => setEditor({ kind: "approval", approval })} />}
         {tab === "closing" && <ClosingPanel items={data?.closingItems ?? []} canManage={Boolean(data?.permissions.manageCompetences)} onStatus={(id, status) => void patchStatus("closing", id, status)} />}
         {tab === "obligations" && <ObligationsPanel items={data?.obligations ?? []} canManage={Boolean(data?.permissions.manageObligations && cycle)} onCreate={() => setEditor({ kind: "obligation" })} onStatus={(id, status) => void patchStatus("obligation", id, status)} />}
-        {tab === "pending" && <PendingPanel items={data?.pendingItems ?? []} canManage={Boolean(data?.permissions.managePending && cycle)} onCreate={() => setEditor({ kind: "pending" })} onResolve={(item, status) => setEditor({ kind: "pending-resolution", item, status })} />}
+        {tab === "calendario" && <CalendarTab canManage={canManageDp} />}
+        {/* Uma aba para tudo o que está pendurado no mês: as pendências da
+            competência, as demandas que chegaram fora do corte e o que o
+            Sankhya sinalizou. Eram três telas para a mesma pergunta. */}
+        {tab === "pending" && <div className={styles.pendingStack}>
+          <section aria-labelledby="pending-competence"><h3 id="pending-competence" className={styles.pendingTitle}>Pendências da competência</h3>
+          <PendingPanel items={data?.pendingItems ?? []} canManage={Boolean(data?.permissions.managePending && cycle)} onCreate={() => setEditor({ kind: "pending" })} onResolve={(item, status) => setEditor({ kind: "pending-resolution", item, status })} />
+          </section>
+          <section aria-labelledby="pending-cutoff"><h3 id="pending-cutoff" className={styles.pendingTitle}>Fora do prazo de corte</h3><OccurrencesTab canManage={canManageDp} /></section>
+          <section aria-labelledby="pending-alerts"><h3 id="pending-alerts" className={styles.pendingTitle}>Alertas do Sankhya</h3><AlertsTab canManage={canManageDp} /></section>
+        </div>}
         {tab === "library" && <LibraryPanel processes={libraryProcesses.length ? libraryProcesses : data?.processes ?? []} versions={versions} canManage={Boolean(data?.permissions.manageProcesses)} canPublish={Boolean(data?.permissions.publishProcesses && role === "admin")} onCreate={() => setEditor({ kind: "process" })} onVersion={(process) => setEditor({ kind: "process-version", process })} onPublish={(process, version) => setEditor({ kind: "process-publish", process, version })} />}
       </div>
 

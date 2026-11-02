@@ -77,10 +77,13 @@ export const processGroups: readonly ProcessGroup[] = [
     label: "Operação DP",
     description: "O trabalho do dia, competências, demandas e agenda do departamento pessoal.",
     kind: "process",
-    /* "Meu trabalho" entra primeiro e vira a porta do processo (§46, §48): a
-       primeira pergunta de quem abre o Vinculato é "o que eu preciso fazer
-       agora?", e a resposta estava espalhada por quatro telas. */
-    views: ["work", "dpOperations", "processes", "board", "portfolio", "inbox", "planner"],
+    /* Três telas, no modelo do Trello (§4.44 de
+       `docs/arquitetura-operacional.md`): o quadro é onde se trabalha, o
+       fechamento é onde se acompanha o mês, os relatórios são onde se presta
+       contas. Eram sete janelas, e cinco delas respondiam a mesma pergunta —
+       "o que é meu hoje?" — em lugares diferentes. As telas que saíram do menu
+       continuam existindo por baixo e estão em `absorbedViews`, abaixo. */
+    views: ["board", "processes", "indicators"],
   },
   {
     id: "pagamento-pj",
@@ -156,8 +159,8 @@ export const processGroups: readonly ProcessGroup[] = [
   },
   {
     id: "analise",
-    label: "Relatórios e integrações",
-    description: "Indicadores da operação, conexões com os sistemas de origem e a automação que lê deles.",
+    label: "Integrações",
+    description: "Conexões com os sistemas de origem, a automação que lê deles, a triagem e o histórico.",
     kind: "support",
     /* Triagem e Agentes moram aqui, e não no menu principal (§48): quem opera o
        dia a dia raramente precisa delas, e um item de menu que quase ninguém
@@ -165,9 +168,72 @@ export const processGroups: readonly ProcessGroup[] = [
     /* O histórico entra aqui, e não na Operação DP: é consulta e prestação de
        contas, não trabalho do dia. Quem opera abre o quadro; quem audita abre a
        trilha, e raramente. */
-    views: ["indicators", "integrations", "triage", "agents", "history"],
+    views: ["integrations", "triage", "agents", "history"],
   },
 ] as const;
+
+/**
+ * Telas que saíram do menu porque foram absorvidas por outra.
+ *
+ * O Trello tem um lugar de trabalho só — o quadro — e o que o Vinculato tinha
+ * em janelas separadas, ele tem como filtro, visão ou painel lateral desse
+ * quadro: "meus cartões" é filtro, calendário é visão, a caixa de entrada e o
+ * planejador abrem ao lado. A Operação DP tinha sete janelas, e a pergunta "o
+ * que é meu hoje?" respondia em cinco delas.
+ *
+ * Cada tela absorvida tem um destino, e o endereço antigo leva até ele — um
+ * link de três meses atrás, um favorito ou um e-mail do Motor de Prazos abre o
+ * lugar novo, não a visão geral.
+ */
+export type AbsorbedTarget = {
+  /** A tela que recebeu o conteúdo. */
+  view: "board" | "processes" | "indicators";
+  /** Seção das Configurações, quando o destino é configuração e não trabalho. */
+  settings?: "portfolio" | "routines";
+  /** Aba da tela de destino (`?aba=`). */
+  tab?: string;
+  /** Recorte do quadro: `me` é quem está olhando. */
+  assignee?: "me";
+  due?: "week";
+  mode?: "calendar";
+  /** Painel lateral do quadro. */
+  panel?: "entrada" | "agenda" | "comigo";
+};
+
+export const absorbedViews: Readonly<Record<string, AbsorbedTarget>> = {
+  /* "Meu trabalho" tinha duas metades: as demandas de quem olha, que são o
+     quadro recortado em "Minhas", e o resto que está com ela fora do quadro —
+     aprovação, exame vencendo, EPI, triagem, falha de integração —, que abre
+     ao lado no painel "Comigo". */
+  work: { view: "board", assignee: "me", panel: "comigo" },
+  /* A semana do analista é o mesmo recorte, só que da semana. */
+  dpOperations: { view: "board", assignee: "me", due: "week" },
+  portfolio: { view: "board", settings: "portfolio" },
+  inbox: { view: "board", panel: "entrada" },
+  planner: { view: "board", panel: "agenda" },
+};
+
+/**
+ * Para onde vai uma tela absorvida, considerando a aba que o endereço pedia.
+ *
+ * O DP Operacional tinha seis abas e cada uma foi para um lugar: a semana e o
+ * calendário de prazos viraram recortes do quadro, o calendário do mês e as
+ * ocorrências e alertas foram para o fechamento, o painel para os relatórios
+ * e as rotinas para as configurações.
+ */
+export function absorbedTarget(view: ProcessNavView, tab = ""): AbsorbedTarget | null {
+  const base = absorbedViews[view];
+  if (!base) return null;
+  if (view !== "dpOperations") return base;
+  switch (tab) {
+    case "calendario": return { view: "processes", tab: "calendario" };
+    case "ocorrencias":
+    case "alertas": return { view: "processes", tab: "pending" };
+    case "painel": return { view: "indicators" };
+    case "rotinas": return { view: "board", settings: "routines" };
+    default: return base;
+  }
+}
 
 /** Um bloco de destinos dentro de um processo, com o próprio rótulo. */
 export type ProcessSection = {
@@ -260,7 +326,7 @@ export function hasSubNavigation(group: Pick<ProcessGroup, "views">) {
  */
 export function viewsWithoutProcess(allViews: readonly ProcessNavView[]) {
   const mapped = new Set(processGroups.flatMap((group) => group.views));
-  return allViews.filter((view) => view !== workspaceHomeView && !mapped.has(view));
+  return allViews.filter((view) => view !== workspaceHomeView && !mapped.has(view) && !absorbedViews[view]);
 }
 
 /** Telas de um grupo que não existem no catálogo — o erro pelo outro lado. */

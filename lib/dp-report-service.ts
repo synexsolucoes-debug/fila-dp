@@ -35,7 +35,7 @@ export async function sendMonthlyDpReport(d1: Database, input: {
   const data = await loadMonthlyReportData(d1, { workspaceId: input.workspaceId, period, today: input.today });
   const pdf = buildMonthlyReportPdf(data, input.today);
   const baseUrl = String(process.env.FDP_APP_URL ?? "").trim().replace(/\/$/u, "");
-  const html = monthlyReportEmailHtml(data, baseUrl ? `${baseUrl}/painel/dp?aba=painel` : "");
+  const html = monthlyReportEmailHtml(data, baseUrl ? `${baseUrl}/painel/indicadores` : "");
 
   // Registra antes de enviar: com o índice único, duas execuções concorrentes
   // não mandam o mesmo relatório duas vezes.

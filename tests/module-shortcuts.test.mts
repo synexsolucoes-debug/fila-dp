@@ -73,7 +73,10 @@ test("o atalho não fura permissão: o recorte é o mesmo do menu (§30)", () =>
      a decisão de acesso continuar sendo uma só. Quem aplica é o painel, com o
      mesmo `visibleViews` que monta o menu. Se este filtro sumir, um destino
      favoritado antes de o plano mudar continua aparecendo. */
-  assert.match(shell, /const visible = new Set\(visibleViews\);/u);
+  /* O recorte continua sendo o do menu, e agora também tira as telas
+     absorvidas (§4.44): o favorito antigo de "Meu trabalho" não vira atalho
+     para uma janela que saiu do menu. */
+  assert.match(shell, /const visible = new Set\(visibleViews\.filter\(\(id\) => !absorbedTarget\(id\)\)\);/u);
   assert.match(shell, /shortcuts\.favorites\.filter\(\(id\): id is View => visible\.has\(id as View\)\)/u);
   assert.match(shell, /visible\.has\(id as View\) && !fixed\.has\(id\)/u);
 });

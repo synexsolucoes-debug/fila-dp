@@ -1917,6 +1917,68 @@ demanda (`replaceCardRelations`) aceita como responsável um membro sem acesso
 à empresa da demanda, e a notificação de responsável leva o título. O
 importador já filtra; a criação manual ainda não.
 
+### 4.44 Operação DP no modelo do Trello: de sete janelas para três telas
+
+**O problema.** A Operação DP tinha sete janelas no menu (Meu trabalho, DP
+Operacional, Operação DP, Demandas, Carteira, Inbox, Planner) e mais de 25
+abas e visões dentro delas. A mesma pergunta respondia em vários lugares:
+"o que é meu hoje?" em cinco, "o que vence quando?" em quatro, "como está a
+operação?" em cinco. "Operação DP" era o nome do módulo e de uma janela
+dentro dele, e "DP Operacional" era outra janela.
+
+**O modelo.** O Trello tem um lugar de trabalho — o quadro. "Meus cartões" é
+filtro, calendário e tabela são o mesmo quadro visto de outro jeito, e a
+caixa de entrada e o planejador abrem ao lado. A Operação DP passou a ter:
+
+| Tela | O que absorveu |
+| --- | --- |
+| **Quadro** (`/painel/demandas`) | Demandas, Meu trabalho, Minha semana, Inbox, Planner e os calendários de prazo |
+| **Fechamento do mês** (`/painel/operacao`) | O cockpit da competência, mais o calendário do mês, as ocorrências fora do corte e os alertas do Sankhya |
+| **Relatórios** (`/painel/indicadores`) | Os indicadores, mais o painel da gestão do DP |
+
+Carteira e Rotinas e regras de corte foram para **Configurações**: são o que
+se ajusta de vez em quando, não o que se faz todo dia.
+
+**O quadro.**
+- Quatro formas de ver: Equipe (coluna por pessoa), Etapas, Lista e
+  Calendário. "Minha fila" e "Processo" eram recortes vestidos de modo; viraram
+  o filtro "Minhas" e o filtro de tipo de processo.
+- Recortes no topo: Minhas, Sem responsável, Atrasadas, Hoje, Esta semana.
+  `responsavel=me` no endereço é quem está olhando — o mesmo link serve para a
+  equipe inteira.
+- Três painéis ao lado (`?painel=`): **Comigo fora do quadro** (a metade
+  não-demanda do antigo Meu trabalho: aprovação, exame, treinamento, EPI,
+  triagem, falha de integração — `WorkCenterView outsideBoard`), **Entrada**
+  (a Inbox) e **Agenda** (o Planner).
+
+**Fechamento do mês.** Uma aba "Calendário" e uma aba "Pendências" que junta
+as pendências da competência, as ocorrências fora do prazo de corte e os
+alertas do Sankhya — eram três telas para a mesma pergunta.
+
+**Endereços antigos.** `lib/process-navigation.ts` (`absorbedViews`,
+`absorbedTarget`) diz para onde foi cada janela, e
+`app/painel/[[...secao]]/page.tsx` redireciona (`absorbedPath`):
+`/painel/trabalho` → quadro em "Minhas" com o painel Comigo;
+`/painel/dp?aba=alertas` → pendências do fechamento; `/painel/carteira` →
+Configurações → Carteira; `/painel/entradas` e `/painel/planner` → quadro com o
+painel aberto. Os links internos (Central de Trabalho, relatório mensal por
+e-mail, alerta do DP) já apontam para o destino novo. Atalho favorito de tela
+absorvida deixa de aparecer.
+
+**Defeito corrigido no caminho.** O efeito que mantém o endereço em dia
+reescrevia a barra antes de o quadro ler a consulta, e todo link com recorte
+(`?situacao=…`, `?responsavel=…`) abria o quadro inteiro. O quadro passou a ler
+a consulta guardada na montagem.
+
+**Corte de conteúdo em notebook.** As portas Módulos, Sistema PJ e ERP DP do
+topo passam a mostrar só o ícone abaixo de 1400px (o nome fica no `aria-label`
+e na dica). Elas empurravam a página 7px (1366×768) e 73px (1280×720) para fora
+da coluna, o que a verificação de navegador acusava desde a #257.
+
+**O que saiu do código.** `QueueBoard`, `DpOperationsView` e `WeekTab`, que
+ficaram sem quem os renderize. A rota `/api/dp/week` continua existindo, sem
+tela que a chame.
+
 ### 4.33 DP Operacional, Fase 1 — carteira e atribuição automática
 
 O DP opera dezenas de CNPJs com dois ou três analistas e nenhuma coordenação

@@ -180,9 +180,14 @@ export function filterDemands(
       || (filters.due === "week" && prazo >= hoje && prazo < semana)
       || (filters.due === "overdue" && card.slaStatus === "overdue");
     const dono = responsibleName(card);
+    /* `me` é quem está olhando (§4.44): é o que torna "Minhas" um link que
+       serve para a equipe inteira, em vez de um endereço com o nome de uma
+       pessoa só. Sem saber quem olha, "minhas" não é ninguém — e um recorte
+       vazio é mais honesto que mostrar o quadro inteiro como se fosse dela. */
+    const alvo = filters.assignee === "me" ? context.currentMemberName || "\u0000" : filters.assignee;
     const donoCombina = filters.assignee === "all"
-      || (filters.assignee === "none" ? dono === "" : dono === filters.assignee
-        || card.assignees.some((assignee) => assignee.name === filters.assignee));
+      || (filters.assignee === "none" ? dono === "" : dono === alvo
+        || card.assignees.some((assignee) => assignee.name === alvo));
     return donoCombina
       && (filters.sla === "all" || card.slaStatus === filters.sla)
       && (filters.companyId === "all" || card.companyId === filters.companyId)
@@ -649,7 +654,11 @@ export const SAVED_VIEWS_LIMIT = 12;
 /** Presets que todo grupo de DP usa, sem ninguém precisar montá-los. */
 export function presetViews(currentMemberName: string): Array<{ id: string; label: string; filters: Partial<DemandFilters>; mode?: BoardViewMode }> {
   return [
-    { id: "minha-fila", label: "Minha fila", mode: "queue", filters: { assignee: currentMemberName || "all" } },
+    /* "Minhas" é filtro, como os "meus cartões" do Trello, e não um modo de
+       ver: ele recorta o que estiver na tela — equipe, etapas, lista ou
+       calendário. Era as duas coisas, e a palavra "Minha fila" aparecia duas
+       vezes na mesma barra. */
+    { id: "minhas", label: "Minhas", filters: { assignee: currentMemberName ? "me" : "all" } },
     { id: "sem-responsavel", label: "Sem responsável", filters: { assignee: "none" } },
     { id: "atrasadas", label: "Atrasadas", filters: { sla: "overdue" } },
     { id: "hoje", label: "Hoje", filters: { due: "today" } },

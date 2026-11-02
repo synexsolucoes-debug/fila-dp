@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { chatGPTSignOutPath, requireChatGPTUser } from "../../chatgpt-auth";
 import { WorkspaceApp } from "../WorkspaceApp";
-import { panelPath, parsePanelPath } from "@/lib/panel-routes";
+import { redirect } from "next/navigation";
+import { absorbedPath, panelPath, parsePanelPath } from "@/lib/panel-routes";
 import {
   parseResolvedTheme, parseThemePreference, resolveTheme,
   THEME_COOKIE, THEME_SYSTEM_COOKIE,
@@ -54,6 +55,11 @@ export default async function DashboardPage({ params, searchParams }: PanelPageP
   if (empresa) consulta.set("empresa", empresa);
   if (aba) consulta.set("aba", aba);
   const location = parsePanelPath(pathname, consulta.toString());
+  /* Tela que saiu do menu (§4.44): o endereço antigo leva ao lugar novo — o
+     link de três meses atrás abre onde o conteúdo está hoje, e não a visão
+     geral. Redireciona antes da autenticação: o destino é que pede o login. */
+  const moved = absorbedPath(location.view, aba, empresa);
+  if (moved) redirect(moved);
 
   const user = await requireChatGPTUser(panelPath(location));
 

@@ -368,6 +368,18 @@ async function auditBoardSurfaces(prefix) {
     await page.waitForTimeout(400);
   }
 
+  /* Os painéis ao lado do quadro (§4.44): Comigo, Entrada e Agenda eram
+     janelas do menu e eram auditados como telas. Agora abrem no quadro, e
+     uma tela que a varredura não abre é uma tela que ninguém mediu. */
+  const paineis = page.locator('[aria-label="Painéis ao lado do quadro"] > button');
+  for (const rotulo of (await paineis.allInnerTexts()).map((t) => t.trim().split("\n")[0]).filter(Boolean)) {
+    await paineis.filter({ hasText: rotulo }).first().click().catch(() => undefined);
+    await page.waitForTimeout(1200);
+    await audit(`${prefix} › painel ${rotulo}`, null);
+    await paineis.filter({ hasText: rotulo }).first().click().catch(() => undefined);
+    await page.waitForTimeout(400);
+  }
+
   const cartao = page.locator('[class*="cardTitle"]').first();
   if (await cartao.count() === 0) return;
   await cartao.click().catch(() => undefined);
@@ -453,14 +465,14 @@ async function auditPanelViews(theme = "") {
     const entrada = `Painel › ${rotulo}${nomes[0] ? ` › ${nomes[0]}` : ""}${sufixo}`;
     await audit(entrada, null);
     await auditModuleTabs(entrada);
-    if (nomes[0] === "Demandas") await auditBoardSurfaces(`Painel › Demandas${sufixo}`);
+    if (nomes[0] === "Quadro") await auditBoardSurfaces(`Painel › Quadro${sufixo}`);
 
     for (const nome of nomes.slice(1)) {
       await modulos.filter({ hasText: nome }).first().click().catch(() => undefined);
       await page.waitForTimeout(900);
       await audit(`Painel › ${rotulo} › ${nome}${sufixo}`, null);
       await auditModuleTabs(`Painel › ${nome}${sufixo}`);
-      if (nome === "Demandas") await auditBoardSurfaces(`Painel › Demandas${sufixo}`);
+      if (nome === "Quadro") await auditBoardSurfaces(`Painel › Quadro${sufixo}`);
     }
     await page.keyboard.press("Escape").catch(() => undefined);
   }

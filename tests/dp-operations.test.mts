@@ -280,7 +280,9 @@ test("Central de Trabalho: alerta do DP é fonte, atribuída ao responsável, e 
   assert.match(mine.sql, /AND a\.assigned_user_id = \?/u);
   assert.deepEqual(mine.parameters, ["ws", "u1"]);
   assert.equal(workItemHref("dp_alert", "a1", "emp-1"), "/painel/cadastros/emp-1");
-  assert.equal(workItemHref("dp_alert", "a1"), "/painel/dp?aba=alertas");
+  // O DP Operacional deixou de ser janela (§4.44): os alertas moram nas
+  // pendências do Fechamento do mês.
+  assert.equal(workItemHref("dp_alert", "a1"), "/painel/operacao?aba=pending");
 });
 
 /* ------------------------------------------------------------------ */

@@ -44,7 +44,7 @@ test("a estrutura por processo é decidida num módulo puro, não no componente"
   // Sem React nem ícone: um módulo puro é o que permite testar a estrutura sem
   // montar a árvore, e o que impede o menu de virar a quinta lista paralela.
   assert.doesNotMatch(nav, /from "react"|lucide-react/u);
-  assert.match(source, /import \{ hasSubNavigation, isContractorOnly, visibleContractorSections, visibleProcessGroups \} from "@\/lib\/process-navigation"/u);
+  assert.match(source, /import \{ absorbedTarget, hasSubNavigation, isContractorOnly, visibleContractorSections, visibleProcessGroups \} from "@\/lib\/process-navigation"/u);
   // O componente não pode ter uma segunda cópia da estrutura.
   assert.doesNotMatch(source, /const navSections/u, "a lista por departamento não pode voltar");
   assert.doesNotMatch(catalog, /section: "/u, "a seção por departamento saiu do catálogo");
@@ -74,10 +74,19 @@ test("toda tela pertence a exatamente um processo, e todo processo aponta para t
 });
 
 test("a Operação DP e os Pagamentos agrupam o que a §26 pede junto", async () => {
-  const { groupOfView } = await import("../lib/process-navigation.ts");
-  // O exemplo literal da §26: demandas, inbox e planner sob a operação.
-  for (const view of ["board", "inbox", "planner", "processes"]) {
-    assert.equal(groupOfView(view)?.id, "operacao-dp", `${view} deveria estar na Operação DP`);
+  const { groupOfView, processGroups, absorbedTarget } = await import("../lib/process-navigation.ts");
+  /* §4.44: três telas, no modelo do Trello — o quadro, o fechamento do mês e
+     os relatórios. Eram sete janelas, cinco delas respondendo "o que é meu
+     hoje?". */
+  assert.deepEqual(processGroups.find((group) => group.id === "operacao-dp")?.views, ["board", "processes", "indicators"]);
+  /* A Inbox e o Planner da §26 continuam sob a operação: abrem ao lado do
+     quadro, como a caixa de entrada e o planejador do Trello. */
+  assert.deepEqual(absorbedTarget("inbox"), { view: "board", panel: "entrada" });
+  assert.deepEqual(absorbedTarget("planner"), { view: "board", panel: "agenda" });
+  // "Meu trabalho": as demandas no filtro "Minhas", o resto no painel ao lado.
+  assert.deepEqual(absorbedTarget("work"), { view: "board", assignee: "me", panel: "comigo" });
+  for (const view of ["work", "dpOperations", "portfolio", "inbox", "planner"]) {
+    assert.equal(groupOfView(view), null, `${view} foi absorvida e não pode voltar a ser item de menu`);
   }
   // E a competência de PJ deixa de atravessar três seções: é um processo só,
   // separado dos outros pagamentos.
@@ -94,9 +103,9 @@ test("um processo sem tela alcançável não vira item de menu (§30)", async ()
   const { visibleProcessGroups, hasSubNavigation } = await import("../lib/process-navigation.ts");
   // Papel sem acesso a EPI, plano sem os módulos de pagamento: os processos
   // somem inteiros em vez de virarem pastas vazias.
-  const grupos = visibleProcessGroups(["overview", "board", "inbox"]);
+  const grupos = visibleProcessGroups(["overview", "board", "processes"]);
   assert.deepEqual(grupos.map((group) => group.id), ["operacao-dp"]);
-  assert.deepEqual(grupos[0].views, ["board", "inbox"], "o recorte precisa alcançar os módulos, não só o grupo");
+  assert.deepEqual(grupos[0].views, ["board", "processes"], "o recorte precisa alcançar os módulos, não só o grupo");
   assert.deepEqual(visibleProcessGroups(["overview"]), [], "sem módulo nenhum, não há processo a mostrar");
 
   // Subnavegação com uma aba só é ruído: um processo recortado a um módulo

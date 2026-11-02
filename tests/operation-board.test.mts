@@ -455,7 +455,10 @@ test("a varredura de acessibilidade alcança a gaveta e os recortes do quadro", 
   assert.match(script, /async function auditBoardSurfaces/u);
   assert.match(script, /gaveta da demanda/u);
   assert.match(script, /recorte \$\{rotulo\}/u);
-  assert.match(script, /auditBoardSurfaces\(`Painel › Demandas\$\{sufixo\}`\)/u);
+  // O módulo passou a se chamar "Quadro" (§4.44), e os painéis ao lado dele
+  // — Comigo, Entrada e Agenda — entram na mesma varredura.
+  assert.match(script, /auditBoardSurfaces\(`Painel › Quadro\$\{sufixo\}`\)/u);
+  assert.match(script, /painel \$\{rotulo\}/u);
 });
 
 test("o quadro não escreve cor à mão: a identidade vem dos tokens", async () => {

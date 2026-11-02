@@ -79,10 +79,12 @@ test("ships operational foundations for boards, attachments, planner, reports an
   assert.match(dashboard, /boardMode === "kanban"/u);
   assert.match(dashboard, /boardMode === "table"/u);
   assert.match(dashboard, /boardMode === "calendar"/u);
-  /* E os dois que a Operação DP acrescentou: o quadro por responsável e a fila
-     de uma pessoa. */
+  /* E o que a Operação DP acrescentou: o quadro por responsável. A "fila de
+     uma pessoa" virou o filtro "Minhas" (§4.44), e o link antigo com
+     `modo=queue` cai no quadro por responsável já recortado. */
   assert.match(dashboard, /boardMode === "team"/u);
-  assert.match(dashboard, /boardMode === "queue"/u);
+  assert.doesNotMatch(dashboard, /boardMode === "queue"/u);
+  assert.match(dashboard, /if \(raw === "queue"\) return "team";/u);
   assert.match(dashboard, /Editor No-Code/);
   assert.match(dashboard, /Bloco de tempo/);
   assert.match(dashboard, /Pausar SLA/);

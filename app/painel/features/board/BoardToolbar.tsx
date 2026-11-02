@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   Archive, BookmarkPlus, CalendarDays, Columns3, Focus, LayoutList, Search,
-  Settings2, SlidersHorizontal, Star, Users, Workflow, X, type LucideIcon,
+  Settings2, SlidersHorizontal, Users, X, type LucideIcon,
 } from "lucide-react";
 import type { BoardList, Company, WorkspaceMember } from "@/lib/fila-dp-types";
 import {
@@ -13,10 +13,12 @@ import {
 import styles from "./board.module.css";
 
 const MODES: Array<{ id: BoardViewMode; label: string; icon: LucideIcon; hint: string }> = [
+  /* Quatro formas de ver o mesmo quadro, como o Trello (quadro, tabela,
+     calendário) mais a coluna por pessoa que o DP pergunta às oito da manhã.
+     "Minha fila" virou o filtro "Minhas" e "Processo" é o filtro de tipo de
+     processo: eram recortes vestidos de modo (§4.44). */
   { id: "team", label: "Equipe", icon: Users, hint: "Colunas por responsável" },
-  { id: "queue", label: "Minha fila", icon: Star, hint: "Atrasadas, hoje, próximas e aguardando" },
-  { id: "kanban", label: "Situação", icon: Columns3, hint: "Colunas por etapa do quadro" },
-  { id: "process", label: "Processo", icon: Workflow, hint: "Agrupado por tipo de processo" },
+  { id: "kanban", label: "Etapas", icon: Columns3, hint: "Colunas por etapa do quadro" },
   { id: "table", label: "Lista", icon: LayoutList, hint: "Tabela operacional" },
   { id: "calendar", label: "Calendário", icon: CalendarDays, hint: "Por data de vencimento" },
 ];
@@ -264,6 +266,7 @@ export function BoardToolbar(props: BoardToolbarProps) {
               <select value={filters.assignee} onChange={(event) => set({ assignee: event.target.value })}>
                 <option value="all">Todos</option>
                 <option value="none">Sem responsável</option>
+                {props.currentMemberName && <option value="me">Minhas</option>}
                 {props.members
                   .filter((member) => member.role === "admin" || member.role === "member")
                   .map((member) => <option key={member.userId} value={member.name}>{member.name}</option>)}

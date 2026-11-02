@@ -26,6 +26,8 @@
  * `/painel/pj` sem o módulo liberado leva à mesma recusa explicada de sempre.
  */
 
+import { absorbedTarget } from "./process-navigation.ts";
+
 export const panelViews = [
   "overview", "work", "board", "inbox", "planner", "processManagement", "processes",
   "auxiliary", "psychologistPayments", "contractorPayments", "contractorProviders",
@@ -105,6 +107,7 @@ const PATH_VIEWS = (Object.entries(VIEW_PATHS) as Array<[PanelView, string]>)
 
 export const settingsSections = [
   "general", "companies", "columns", "team", "security", "fields", "templates", "sla", "automations",
+  "portfolio", "routines",
 ] as const;
 export type PanelSettingsSection = typeof settingsSections[number];
 
@@ -118,6 +121,11 @@ const SETTINGS_PATHS: Record<PanelSettingsSection, string> = {
   templates: "modelos",
   sla: "sla",
   automations: "automacoes",
+  /* Carteira e rotinas são configuração da operação, não trabalho do dia: quem
+     responde por cada empresa e o que se repete todo mês. Saíram do menu da
+     Operação DP (§4.44). */
+  portfolio: "carteira",
+  routines: "rotinas",
 };
 
 const SETTINGS_BY_PATH = new Map(
@@ -229,10 +237,36 @@ export function employeePath(employeeId: string, recordTab: EmployeeRecordTab | 
   return panelPath({ view: "registrations", recordId: employeeId, recordTab });
 }
 
+/**
+ * O endereço novo de uma tela absorvida (§4.44), ou `null` se a tela não foi.
+ *
+ * O endereço antigo continua sendo entendido — `/painel/trabalho`,
+ * `/painel/dp?aba=alertas`, `/painel/carteira` — e a página o redireciona para
+ * cá. O recorte do quadro vai nos mesmos parâmetros que o quadro já lê.
+ */
+export function absorbedPath(view: PanelView, tab = "", companyId = ""): string | null {
+  const target = absorbedTarget(view, tab);
+  if (!target) return null;
+  const empresa = clean(companyId);
+  if (target.settings) {
+    return panelPath({ settings: target.settings === "portfolio" ? "portfolio" : "routines", companyId: empresa });
+  }
+  const [path, query = ""] = panelPath({ view: target.view, companyId: empresa }).split("?");
+  const parameters = new URLSearchParams(query);
+  if (target.assignee) parameters.set("responsavel", target.assignee);
+  if (target.due) parameters.set("prazo", target.due);
+  if (target.mode) parameters.set("modo", target.mode);
+  if (target.panel) parameters.set("painel", target.panel);
+  if (target.tab) parameters.set("aba", target.tab);
+  const search = parameters.toString();
+  return search ? `${path}?${search}` : path;
+}
+
 /** Os endereços que o produto promete; usado pela verificação de navegador. */
 export function panelRoutes(): string[] {
   return [
-    ...panelViews.map((view) => panelPath({ view })),
+    /* Tela absorvida não é endereço prometido: ela redireciona. */
+    ...panelViews.filter((view) => !absorbedTarget(view)).map((view) => panelPath({ view })),
     ...settingsSections.map((settings) => panelPath({ settings })),
   ];
 }

@@ -8,6 +8,7 @@ import {
 import { EmptyState, ErrorBanner, LoadingState, PanelHeader } from "../shared";
 import { ActionCenter } from "../action-center";
 import type { ActionTarget } from "@/lib/action-center";
+import { workItemSources } from "@/lib/work-items";
 import { dueLabel, formatDateTime, normalizeWorkPayload, requestJson } from "./work.api";
 import type { WorkItem, WorkPayload } from "./work.types";
 import styles from "./work.module.css";
@@ -62,8 +63,18 @@ const PRIORITIES = [
   { key: "low", label: "Baixa" },
 ];
 
-function buildQuery(filters: Filters, cursor: string) {
+/**
+ * Fontes de tudo o que não é demanda.
+ *
+ * No painel "Comigo", ao lado do quadro (§4.44), a demanda já está na tela —
+ * no filtro "Minhas". Mostrá-la de novo ao lado era a repetição que a
+ * consolidação existe para acabar; o painel mostra só o que o quadro não mostra.
+ */
+const OUTSIDE_BOARD = workItemSources.map((source) => source.key).filter((key) => key !== "card").join(",");
+
+function buildQuery(filters: Filters, cursor: string, outsideBoard = false) {
   const search = new URLSearchParams();
+  if (outsideBoard && !filters.source) search.set("fontes", OUTSIDE_BOARD);
   search.set("escopo", filters.scope);
   if (filters.sort) search.set("ordem", filters.sort);
   if (filters.group) search.set("agrupar", filters.group);
@@ -77,8 +88,10 @@ function buildQuery(filters: Filters, cursor: string) {
   return search.toString();
 }
 
-export function WorkCenterView({ onOpenCompanyFilter, onNavigate, companyId }: {
+export function WorkCenterView({ onOpenCompanyFilter, onNavigate, companyId, outsideBoard = false }: {
   onOpenCompanyFilter?: (companyId: string) => void;
+  /** Painel ao lado do quadro: só o que não é demanda. */
+  outsideBoard?: boolean;
   /** Destino de cada pendência da central de ação. */
   onNavigate?: (target: ActionTarget) => void;
   /** Empresa do recorte do topo; vazio = todas as autorizadas. */
@@ -100,7 +113,7 @@ export function WorkCenterView({ onOpenCompanyFilter, onNavigate, companyId }: {
     const token = ++requestId.current;
     if (quiet) setRefreshing(true); else setLoading(true);
     try {
-      const data = await requestJson<Record<string, unknown>>(`/api/work?${buildQuery(next, "")}`);
+      const data = await requestJson<Record<string, unknown>>(`/api/work?${buildQuery(next, "", outsideBoard)}`);
       // Resposta de um pedido antigo não pode sobrescrever o atual: quem troca
       // dois filtros rápido veria a lista do primeiro.
       if (token !== requestId.current) return;
@@ -115,7 +128,7 @@ export function WorkCenterView({ onOpenCompanyFilter, onNavigate, companyId }: {
     } finally {
       if (token === requestId.current) { setLoading(false); setRefreshing(false); }
     }
-  }, []);
+  }, [outsideBoard]);
 
   /* O carregamento é adiado para o quadro seguinte, e não disparado no corpo do
      efeito: assim a primeira pintura acontece antes da rede, e trocar dois
@@ -130,14 +143,14 @@ export function WorkCenterView({ onOpenCompanyFilter, onNavigate, companyId }: {
     if (!cursor || loadingMore) return;
     setLoadingMore(true);
     try {
-      const data = await requestJson<Record<string, unknown>>(`/api/work?${buildQuery(filters, cursor)}`);
+      const data = await requestJson<Record<string, unknown>>(`/api/work?${buildQuery(filters, cursor, outsideBoard)}`);
       const normalized = normalizeWorkPayload(data);
       setItems((current) => [...current, ...normalized.items]);
       setCursor(normalized.nextCursor);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível carregar mais itens.");
     } finally { setLoadingMore(false); }
-  }, [cursor, filters, loadingMore]);
+  }, [cursor, filters, loadingMore, outsideBoard]);
 
   const update = useCallback(<K extends keyof Filters>(key: K, value: Filters[K]) => {
     setFilters((current) => ({ ...current, [key]: value }));
@@ -207,7 +220,7 @@ export function WorkCenterView({ onOpenCompanyFilter, onNavigate, companyId }: {
         <span>Tipo</span>
         <select value={filters.source} onChange={(event) => update("source", event.target.value)}>
           <option value="">Todos os tipos</option>
-          {(payload?.sources ?? []).map((source) => <option key={source.key} value={source.key}>{source.label}</option>)}
+          {(payload?.sources ?? []).filter((source) => !outsideBoard || source.key !== "card").map((source) => <option key={source.key} value={source.key}>{source.label}</option>)}
         </select>
       </label>
 

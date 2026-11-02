@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
-  defaultPanelLocation, demandPath, employeePath, panelPath, panelRoutes, panelViews,
+  absorbedPath, defaultPanelLocation, demandPath, employeePath, panelPath, panelRoutes, panelViews,
   parsePanelPath, settingsSections,
 } from "../lib/panel-routes.ts";
 
@@ -137,7 +137,10 @@ test("configurações têm porta na navegação, e não só atrás do avatar (§
 
 test("a lista de rotas prometidas cobre visões e configurações", () => {
   const routes = panelRoutes();
-  assert.equal(routes.length, panelViews.length + settingsSections.length);
+  // Tela absorvida (§4.44) não é rota prometida: ela redireciona.
+  const absorvidas = panelViews.filter((view) => absorbedPath(view) !== null);
+  assert.deepEqual(absorvidas.sort(), ["dpOperations", "inbox", "planner", "portfolio", "work"]);
+  assert.equal(routes.length, panelViews.length - absorvidas.length + settingsSections.length);
   assert.ok(routes.includes("/painel/demandas"));
   assert.ok(routes.includes("/painel/configuracoes/seguranca"));
 });
@@ -181,4 +184,35 @@ test("a lista de telas do painel tem uma fonte só, e as duas cópias não podem
     "tela com endereço e sem entrada em `View`: o painel não sabe renderizá-la");
   assert.deepEqual(soNaTela, [],
     "tela em `View` e sem endereço: ninguém consegue abri-la por link");
+});
+
+/* §4.44: a Operação DP passou de sete janelas para três telas. O endereço
+   antigo continua sendo entendido e leva ao lugar que absorveu a janela —
+   um favorito, um e-mail do relatório mensal ou um link mandado no Teams há
+   três meses abre onde o conteúdo está hoje. */
+test("o endereço de uma janela absorvida leva ao lugar novo, com o recorte certo", () => {
+  assert.equal(absorbedPath("work"), "/painel/demandas?responsavel=me&painel=comigo");
+  assert.equal(absorbedPath("dpOperations"), "/painel/demandas?responsavel=me&prazo=week");
+  assert.equal(absorbedPath("dpOperations", "calendario"), "/painel/operacao?aba=calendario");
+  assert.equal(absorbedPath("dpOperations", "alertas"), "/painel/operacao?aba=pending");
+  assert.equal(absorbedPath("dpOperations", "ocorrencias"), "/painel/operacao?aba=pending");
+  assert.equal(absorbedPath("dpOperations", "painel"), "/painel/indicadores");
+  assert.equal(absorbedPath("dpOperations", "rotinas"), "/painel/configuracoes/rotinas");
+  assert.equal(absorbedPath("portfolio"), "/painel/configuracoes/carteira");
+  assert.equal(absorbedPath("inbox"), "/painel/demandas?painel=entrada");
+  assert.equal(absorbedPath("planner"), "/painel/demandas?painel=agenda");
+  // A empresa escolhida vai junto: o recorte não se perde no redirecionamento.
+  assert.equal(absorbedPath("work", "", "co-1"), "/painel/demandas?empresa=co-1&responsavel=me&painel=comigo");
+  // Tela que não foi absorvida não redireciona.
+  assert.equal(absorbedPath("board"), null);
+  assert.equal(absorbedPath("processes"), null);
+});
+
+test("os endereços antigos continuam sendo lidos, e a página os redireciona", async () => {
+  assert.equal(parsePanelPath("/painel/trabalho").view, "work");
+  assert.equal(parsePanelPath("/painel/carteira").view, "portfolio");
+  assert.equal(parsePanelPath("/painel/configuracoes/carteira").settings, "portfolio");
+  assert.equal(parsePanelPath("/painel/configuracoes/rotinas").settings, "routines");
+  const page = await readFile(new URL("../app/painel/[[...secao]]/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /const moved = absorbedPath\(location\.view, aba, empresa\);\s*\n\s*if \(moved\) redirect\(moved\);/u);
 });

@@ -1,4 +1,4 @@
-export type OperationTab = "overview" | "movements" | "approvals" | "closing" | "obligations" | "pending" | "library";
+export type OperationTab = "overview" | "calendario" | "movements" | "approvals" | "closing" | "obligations" | "pending" | "library";
 export type CycleStatus = "open" | "pre_closing" | "processing" | "post_closing" | "closed";
 export type WorkStatus = "pending" | "in_progress" | "blocked" | "completed";
 export type MovementStatus = "draft" | "pending_approval" | "approved" | "rejected" | "applied" | "canceled";

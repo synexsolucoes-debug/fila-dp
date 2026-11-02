@@ -93,7 +93,7 @@ page.on("response", (resposta) => {
  * O menu agrupa os módulos pelo processo a que pertencem, e os do segundo
  * nível só existem no DOM enquanto o processo está aberto. Esta verificação
  * clicava direto em "Demandas" e "Relatórios" — que agora só aparecem depois
- * de abrir "Operação DP" e "Relatórios e integrações". Sem isto, sete
+ * de abrir "Operação DP". Sem isto, sete
  * conferências reprovavam por não achar o botão, e nenhuma delas era sobre o
  * menu: eram sobre exportação de CSV e persistência de demanda.
  *
@@ -248,8 +248,18 @@ if (password && await emailField.count()) {
      Vinculato, vê o que precisa fazer, e chega ao item certo. Se a Central
      abrir vazia por erro de consulta, ou se o filtro não recortar, isso só
      aparece no navegador — a rota devolveria 200 nos dois casos. */
+  /* "Meu trabalho" deixou de ser janela (§4.44): o endereço antigo leva ao
+     quadro recortado em "Minhas", com o painel "Comigo fora do quadro" aberto
+     ao lado. O link de três meses atrás precisa continuar chegando. */
+  await page.goto(`${base}/painel/trabalho`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(1500);
+  const destino = new URL(page.url());
+  record("o endereço antigo de Meu trabalho abre o quadro com o painel Comigo",
+    destino.pathname === "/painel/demandas" && destino.searchParams.get("painel") === "comigo"
+      && await page.locator("aside.board-side-panel[data-panel='comigo']").count() > 0,
+    `${destino.pathname}${destino.search}`);
+
   for (const [rota, titulo] of [
-    ["/painel/trabalho", /está comigo hoje/iu],
     ["/painel/triagem", /não teve certeza/iu],
     ["/painel/agentes", /Automação sob controle/iu],
   ]) {
@@ -261,7 +271,7 @@ if (password && await emailField.count()) {
       `${new URL(page.url()).pathname} · ${cabecalho.slice(0, 3).join(" | ").slice(0, 80)}`);
   }
 
-  await page.goto(`${base}/painel/trabalho`, { waitUntil: "networkidle" });
+  await page.goto(`${base}/painel/demandas?painel=comigo`, { waitUntil: "networkidle" });
   await page.waitForTimeout(1500);
   record("a Central de Trabalho oferece escopo, tipo, prazo e ordenação (§6, §7)",
     await page.getByRole("button", { name: /^Meus itens$/u }).count() > 0
@@ -498,7 +508,7 @@ if (password) {
     // A home e um processo: em 1366 a home cabia e o cockpit de fechamento
     // não, então medir só a primeira tela deixaria metade do defeito passar.
     let corte = await medir();
-    await abrirModulo("Operação DP", "Visão geral");
+    await abrirModulo("Operação DP", "Fechamento do mês");
     await page.waitForTimeout(1400);
     corte = Math.max(corte, await medir());
     record(`o painel não corta conteúdo em ${width}x${height}`, corte >= 0 && corte <= 2, `${corte}px além da coluna`);
@@ -586,7 +596,7 @@ if (password) {
       if (request.url().includes("/api/dashboard/action-center")) chamadasTrabalho.push(request.url());
     };
     page.on("request", escutaTrabalho);
-    await page.goto(`${base}/painel/trabalho`, { waitUntil: "networkidle" });
+    await page.goto(`${base}/painel/demandas?painel=comigo`, { waitUntil: "networkidle" });
     await page.waitForTimeout(1200);
     await page.getByLabel("Selecionar empresa").selectOption(vazia).catch(() => undefined);
     await page.waitForTimeout(2000);
@@ -606,7 +616,7 @@ if (password) {
 if (password) {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${base}/painel`, { waitUntil: "domcontentloaded" });
-  await abrirModulo("Relatórios e integrações", "Relatórios");
+  await abrirModulo("Operação DP", "Relatórios");
   await page.waitForTimeout(1800);
 
   const linhasDoCsv = async () => {
@@ -672,7 +682,7 @@ if (password) {
 if (password) {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${base}/painel`, { waitUntil: "domcontentloaded" });
-  await abrirModulo("Operação DP", "Demandas");
+  await abrirModulo("Operação DP", "Quadro");
   await page.waitForTimeout(1500);
 
   const titulo = `Ensaio de ponta a ponta ${Date.now()}`;
@@ -695,7 +705,7 @@ if (password) {
   // de procurar. Sem isso a conferência mediria "o título aparece na primeira
   // tela que carregar", que não é a pergunta.
   await page.reload({ waitUntil: "domcontentloaded" });
-  await abrirModulo("Operação DP", "Demandas");
+  await abrirModulo("Operação DP", "Quadro");
   await page.waitForTimeout(2500);
   const depoisDoReload = await page.getByText(titulo, { exact: false }).count();
   record("a demanda sobrevive à recarga da página", depoisDoReload > 0, `${depoisDoReload} ocorrência(s)`);

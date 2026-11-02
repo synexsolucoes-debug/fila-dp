@@ -43,9 +43,11 @@ const launch = existsSync(`${browsersRoot}/chromium`) ? { executablePath: `${bro
 /** As telas que o produto usa todo dia — não a lista inteira. */
 const TELAS = [
   ["Visão geral", "/painel"],
-  ["Demandas", "/painel/demandas"],
+  ["Quadro", "/painel/demandas"],
   ["Processos", "/painel/processos"],
-  ["Meu trabalho", "/painel/trabalho"],
+  /* "Meu trabalho" virou o painel "Comigo" ao lado do quadro (§4.44). */
+  ["Quadro com o painel Comigo", "/painel/demandas?responsavel=me&painel=comigo"],
+  ["Fechamento do mês", "/painel/operacao"],
   ["Ponto e jornada", "/painel/ponto"],
   ["Configurações", "/painel/configuracoes"],
 ];

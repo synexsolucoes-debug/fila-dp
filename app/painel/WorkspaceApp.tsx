@@ -75,11 +75,11 @@ import { ArrowLeftRight,
 import { VinculatoLogo } from "@/app/components/VinculatoLogo";
 import { HistoryView } from "./features/history/HistoryView";
 import { PortfolioView } from "./features/portfolio";
-import { DpOperationsView } from "./features/dp";
+import { DashboardTab, SettingsTab } from "./features/dp";
 import type { ActivityEvent, Card, CardAttachment, InboxItem, ProcessFlowSummary, WorkspaceRole, WorkspaceSnapshot } from "@/lib/fila-dp-types";
 import type { ActionTarget } from "@/lib/action-center";
 import { RULE_TRIGGERS, RULE_TRIGGER_LABELS } from "@/lib/automation-rules";
-import { hasSubNavigation, isContractorOnly, visibleContractorSections, visibleProcessGroups } from "@/lib/process-navigation";
+import { absorbedTarget, hasSubNavigation, isContractorOnly, visibleContractorSections, visibleProcessGroups } from "@/lib/process-navigation";
 import { ModuleLauncher, type LauncherModule } from "./features/shared/ModuleLauncher";
 import { PRIORITY_LABELS } from "@/lib/work-items";
 import { demandNextAction } from "@/lib/demand-dashboard";
@@ -114,9 +114,9 @@ import { TrelloImportPanel } from "./features/boards/TrelloImportPanel";
 import { PayrollMovementsPanel } from "./features/payroll/PayrollMovementsPanel";
 import { DemandDeadlineView } from "./features/work/DemandViews";
 import {
-  BoardIndicators, BoardToolbar, BulkBar, QueueBoard, TeamBoard,
+  BoardIndicators, BoardToolbar, BulkBar, TeamBoard,
   activeFilterCount, demandIndicators, filterDemands, operationalAlerts,
-  applyAssigneeOptimistically, boardViewModes, parseSavedViews, readBoardFilters,
+  applyAssigneeOptimistically, parseSavedViews, readBoardFilters,
   responsibleColumns, slaReading, toggleIndicator, writeBoardFilters,
   SAVED_VIEWS_LIMIT,
   type BoardAlert, type BoardContext, type BulkAction, type DemandFilters, type DemandSort,
@@ -132,7 +132,22 @@ type View = "overview" | "work" | "board" | "inbox" | "planner" | "processManage
    é o quadro por responsável — o modo principal —, o segundo é a fila de uma
    pessoa separada por urgência. Os quatro antigos continuam porque cada um
    responde uma pergunta que os novos não respondem. */
-type BoardMode = "team" | "queue" | "kanban" | "table" | "calendar" | "process";
+type BoardMode = "team" | "kanban" | "table" | "calendar";
+const boardPanelTitle = { entrada: "Entrada", agenda: "Agenda", comigo: "Comigo fora do quadro" } as const;
+
+/**
+ * Modo do quadro a partir do que veio de fora — endereço ou visualização salva.
+ *
+ * "Minha fila" e "Processo" deixaram de ser modo (§4.44): eram recortes, e
+ * agora são o filtro "Minhas" e o filtro de tipo de processo. Um link ou uma
+ * visualização salva de antes ainda abre — no quadro equivalente, e não num
+ * modo que não existe mais.
+ */
+function boardModeFrom(raw: unknown): BoardMode {
+  if (raw === "queue") return "team";
+  if (raw === "process") return "kanban";
+  return raw === "kanban" || raw === "table" || raw === "calendar" ? raw : "team";
+}
 type BoardDensity = "comfortable" | "compact";
 type BoardGroupBy = "none" | "company" | "assignee";
 /* A ordem do quadro. "Mais recentes" e "mais antigas" chegaram com a Operação
@@ -145,7 +160,7 @@ type BoardSort = DemandSort;
 type OverviewFocusTarget = "board" | "processManagement" | "processes" | "integrations" | "history";
 
 type CardTab = "details" | "process" | "checklist" | "attachments" | "sheet" | "activity";
-type SettingsSection = "general" | "companies" | "columns" | "team" | "security" | "fields" | "templates" | "sla" | "automations";
+type SettingsSection = "general" | "companies" | "columns" | "team" | "security" | "fields" | "templates" | "sla" | "automations" | "portfolio" | "routines";
 
 /**
  * Cada seção de configuração precisa de um cabeçalho próprio.
@@ -171,6 +186,10 @@ const settingsSectionMeta: Record<SettingsSection, { group: string; title: strin
   templates: { group: "OPERAÇÃO", title: "Modelos", description: "Checklists e SLA prontos para abrir uma demanda sem esquecer etapas." },
   sla: { group: "OPERAÇÃO", title: "SLA e calendário", description: "Expediente, feriados e metas de prazo por processo." },
   automations: { group: "OPERAÇÃO", title: "Automações", description: "Regras que reagem automaticamente aos eventos das demandas." },
+  /* Saíram do menu da Operação DP (§4.44): são o que se ajusta de vez em
+     quando, não o que se faz todo dia. */
+  portfolio: { group: "OPERAÇÃO", title: "Carteira", description: "Quem responde por cada empresa: titular, backup e ausências da equipe." },
+  routines: { group: "OPERAÇÃO", title: "Rotinas e regras de corte", description: "Demandas que se repetem todo mês e o prazo de corte de cada processo." },
 };
 
 /* O menu lateral das configurações escrito como dado, e não como sete botões
@@ -203,6 +222,10 @@ const settingsNavGroups: Array<{ label: string; sections: Array<{ section: Setti
     { section: "templates", icon: ClipboardCheck, hint: "Checklists prontos", adminOnly: true },
     { section: "sla", icon: CalendarClock, hint: "Expediente e feriados", adminOnly: true },
     { section: "automations", icon: Workflow, hint: "Regras automáticas", adminOnly: true },
+    /* Abertas a quem opera: a carteira e as rotinas se consultam; quem pode
+       mudar é decidido dentro da seção, pela mesma permissão de antes. */
+    { section: "portfolio", icon: Briefcase, hint: "Responsável por empresa", adminOnly: false },
+    { section: "routines", icon: CalendarCheck2, hint: "Recorrências e corte", adminOnly: false },
   ] },
   { label: "CONTA", sections: [
     { section: "security", icon: Smartphone, hint: "Dispositivos e sessões", adminOnly: false },
@@ -405,13 +428,15 @@ const viewCatalog: Record<View, ViewEntry> = {
     ownHeader: true,
   },
   board: {
-    label: "Demandas", icon: ListChecks,
+    /* "Quadro", como no Trello (§4.44): é o lugar onde se trabalha, e a
+       palavra diz isso melhor que "Demandas", que é o que está dentro dele. */
+    label: "Quadro", icon: ListChecks,
     /* O título é o mesmo nome do item de menu, de propósito. O menu dizia
        "Demandas", a trilha dizia "Quadro de demandas" e o título repetia a
        trilha: três nomes para uma tela só, e a palavra "quadro" ainda por cima
        colidindo com o seletor de quadro que mora dentro dela. */
-    eyebrow: "DEMANDAS", title: "Demandas",
-    description: "Acompanhe as execuções do seu departamento.",
+    eyebrow: "OPERAÇÃO DP", title: "Quadro",
+    description: "Todas as demandas do departamento. Filtre por suas, sem responsável ou atrasadas; a entrada e a agenda abrem ao lado.",
     primaryAction: { label: "Nova demanda", kind: "card" },
   },
   inbox: {
@@ -432,9 +457,9 @@ const viewCatalog: Record<View, ViewEntry> = {
     description: "Desenhe, documente, versione e publique processos BPMN ligados às áreas, empresas e responsabilidades do grupo.",
   },
   processes: {
-    label: "Operação DP", icon: ClipboardCheck, module: "processes",
-    eyebrow: "OPERAÇÃO DO DP", title: "Cockpit de fechamento",
-    description: "Coordene competências, gates, aprovações e obrigações. A admissão digital permanece integralmente na Sólides.",
+    label: "Fechamento do mês", icon: ClipboardCheck, module: "processes",
+    eyebrow: "OPERAÇÃO DP", title: "Fechamento do mês",
+    description: "Competência, calendário, movimentações, aprovações, obrigações e tudo o que está pendente no mês. A admissão digital permanece integralmente na Sólides.",
     primaryAction: { label: "Nova demanda", kind: "card" },
   },
   payrollLedger: {
@@ -1035,6 +1060,14 @@ export function WorkspaceApp({
      — quem está com o quê, e o que não tem dono —, e abrir por etapa fazia
      essa resposta custar um clique todos os dias. */
   const [boardMode, setBoardMode] = useState<BoardMode>("team");
+  /* Painel ao lado do quadro: a Caixa de entrada e a Agenda, como no Trello
+     (§4.44). Eram janelas do menu; agora abrem sem sair do quadro, que é onde
+     a solicitação vira demanda e o prazo vira bloco de agenda. */
+  const [boardPanel, setBoardPanel] = useState<"entrada" | "agenda" | "comigo" | null>(null);
+  const inboxPending = useMemo(() => (snapshot?.inbox ?? []).filter((item) => item.status === "new").length, [snapshot?.inbox]);
+  /* Aba do Fechamento do mês. Vem do endereço (`?aba=`) ou de uma tela
+     absorvida — o "Calendário" e os "Alertas" do antigo DP Operacional. */
+  const [operationsTab, setOperationsTab] = useState(initialLocation.view === "processes" ? initialViewTab ?? "" : "");
   /* Como o quadro é lido, e não o que ele mostra.
      Densidade, agrupamento e ordenação são preferências de leitura: não mudam
      o recorte (isso é filtro) nem o formato (isso é `boardMode`), mudam o
@@ -1085,7 +1118,22 @@ export function WorkspaceApp({
      vez de exigir que cada um lembre de fechar. */
   const setView = useCallback((next: View) => {
     setAdministrationOpen(false);
-    setViewState(next);
+    /* Tela que saiu do menu (§4.44) leva ao lugar que a absorveu. Quem chama
+       com "work" ou "inbox" — um link da visão geral, a central de trabalho,
+       o assistente — chega ao destino novo já recortado, sem precisar saber
+       que a janela antiga deixou de existir. A carteira e as rotinas, que
+       foram para as Configurações, só se alcançam pelo endereço, que a página
+       redireciona; aqui elas caem no quadro em vez de abrir a Administração
+       por um segundo caminho. */
+    const moved = absorbedTarget(next);
+    setViewState(moved ? moved.view : next);
+    if (moved) {
+      if (moved.assignee) setAssigneeFilter(moved.assignee);
+      if (moved.due) setDueFilter(moved.due);
+      if (moved.mode) setBoardMode(moved.mode);
+      setBoardPanel(moved.panel ?? null);
+      if (moved.tab) setOperationsTab(moved.tab);
+    }
     /* Sair do quadro desfaz a seleção. Voltar meia hora depois e encontrar doze
        demandas ainda marcadas é o caminho mais curto para uma ação em massa
        aplicada no conjunto errado. */
@@ -1371,15 +1419,26 @@ export function WorkspaceApp({
    * mexesse.
    */
   const boardLocationApplied = useRef(false);
+  /* A consulta como ela chegou, guardada na montagem. O efeito que mantém o
+     endereço em dia roda antes do quadro adiado e reescreve a barra com o
+     estado inicial — sem recorte —, então ler `window.location` no quadro
+     encontrava a consulta já apagada: `/painel/trabalho`, redirecionado para
+     `?responsavel=me&painel=comigo`, abria o quadro inteiro e sem painel. */
+  const arrivalSearch = useRef(typeof window === "undefined" ? "" : window.location.search);
   useEffect(() => {
     if (boardLocationApplied.current) return;
     boardLocationApplied.current = true;
     const frame = window.requestAnimationFrame(() => {
-      const busca = window.location.search;
+      const busca = arrivalSearch.current;
       if (!busca) return;
-      applyBoardFilters(readBoardFilters(busca));
-      const modo = new URLSearchParams(busca).get("modo");
-      if (boardViewModes.includes(modo as BoardMode)) setBoardMode(modo as BoardMode);
+      const parametros = new URLSearchParams(busca);
+      const modo = parametros.get("modo");
+      const filtros = readBoardFilters(busca);
+      /* O link antigo de "Minha fila" vira o filtro "Minhas". */
+      applyBoardFilters(modo === "queue" && filtros.assignee === "all" ? { ...filtros, assignee: "me" } : filtros);
+      if (modo) setBoardMode(boardModeFrom(modo));
+      const painel = parametros.get("painel");
+      if (painel === "entrada" || painel === "agenda" || painel === "comigo") setBoardPanel(painel);
     });
     return () => window.cancelAnimationFrame(frame);
   }, [applyBoardFilters]);
@@ -1505,9 +1564,10 @@ export function WorkspaceApp({
     const [caminho, consulta = ""] = base.split("?");
     const parametros = writeBoardFilters(boardFilters, new URLSearchParams(consulta));
     if (boardMode !== "team") parametros.set("modo", boardMode); else parametros.delete("modo");
+    if (boardPanel) parametros.set("painel", boardPanel); else parametros.delete("painel");
     const query = parametros.toString();
     return query ? `${caminho}?${query}` : caminho;
-  }, [view, cardModalOpen, selectedCardId, administrationOpen, settingsSection, companyFilter, boardFilters, boardMode]);
+  }, [view, cardModalOpen, selectedCardId, administrationOpen, settingsSection, companyFilter, boardFilters, boardMode, boardPanel]);
 
   useEffect(() => {
     const here = `${window.location.pathname}${window.location.search}`;
@@ -1527,8 +1587,10 @@ export function WorkspaceApp({
          Horizonte" — mudava o endereço e não mudava nada na tela. */
       if (next.view === "board") {
         applyBoardFilters(readBoardFilters(window.location.search));
-        const modo = new URLSearchParams(window.location.search).get("modo");
-        setBoardMode(boardViewModes.includes(modo as BoardMode) ? modo as BoardMode : "team");
+        const parametros = new URLSearchParams(window.location.search);
+        setBoardMode(boardModeFrom(parametros.get("modo")));
+        const painel = parametros.get("painel");
+        setBoardPanel(painel === "entrada" || painel === "agenda" || painel === "comigo" ? painel : null);
       }
       setAdministrationOpen(Boolean(next.settings));
       if (next.settings) setSettingsSection(next.settings as SettingsSection);
@@ -1982,7 +2044,9 @@ export function WorkspaceApp({
      favoritado antes de o plano mudar não pode continuar aparecendo. */
   const shortcuts = useShortcuts(view, Boolean(snapshot));
   const shortcutViews = useMemo(() => {
-    const visible = new Set(visibleViews);
+    /* Tela absorvida não vira atalho (§4.44): o favorito antigo de "Meu
+       trabalho" apontaria para uma janela que não existe mais no menu. */
+    const visible = new Set(visibleViews.filter((id) => !absorbedTarget(id)));
     const favorites = shortcuts.favorites.filter((id): id is View => visible.has(id as View));
     // O recente não repete o que já está fixado: o atalho apareceria duas vezes
     // na mesma coluna, e a segunda não acrescenta nada.
@@ -2835,7 +2899,11 @@ export function WorkspaceApp({
                 seção que a pessoa não tem. Para quem não é administrador,
                 "Pessoas e acesso" e "Operação" somem inteiros. */}
             {settingsNavGroups
-              .map((group) => ({ ...group, sections: group.sections.filter((item) => isAdmin || !item.adminOnly) }))
+              .map((group) => ({ ...group, sections: group.sections.filter((item) => (isAdmin || !item.adminOnly)
+                /* Carteira e rotinas dependem do módulo que as tinha no menu: sem
+                   ele no plano, a seção abriria numa recusa. */
+                && (item.section !== "portfolio" || visibleViews.includes("portfolio"))
+                && (item.section !== "routines" || visibleViews.includes("dpOperations"))) }))
               .filter((group) => group.sections.length > 0)
               .flatMap((group) => [
               <span className="settings-nav-label" key={group.label}>{group.label}</span>,
@@ -3015,6 +3083,8 @@ export function WorkspaceApp({
             {settingsSection === "templates" && <TemplatesSettings snapshot={snapshot} busy={busy} isAdmin={isAdmin} onCatalog={updateCatalog} onConfirm={requestConfirmation} onUseTemplate={(id) => { setAdministrationOpen(false); openFromTemplate(id); }} />}
             {settingsSection === "sla" && <SlaSettings snapshot={snapshot} busy={busy} isAdmin={isAdmin} onCatalog={updateCatalog} />}
             {settingsSection === "automations" && <RulesSettings snapshot={snapshot} busy={busy} isAdmin={isAdmin} onCatalog={updateCatalog} onConfirm={requestConfirmation} />}
+            {settingsSection === "portfolio" && <PortfolioView canManage={hasCapability(snapshot.workspace.role, "portfolio.manage")} />}
+            {settingsSection === "routines" && <SettingsTab canManage={hasCapability(snapshot.workspace.role, "portfolio.manage")} />}
           </div>
         </div>
   </> : null;
@@ -3590,7 +3660,10 @@ export function WorkspaceApp({
 
           {view === "processManagement" && <ProcessManagementView role={snapshot.workspace.role} />}
 
-          {view === "processes" && <OperationsView role={snapshot.workspace.role} />}
+          {/* A chave remonta a tela quando outra a abre numa aba específica —
+              sem ela, "Alertas" levaria ao fechamento na aba em que ele estava. */}
+          {view === "processes" && <OperationsView key={operationsTab} role={snapshot.workspace.role} initialTab={operationsTab}
+            canManageDp={hasCapability(snapshot.workspace.role, "portfolio.manage")} />}
 
           {view === "auxiliary" && <AuxiliaryModulesView role={snapshot.workspace.role} />}
 
@@ -3603,10 +3676,6 @@ export function WorkspaceApp({
 
           {view === "epi" && <EpiControlView role={snapshot.workspace.role} />}
 
-          {view === "portfolio" && <PortfolioView canManage={hasCapability(snapshot.workspace.role, "portfolio.manage")} />}
-
-          {view === "dpOperations" && <DpOperationsView canManage={hasCapability(snapshot.workspace.role, "portfolio.manage")}
-            initialTab={initialLocation.view === "dpOperations" ? initialViewTab : ""} />}
 
           {view === "safety" && <WorkAccidentDashboardView />}
           {view === "payrollLedger" && (
@@ -3621,9 +3690,6 @@ export function WorkspaceApp({
           {/* As três centrais operacionais. Elas são camadas de leitura sobre o
               que já existe: nenhuma delas cria objeto de trabalho novo, e cada
               item que mostram é resolvido na tela do módulo dono dele. */}
-          {view === "work" && <WorkCenterView onOpenCompanyFilter={(companyId) => setCompanyFilter(companyId || "all")}
-            onNavigate={(target) => setView(target)} companyId={companyFilter === "all" ? "" : companyFilter} />}
-
           {view === "triage" && <TriageView initialItemId={initialLocation.view === "triage" ? initialLocation.recordId : ""} />}
 
           {view === "agents" && <AgentsView />}
@@ -3652,7 +3718,7 @@ export function WorkspaceApp({
                 filters={boardFilters}
                 onFilters={applyBoardFilters}
                 mode={boardMode}
-                onMode={setBoardMode}
+                onMode={(mode) => setBoardMode(boardModeFrom(mode))}
                 sort={boardSort}
                 onSort={setBoardSort}
                 companies={snapshot.companies}
@@ -3663,7 +3729,7 @@ export function WorkspaceApp({
                 currentMemberName={currentMemberName}
                 savedViews={savedViews}
                 onSaveView={saveCurrentBoardView}
-                onApplyView={(view_) => { applyBoardFilters(view_.filters); setBoardMode(view_.mode); }}
+                onApplyView={(view_) => { applyBoardFilters(view_.filters); setBoardMode(boardModeFrom(view_.mode)); }}
                 onRemoveView={removeBoardView}
                 focusMode={focusMode}
                 onFocusMode={setFocusMode}
@@ -3681,66 +3747,85 @@ export function WorkspaceApp({
                   teclado passar por um contêiner vazio antes de chegar neles.
                   O `-1` mantém o painel alcançável por programa, que é o que a
                   aba precisa para apontar para ele. */}
-              <div id="board-view-panel" role="tabpanel" tabIndex={-1} aria-labelledby={`board-mode-${boardMode}`} className="board-view-panel">
-              {boardMode === "team" && <TeamBoard
-                cards={filteredActiveCards}
-                members={snapshot.members}
-                stageNames={stageNames}
-                sort={boardSort}
-                canEdit={canEdit}
-                now={boardNow}
-                selection={boardSelection}
-                filtered={activeBoardFilters > 0}
-                onOpen={openCard}
-                onToggleSelect={toggleCardSelection}
-                onAssign={(cardId, userId, name) => void assignCard(cardId, userId, name)}
-                onQuickAssign={(card) => { openCard(card); focusCardField("card-assignees"); }}
-                onQuickComment={(card) => { openCard(card); setCardTab("activity"); }}
-                onQuickDue={(card) => { openCard(card); focusCardField("card-due-at"); }}
-              />}
+              {/* A caixa de entrada e a agenda abrem ao lado do quadro, como no
+                  Trello (§4.44). Eram janelas próprias no menu: a solicitação
+                  saía da Inbox para virar demanda num lugar que a pessoa não
+                  estava vendo, e o prazo ia para a agenda numa terceira tela. */}
+              <div className="board-side-toggles" role="group" aria-label="Painéis ao lado do quadro">
+                {/* O que está com a pessoa fora do quadro: aprovação, exame,
+                    EPI, triagem, falha. Era a metade não-demanda do "Meu
+                    trabalho"; a outra metade é o filtro "Minhas". */}
+                {visibleViews.includes("work") && <button type="button" aria-pressed={boardPanel === "comigo"} data-active={boardPanel === "comigo" || undefined}
+                  onClick={() => setBoardPanel((atual) => atual === "comigo" ? null : "comigo")}>
+                  <ClipboardList aria-hidden="true" />Comigo fora do quadro
+                </button>}
+                {visibleViews.includes("inbox") && <button type="button" aria-pressed={boardPanel === "entrada"} data-active={boardPanel === "entrada" || undefined}
+                  onClick={() => setBoardPanel((atual) => atual === "entrada" ? null : "entrada")}>
+                  <Inbox aria-hidden="true" />Entrada{inboxPending > 0 && <b aria-label={`${inboxPending} aguardando`}>{inboxPending}</b>}
+                </button>}
+                {visibleViews.includes("planner") && <button type="button" aria-pressed={boardPanel === "agenda"} data-active={boardPanel === "agenda" || undefined}
+                  onClick={() => setBoardPanel((atual) => atual === "agenda" ? null : "agenda")}>
+                  <CalendarDays aria-hidden="true" />Agenda
+                </button>}
+              </div>
 
-              {boardMode === "queue" && <QueueBoard
-                cards={filteredActiveCards}
-                context={boardContext}
-                stageNames={stageNames}
-                canEdit={canEdit}
-                now={boardNow}
-                selection={boardSelection}
-                onOpen={openCard}
-                onToggleSelect={toggleCardSelection}
-                onQuickAssign={(card) => { openCard(card); focusCardField("card-assignees"); }}
-                onQuickComment={(card) => { openCard(card); setCardTab("activity"); }}
-                onQuickDue={(card) => { openCard(card); focusCardField("card-due-at"); }}
-              />}
+              <div className="board-workspace" data-panel={boardPanel ?? undefined}>
+                <div id="board-view-panel" role="tabpanel" tabIndex={-1} aria-labelledby={`board-mode-${boardMode}`} className="board-view-panel">
+                {boardMode === "team" && <TeamBoard
+                  cards={filteredActiveCards}
+                  members={snapshot.members}
+                  stageNames={stageNames}
+                  sort={boardSort}
+                  canEdit={canEdit}
+                  now={boardNow}
+                  selection={boardSelection}
+                  filtered={activeBoardFilters > 0}
+                  onOpen={openCard}
+                  onToggleSelect={toggleCardSelection}
+                  onAssign={(cardId, userId, name) => void assignCard(cardId, userId, name)}
+                  onQuickAssign={(card) => { openCard(card); focusCardField("card-assignees"); }}
+                  onQuickComment={(card) => { openCard(card); setCardTab("activity"); }}
+                  onQuickDue={(card) => { openCard(card); focusCardField("card-due-at"); }}
+                />}
 
-              {/* O quadro por etapa continua sendo o que sempre foi, com o
-                  arrasto que move de coluna. Ele não foi substituído: "em que
-                  pé está" é uma pergunta legítima, só não é a primeira. */}
-              {boardMode === "kanban" && (boardGroupBy === "none"
-                ? <div className="dashboard-kanban" data-density={boardDensity}>
-                    {snapshot.lists.map((list) => renderBoardColumn(list, boardLanes[0]?.cardsByList.get(list.id) ?? [], "todas"))}
-                  </div>
-                : <div className="board-lanes" data-density={boardDensity}>
-                    {boardLanes.map((lane) => <details className="board-lane" key={lane.key} open>
-                      <summary>
-                        <ChevronRight aria-hidden="true" />
-                        <strong>{lane.label}</strong>
-                        <b>{lane.total}</b>
-                      </summary>
-                      <div className="dashboard-kanban">
-                        {snapshot.lists.map((list) => renderBoardColumn(list, lane.cardsByList.get(list.id) ?? [], lane.key))}
-                      </div>
-                    </details>)}
-                    {boardLanes.length === 0 && <p className="dashboard-column-empty board-lanes-empty">Nenhuma demanda no recorte atual.</p>}
-                  </div>
-              )}
-              {boardMode === "table" && <DemandTableView cards={filteredActiveCards} lists={snapshot.lists} areas={snapshot.areas} onOpen={openCard} />}
-              {/* O calendário é o do #138: ele substituiu o `DemandCalendarView`
-                  que existia aqui, e ressuscitar o antigo seria desfazer
-                  trabalho que já está na main sem nada a ganhar. */}
-              {boardMode === "calendar" && <DemandDeadlineView cards={filteredActiveCards} lists={snapshot.lists} onOpen={openCard} />}
-              {boardMode === "process" && <ProcessTablesView cards={filteredActiveCards} lists={snapshot.lists} areas={snapshot.areas} onOpen={openCard} />}
+                {/* O quadro por etapa continua sendo o que sempre foi, com o
+                    arrasto que move de coluna. Ele não foi substituído: "em que
+                    pé está" é uma pergunta legítima, só não é a primeira. */}
+                {boardMode === "kanban" && (boardGroupBy === "none"
+                  ? <div className="dashboard-kanban" data-density={boardDensity}>
+                      {snapshot.lists.map((list) => renderBoardColumn(list, boardLanes[0]?.cardsByList.get(list.id) ?? [], "todas"))}
+                    </div>
+                  : <div className="board-lanes" data-density={boardDensity}>
+                      {boardLanes.map((lane) => <details className="board-lane" key={lane.key} open>
+                        <summary>
+                          <ChevronRight aria-hidden="true" />
+                          <strong>{lane.label}</strong>
+                          <b>{lane.total}</b>
+                        </summary>
+                        <div className="dashboard-kanban">
+                          {snapshot.lists.map((list) => renderBoardColumn(list, lane.cardsByList.get(list.id) ?? [], lane.key))}
+                        </div>
+                      </details>)}
+                      {boardLanes.length === 0 && <p className="dashboard-column-empty board-lanes-empty">Nenhuma demanda no recorte atual.</p>}
+                    </div>
+                )}
+                {boardMode === "table" && <DemandTableView cards={filteredActiveCards} lists={snapshot.lists} areas={snapshot.areas} onOpen={openCard} />}
+                {/* O calendário é o do #138: ele substituiu o `DemandCalendarView`
+                    que existia aqui, e ressuscitar o antigo seria desfazer
+                    trabalho que já está na main sem nada a ganhar. */}
+                {boardMode === "calendar" && <DemandDeadlineView cards={filteredActiveCards} lists={snapshot.lists} onOpen={openCard} />}
 
+                </div>
+                {boardPanel && <aside className="board-side-panel" data-panel={boardPanel} aria-label={boardPanelTitle[boardPanel]}>
+                  <header>
+                    <strong>{boardPanelTitle[boardPanel]}</strong>
+                    <button type="button" className="icon-button" onClick={() => setBoardPanel(null)} aria-label="Fechar painel"><X aria-hidden="true" /></button>
+                  </header>
+                  {boardPanel === "comigo" && <WorkCenterView outsideBoard onOpenCompanyFilter={(companyId) => setCompanyFilter(companyId || "all")}
+                    onNavigate={(target) => setView(target)} companyId={companyFilter === "all" ? "" : companyFilter} />}
+                  {boardPanel === "entrada" && <InboxView items={snapshot.inbox} busy={busy} canEdit={canEdit} onConvert={convertInbox} onNew={() => setInboxModalOpen(true)} />}
+                  {boardPanel === "agenda" && <PlannerView cards={activeCards} blocks={snapshot.plannerBlocks} connections={snapshot.calendarConnections} onOpen={openCard} onCreateBlock={(payload) => mutate("/api/planner/blocks", { method: "POST", body: JSON.stringify(payload) }, "Bloco adicionado ao planner.")} onDeleteBlock={(id) => mutate(`/api/planner/blocks/${id}`, { method: "DELETE" }, "Bloco removido do planner.")} onSaveConnection={(payload) => mutate("/api/calendar/connections", { method: "POST", body: JSON.stringify(payload) }, "Calendário externo configurado. A sincronização será ativada após a conexão OAuth.")} />}
+                </aside>}
               </div>
 
               {boardSelection.size > 0 && canEdit && <BulkBar
@@ -3754,9 +3839,13 @@ export function WorkspaceApp({
             </div>
           )}
 
-          {view === "inbox" && <InboxView items={snapshot.inbox} busy={busy} canEdit={canEdit} onConvert={convertInbox} onNew={() => setInboxModalOpen(true)} />}
-          {view === "planner" && <PlannerView cards={activeCards} blocks={snapshot.plannerBlocks} connections={snapshot.calendarConnections} onOpen={openCard} onCreateBlock={(payload) => mutate("/api/planner/blocks", { method: "POST", body: JSON.stringify(payload) }, "Bloco adicionado ao planner.")} onDeleteBlock={(id) => mutate(`/api/planner/blocks/${id}`, { method: "DELETE" }, "Bloco removido do planner.")} onSaveConnection={(payload) => mutate("/api/calendar/connections", { method: "POST", body: JSON.stringify(payload) }, "Calendário externo configurado. A sincronização será ativada após a conexão OAuth.")} />}
           {view === "payroll" && <PayrollView companies={snapshot.companies} metrics={snapshot.hrMetrics} busy={busy} canEdit={canEdit} onSaveMetric={saveHrMetric} onImportPayroll={(body) => mutate("/api/hr-metrics/import/pdf", { method: "POST", body }, "Extrato da folha importado e painéis atualizados.")} />}
+          {/* O painel da gestão do DP morava numa aba do "DP Operacional" e
+              repetia a pergunta que os Relatórios respondem (§4.44). */}
+          {view === "indicators" && visibleViews.includes("dpOperations")
+            && <section className="indicators-dp-panel" aria-label="Painel da gestão do DP">
+              <DashboardTab canManage={hasCapability(snapshot.workspace.role, "portfolio.manage")} />
+            </section>}
           {view === "indicators" && <IndicatorsView canExportWorkspace={isAdmin} cards={scopedCards} companyId={companyFilter === "all" ? "" : companyFilter} scopeLabel={companyFilter === "all" ? companyScopeLabel : (snapshot.companies.find((item) => item.id === companyFilter)?.tradeName || snapshot.companies.find((item) => item.id === companyFilter)?.legalName || "Empresa selecionada")} rules={snapshot.rules} busy={busy} canManageRules={isAdmin} onToggleRule={toggleRule} onExport={exportCsv} hrMetrics={snapshot.hrMetrics} companies={snapshot.companies} />}
           {/* O histórico completo (spec: "Ver histórico completo"). Carrega
               sob demanda, e não junto do snapshot: a trilha cresce sem limite,
@@ -4800,15 +4889,6 @@ function MemberEmployeeLink({ member, busy, onSave }: { member: WorkspaceSnapsho
       {member.employeeId && <button type="button" className="member-employee-unlink" disabled={busy} onClick={() => void onSave(member.userId, "")}>Remover vínculo</button>}
     </div>
   </details>;
-}
-
-function ProcessTablesView({ cards, lists, areas, onOpen }: { cards: Card[]; lists: WorkspaceSnapshot["lists"]; areas: WorkspaceSnapshot["areas"]; onOpen: (card: Card) => void }) {
-  const grouped = cards.reduce<Record<string, Card[]>>((accumulator, card) => {
-    (accumulator[card.processType] ??= []).push(card);
-    return accumulator;
-  }, {});
-  const processNames = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
-  return <div className="process-tables-view">{processNames.length === 0 && <div className="empty-view"><span>▤</span><strong>Nenhuma demanda encontrada</strong><p>Crie uma demanda para iniciar uma tabela de processo.</p></div>}{processNames.map((process) => <section key={process}><header><div><span>FLUXO ESPECÍFICO</span><strong>{process}</strong></div><b>{grouped[process].length} demanda(s)</b></header><DemandTableView cards={grouped[process]} lists={lists} areas={areas} onOpen={onOpen} /></section>)}</div>;
 }
 
 function CompanySettings({ companies, members, busy, onCreateCompany, onUpdateCompany, onDeleteCompany, onOpenAccess }: { companies: WorkspaceSnapshot["companies"]; members: WorkspaceSnapshot["members"]; busy: boolean; onCreateCompany: (payload: Record<string, unknown>) => Promise<WorkspaceSnapshot | null>; onUpdateCompany: (id: string, payload: Record<string, unknown>) => Promise<WorkspaceSnapshot | null>; onDeleteCompany: (id: string, name: string) => void; onOpenAccess: () => void }) {

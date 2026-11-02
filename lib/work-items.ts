@@ -626,7 +626,7 @@ export function workItemHref(source: WorkItemSource, id: string, employeeId?: st
     case "cat_pending": return "/painel/acidentes";
     case "position_risk_exam_missing": return employeeId ? employeePath(employeeId, "exams") : "/painel/cadastros";
     // Alerta de colaborador abre a ficha; o de empresa, a aba de alertas.
-    case "dp_alert": return employeeId ? employeePath(employeeId) : "/painel/dp?aba=alertas";
+    case "dp_alert": return employeeId ? employeePath(employeeId) : "/painel/operacao?aba=pending";
     default: return "/painel";
   }
 }

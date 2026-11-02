@@ -99,7 +99,10 @@ test("a administração do grupo fica atrás de isAdmin; a conta pessoal não", 
      de quem exige administrador continua idêntica, seção por seção. */
   const todas = grupos.flatMap((grupo) => grupo.sections);
   const pessoais = todas.filter((secao) => !secao.adminOnly).map((secao) => secao.nome);
-  assert.deepEqual(pessoais.sort(), ["general", "security"],
+  /* Carteira e rotinas vieram do menu da Operação DP (§4.44), onde quem opera
+     já as abria: quem pode mudar continua decidido dentro da seção, pela
+     permissão `portfolio.manage`. */
+  assert.deepEqual(pessoais.sort(), ["general", "portfolio", "routines", "security"],
     "uma seção de administração ficou visível para quem não é administrador do grupo");
   const administrativas = todas.filter((secao) => secao.adminOnly).map((secao) => secao.nome);
   for (const secao of ["companies", "team", "columns", "fields", "templates", "sla", "automations"]) {
@@ -108,7 +111,7 @@ test("a administração do grupo fica atrás de isAdmin; a conta pessoal não", 
   /* O filtro precisa correr sobre a seção. Se voltasse a filtrar pelo grupo, as
      marcas acima viravam enfeite: um grupo misto entregaria a seção
      administrativa junto com a pública, e nada aqui acusaria. */
-  assert.match(source, /sections: group\.sections\.filter\(\(item\) => isAdmin \|\| !item\.adminOnly\)/u);
+  assert.match(source, /sections: group\.sections\.filter\(\(item\) => \(isAdmin \|\| !item\.adminOnly\)/u);
   /* E o grupo que ficou sem seção alguma não pode restar como rótulo solto,
      anunciando uma área que a pessoa não alcança. */
   assert.match(source, /\.filter\(\(group\) => group\.sections\.length > 0\)/u);

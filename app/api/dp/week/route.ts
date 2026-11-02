@@ -45,7 +45,7 @@ export async function GET(request: Request) {
       ...alerts.results.map((row) => ({
         kind: "alert" as const, id: String(row.id), title: String(row.title), dueDay: String(row.due_day).slice(0, 10),
         detail: String(row.company_name ?? ""), priority: row.severity === "warning" ? "normal" : "high", recurring: false,
-        href: row.employee_id ? `/painel/cadastros/${encodeURIComponent(String(row.employee_id))}` : "/painel/dp?aba=alertas",
+        href: row.employee_id ? `/painel/cadastros/${encodeURIComponent(String(row.employee_id))}` : "/painel/operacao?aba=pending",
       })),
     ];
     const overdue = items.filter((item) => item.dueDay < today);
