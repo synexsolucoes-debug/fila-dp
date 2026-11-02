@@ -5,9 +5,9 @@ import {
   Archive, BookmarkPlus, CalendarDays, Columns3, Focus, LayoutList, Search,
   Settings2, SlidersHorizontal, Star, Users, Workflow, X, type LucideIcon,
 } from "lucide-react";
-import type { BoardList, Company, WorkspaceMember } from "@/lib/fila-dp-types";
+import type { BoardList, CardLabel, Company, WorkspaceMember } from "@/lib/fila-dp-types";
 import {
-  activeFilterCount, canRespondForDemands, defaultDemandFilters, presetViews,
+  STALE_FILTER_OPTIONS, activeFilterCount, canRespondForDemands, defaultDemandFilters, presetViews,
   type BoardViewMode, type DemandFilters, type DemandSort, type SavedBoardView,
 } from "./board.model";
 import styles from "./board.module.css";
@@ -42,6 +42,7 @@ export type BoardToolbarProps = {
   onSort: (sort: DemandSort) => void;
   companies: readonly Company[];
   lists: readonly BoardList[];
+  labels: readonly CardLabel[];
   members: readonly WorkspaceMember[];
   processTypes: readonly string[];
   competences: readonly string[];
@@ -294,6 +295,19 @@ export function BoardToolbar(props: BoardToolbarProps) {
                 <option value="overdue">Atrasado</option>
                 <option value="paused">Aguardando retorno</option>
                 <option value="completed">Concluído</option>
+              </select>
+            </label>
+            <label><span>Etiqueta</span>
+              <select value={filters.label} onChange={(event) => set({ label: event.target.value })}>
+                <option value="all">Todas</option>
+                {props.labels.map((label) => <option key={label.id} value={label.id}>{label.name}</option>)}
+              </select>
+            </label>
+            <label><span>Parada há</span>
+              <select value={filters.stale} onChange={(event) => set({ stale: event.target.value })}
+                title="Demandas abertas sem nenhuma alteração nesse período">
+                <option value="all">Qualquer tempo</option>
+                {STALE_FILTER_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
             </label>
             <label><span>Competência</span>

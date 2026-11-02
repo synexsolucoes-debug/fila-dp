@@ -1066,6 +1066,10 @@ export function WorkspaceApp({
   const [listFilter, setListFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [competenceFilter, setCompetenceFilter] = useState("");
+  /* Etiqueta e "parada há": os dois recortes que o Trello tem e o quadro não
+     tinha (§10 de docs/engenharia-reversa-trello.md). */
+  const [labelFilter, setLabelFilter] = useState("all");
+  const [staleFilter, setStaleFilter] = useState("all");
   /* Seleção em massa, modo foco e visualizações salvas.
      A seleção mora aqui, e não dentro do quadro, porque a barra de ações que
      ela liga é irmã do quadro e não filha dele — e porque trocar de eixo
@@ -1202,7 +1206,9 @@ export function WorkspaceApp({
     due: dueFilter,
     sla: slaFilter,
     competence: competenceFilter,
-  }), [assigneeFilter, boardQuery, companyFilter, competenceFilter, dueFilter, listFilter, priorityFilter, processFilter, slaFilter]);
+    label: labelFilter,
+    stale: staleFilter,
+  }), [assigneeFilter, boardQuery, companyFilter, competenceFilter, dueFilter, labelFilter, listFilter, priorityFilter, processFilter, slaFilter, staleFilter]);
 
   const applyBoardFilters = useCallback((next: DemandFilters) => {
     setBoardQuery(next.query);
@@ -1214,6 +1220,8 @@ export function WorkspaceApp({
     setDueFilter(next.due);
     setSlaFilter(next.sla);
     setCompetenceFilter(next.competence);
+    setLabelFilter(next.label);
+    setStaleFilter(next.stale);
   }, []);
 
   /* O que o recorte sozinho não sabe: o nome das áreas (a busca procura
@@ -1317,18 +1325,25 @@ export function WorkspaceApp({
    * mexesse.
    */
   const boardLocationApplied = useRef(false);
+  /* A consulta como chegou, guardada antes de qualquer efeito. O efeito que
+     sincroniza o endereço (mais abaixo) roda no mesmo ciclo e reescreve a URL
+     com o recorte ainda vazio; lida dentro do quadro adiado, a consulta já
+     tinha sumido, e todo link com filtro ou `?modo=` abria o quadro inteiro. */
+  const [initialBoardSearch] = useState(() => (typeof window === "undefined" ? "" : window.location.search));
   useEffect(() => {
     if (boardLocationApplied.current) return;
-    boardLocationApplied.current = true;
     const frame = window.requestAnimationFrame(() => {
-      const busca = window.location.search;
+      /* Marcado só quando aplica: no modo estrito do React o efeito roda,
+         é desfeito e roda de novo, e marcar antes cancelaria a única vez. */
+      boardLocationApplied.current = true;
+      const busca = initialBoardSearch;
       if (!busca) return;
       applyBoardFilters(readBoardFilters(busca));
       const modo = new URLSearchParams(busca).get("modo");
       if (boardViewModes.includes(modo as BoardMode)) setBoardMode(modo as BoardMode);
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [applyBoardFilters]);
+  }, [applyBoardFilters, initialBoardSearch]);
 
   /**
    * "Meus filtros": as visualizações que a pessoa salvou.
@@ -3501,6 +3516,7 @@ export function WorkspaceApp({
                 onSort={setBoardSort}
                 companies={snapshot.companies}
                 lists={snapshot.lists}
+                labels={snapshot.labels}
                 members={snapshot.members}
                 processTypes={processTypes}
                 competences={boardCompetences}

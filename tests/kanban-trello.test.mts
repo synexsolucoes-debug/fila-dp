@@ -3,7 +3,10 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { POSITION_STEP, positionBetween } from "../lib/card-position.ts";
-import { STALE_AFTER_DAYS, applyMoveOptimistically, staleDays } from "../app/painel/features/board/board.model.ts";
+import {
+  STALE_AFTER_DAYS, activeFilterCount, applyMoveOptimistically, defaultDemandFilters, filterDemands, presetViews,
+  readBoardFilters, staleDays, writeBoardFilters,
+} from "../app/painel/features/board/board.model.ts";
 import type { Card, WorkspaceSnapshot } from "../lib/fila-dp-types.ts";
 
 /**
@@ -83,4 +86,65 @@ test("reordenar na mesma coluna não conta como mover: sem evento, sem mexer no 
 test("o quadro por etapa só usa tokens do tema, sem cor fixa", async () => {
   const css = await readFile(new URL("../app/painel/features/board/kanban.module.css", import.meta.url), "utf8");
   assert.doesNotMatch(css.replace(/\/\*[\s\S]*?\*\//gu, ""), /#[0-9a-f]{3,8}\b|rgba?\(/iu);
+});
+
+/* ── Filtros por etiqueta e por parada ────────────────────────────────────── */
+
+const agora = new Date("2026-11-20T12:00:00Z");
+const rotulada = (id: string, labels: string[], updatedAt: string, slaStatus: Card["slaStatus"] = "safe") =>
+  ({ ...demanda(id, "a", { updatedAt, slaStatus }), labels: labels.map((label) => ({ id: label, name: label, color: "#000" })),
+    assignees: [], assigneeName: "", customValues: {}, checklist: [], comments: [], attachments: [] }) as unknown as Card;
+
+const lote = [
+  rotulada("nova", ["urgente-cliente"], "2026-11-19T12:00:00Z"),
+  rotulada("seis-dias", ["urgente-cliente", "documentos"], "2026-11-14T12:00:00Z"),
+  rotulada("vinte-dias", [], "2026-10-31T12:00:00Z"),
+  rotulada("concluida-velha", ["documentos"], "2026-09-01T12:00:00Z", "completed"),
+];
+const so = (filtros: Partial<typeof defaultDemandFilters>) =>
+  filterDemands(lote, { ...defaultDemandFilters, ...filtros }, undefined, agora).map((card) => card.id);
+
+test("filtro por etiqueta mostra só as demandas com aquela etiqueta", () => {
+  assert.deepEqual(so({ label: "documentos" }), ["seis-dias", "concluida-velha"]);
+  assert.deepEqual(so({ label: "urgente-cliente" }), ["nova", "seis-dias"]);
+  assert.deepEqual(so({ label: "nao-existe" }), []);
+});
+
+test("filtro de parada usa a faixa mínima e ignora concluída", () => {
+  assert.deepEqual(so({ stale: "5" }), ["seis-dias", "vinte-dias"]);
+  assert.deepEqual(so({ stale: "14" }), ["vinte-dias"]);
+  assert.deepEqual(so({ stale: "30" }), []);
+});
+
+test("valor de parada inventado no endereço não esconde o quadro inteiro", () => {
+  assert.equal(so({ stale: "abc" }).length, lote.length);
+  assert.equal(so({ stale: "-3" }).length, lote.length);
+});
+
+test("os dois filtros contam como ativos, vão para a URL e voltam dela", () => {
+  const filtros = { ...defaultDemandFilters, label: "documentos", stale: "14" };
+  assert.equal(activeFilterCount(filtros), 2);
+  const url = writeBoardFilters(filtros);
+  assert.equal(url.get("etiqueta"), "documentos");
+  assert.equal(url.get("parada"), "14");
+  const lido = readBoardFilters(url);
+  assert.equal(lido.label, "documentos");
+  assert.equal(lido.stale, "14");
+  assert.equal(writeBoardFilters(defaultDemandFilters).toString(), "");
+});
+
+test("existe o atalho 'Paradas' ao lado de 'Atrasadas'", () => {
+  const paradas = presetViews("").find((view) => view.id === "paradas");
+  assert.deepEqual(paradas?.filters, { stale: "5" });
+});
+
+test("link com filtro abre o quadro filtrado: a consulta é guardada antes de a URL ser reescrita", async () => {
+  /* O efeito que sincroniza o endereço rodava antes do quadro adiado ler a
+     consulta e a apagava; todo link com `?etiqueta=`, `?parada=` ou `?modo=`
+     abria o quadro inteiro. */
+  const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+  assert.match(app, /const \[initialBoardSearch\] = useState\(\(\) => \(typeof window === "undefined" \? "" : window\.location\.search\)\)/u);
+  const efeito = app.slice(app.indexOf("const boardLocationApplied"), app.indexOf("[applyBoardFilters, initialBoardSearch]"));
+  assert.match(efeito, /const busca = initialBoardSearch;/u);
+  assert.doesNotMatch(efeito, /window\.location\.search;\n\s*if \(!busca\)/u);
 });

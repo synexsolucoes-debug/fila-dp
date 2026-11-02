@@ -792,7 +792,7 @@ coluna e coluna recolhida.
 | 1 | ~~**Importador de quadro do Trello (JSON)**~~ — **feito** (§4.43 de `docs/arquitetura-operacional.md`). — prévia antes de gravar: lista → coluna (com `kind`/`sla_behavior` escolhidos), etiqueta → etiqueta do workspace, membro → membro (confirmado à mão), checklist → itens, campo → campo, comentários das ações, anexos como link; tipo de processo e empresa por regra (etiqueta → empresa, lista → processo) ou em lote na prévia | É o que tira o cliente do Trello; sem ele a migração é digitação | G |
 | 2 | Botões de demanda (sequência nomeada de ações, por quadro) | A automação que o DP usa de fato no Butler | M |
 | 3 | Seguir demanda + notificação a quem segue | Solicitante acompanha sem menção a cada passo | P |
-| 4 | Filtro por etiqueta e por inatividade — **em parte**: o cartão já mostra "Parada há N dias" (≥ 5 dias sem alteração, só aberta); falta o filtro | Achar a demanda esquecida dentro do prazo | P |
+| 4 | ~~Filtro por etiqueta e por inatividade~~ — **feito**: filtros "Etiqueta" e "Parada há" (5, 14 ou 30 dias sem alteração, só demanda aberta), atalho "Paradas", aviso no cartão; tudo na URL (`?etiqueta=`, `?parada=`) | Achar a demanda esquecida dentro do prazo | P |
 | 5 | Novas ações de regra: atribuir, comentar com modelo, definir prazo, preencher campo | Fecha a lacuna do executor (§11.3) | M |
 | 6 | Atalhos de teclado do quadro, com `?` mostrando a lista | Velocidade de quem vive no quadro | P |
 | 7 | Campo caixa de seleção | Tipo mais usado em Trello de DP; simplifica o importador | P |
