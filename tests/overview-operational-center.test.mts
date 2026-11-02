@@ -10,6 +10,7 @@ import {
   periodWindowStart,
   withinPeriod,
 } from "../lib/overview-period.ts";
+import { painelSource } from "./painel-source.ts";
 
 /**
  * §12–§19: a Visão geral como central operacional.
@@ -20,10 +21,9 @@ import {
  * dois recortes do topo, empresa e período (§13).
  */
 
-const painel = new URL("../app/painel/WorkspaceApp.tsx", import.meta.url);
 const dados = new URL("../lib/fila-dp-db.ts", import.meta.url);
 const tipos = new URL("../lib/fila-dp-types.ts", import.meta.url);
-const source = (await readFile(painel, "utf8")).replaceAll("\r\n", "\n");
+const source = await painelSource();
 const dbSource = await readFile(dados, "utf8");
 const typesSource = await readFile(tipos, "utf8");
 
@@ -301,9 +301,9 @@ test("a Visão geral é a central de operação da maquete, e nada além dela (�
      dentro da página, a navegação que já está na barra lateral, que é o
      "dashboard genérico" que a §93 nomeia. A tela passa a ter quatro blocos, e
      este teste guarda os dois lados: os que entram e os que não voltam. */
-  const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+  const app = await painelSource();
   const layout = app.slice(app.indexOf('<div className="overview-layout">'),
-    app.indexOf("function MemberCompanyAccess"));
+    app.indexOf("Formatação usada pela Visão geral"));
 
   const posicao = (marca: string) => layout.indexOf(marca);
   const metricas = posicao('className="overview-kpis"');
@@ -347,7 +347,7 @@ test("o cartão da demanda mostra a etapa do processo (§38, §95)", async () =>
      quadro. Das quatro, a etapa era a única ausente — apesar de a §38 separar
      status de etapa exatamente porque são coisas diferentes: a coluna diz onde
      a demanda está no quadro, a etapa diz onde ela está no processo. */
-  const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+  const app = await painelSource();
   assert.match(app, /className="dashboard-card-step"/u);
   assert.match(app, /flowByCard\.get\(card\.id\)/u);
   assert.match(app, /\{flow\.stepLabel\}/u,
@@ -358,7 +358,7 @@ test("a etapa do cartão não custa consulta nova", async () => {
   // `processFlows` já resolve o rótulo no servidor, com o mesmo recorte de
   // empresa. Uma consulta por cartão seria dezenas de idas ao banco para
   // repetir o que o snapshot já traz.
-  const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+  const app = await painelSource();
   const memo = app.slice(app.indexOf("const flowByCard"), app.indexOf("const scopedObligations"));
   assert.match(memo, /snapshot\?\.processFlows/u);
   assert.ok(!/fetch\(|requestJson/u.test(memo), "o cartão passou a buscar a etapa por conta própria");
@@ -367,7 +367,7 @@ test("a etapa do cartão não custa consulta nova", async () => {
 test("demanda fora do teto de fluxos não ganha etapa inventada", async () => {
   // A consulta traz 60 demandas em andamento. Passando disso, o cartão mostra
   // ausência — que é verdade — em vez de um rótulo aproximado.
-  const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+  const app = await painelSource();
   /* O desenho do cartão saiu do laço e virou função (`renderDemandCard`), para
      que a mesma coluna desenhada dentro de cada raia não dependesse de duas
      cópias iguais. Com isso o fluxo é lido uma vez numa variável, e a guarda
@@ -385,7 +385,7 @@ test("a mesma obrigação em várias empresas ocupa uma linha, com a contagem", 
   /* A consulta devolve uma linha por empresa. Doze filiais com o mesmo eSocial
      S-1299 ocupavam as seis vagas do painel com o mesmo prazo repetido, e a
      sétima obrigação — de outro tipo, talvez mais urgente — não aparecia. */
-  const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+  const app = await painelSource();
   assert.match(app, /function groupObligations\(/u);
   assert.match(app, /item\.companies > 1\s*\n?\s*\? `\$\{item\.companies\} empresas`/u);
   assert.match(app, /groupObligations\(obligations\)\.slice\(0, 6\)/u,
@@ -395,7 +395,7 @@ test("a mesma obrigação em várias empresas ocupa uma linha, com a contagem", 
 test("obrigações com vencimentos diferentes não são fundidas", async () => {
   /* Mesma obrigação com prazos diferentes são dois compromissos. Juntá-los
      esconderia o mais apertado atrás do mais folgado. */
-  const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+  const app = await painelSource();
   assert.match(app, /const chave = `\$\{item\.title\}\|\$\{item\.competence\}\|\$\{item\.dueDate\}`/u);
   assert.match(app, /if \(item\.daysRemaining < atual\.daysRemaining\) atual\.daysRemaining = item\.daysRemaining/u,
     "o grupo precisa manter o prazo mais apertado, senão a urgência some na agregação");
@@ -406,7 +406,7 @@ test("o botão do histórico entrou junto com a tela, e aponta para ela", async 
      cobrava que o botão NÃO existisse — link que leva ao lugar errado é pior
      que nenhum. A tela existe agora, então ele cobra a outra metade: que o
      botão exista e aponte para uma visão registrada. */
-  const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+  const app = await painelSource();
   const painel = app.slice(app.indexOf('className="overview-panel activity-panel"'));
   const bloco = painel.slice(0, painel.indexOf("</section>"));
   assert.match(bloco, /onFocus\("history", "all"\)/u,
@@ -422,7 +422,7 @@ test("sem demanda no recorte, o painel não afirma 100% dentro do prazo", async 
   /* O cálculo caía em `: 100` quando não havia nenhuma demanda. O número mais
      tranquilizador da tela aparecia justamente quando não havia evidência para
      tranquilizar ninguém — percentual sobre denominador zero. */
-  const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+  const app = await painelSource();
   assert.match(app, /onTime: scopedCards\.length\s*\n?\s*\? Math\.round/u);
   assert.match(app, /: null,/u);
   assert.ok(!/\) \* 100\) : 100,/u.test(app),
@@ -435,7 +435,7 @@ test("a faixa de SLA diz qual população o percentual mede", async () => {
   /* "100% dentro do prazo" ao lado de "0 demandas concluídas" fazia supor que
      100% das concluídas cumpriram o prazo. O percentual mede as demandas EM
      ABERTO que não estouraram; são populações diferentes. */
-  const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+  const app = await painelSource();
   assert.match(app, /das demandas em aberto/u);
   assert.match(app, /\{typeof kpi\.bar === "number" && <span className="overview-kpi-bar"/u,
     "barra de progresso sem número para representar não deve ser desenhada");
@@ -599,7 +599,7 @@ test("a linha da tabela não vira clicável no lugar de um botão", () => {
   /* Sem tirar os comentários, esta própria conferência acusaria a explicação
      escrita ao lado do botão — que cita `<tr onClick>` justamente para dizer
      por que ele não está ali. */
-  const tela = bloco('<div className="overview-layout">', "function MemberCompanyAccess")
+  const tela = bloco('<div className="overview-layout">', "Formatação usada pela Visão geral")
     .replace(/\/\*[\s\S]*?\*\//gu, "");
   assert.doesNotMatch(tela, /<tr[^>]*onClick/u);
   assert.match(source, /className="overview-table-link" onClick=\{\(\) => onOpenCard\(flow\.cardId\)\}/u);

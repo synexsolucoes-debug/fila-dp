@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { painelSource } from "./painel-source.ts";
 
 /**
  * §17 e §18: o menu por contexto e a barra superior.
@@ -17,7 +18,7 @@ import test from "node:test";
  * sem ter demanda nenhuma para criar, e só um olho humano notaria.
  */
 
-const source = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+const source = await painelSource();
 const catalog = source.slice(source.indexOf("const viewCatalog: Record<View, ViewEntry>"), source.indexOf("const navOrder"));
 const views = (source.match(/^type View = (.+);$/mu)?.[1] ?? "")
   .split("|").map((part) => part.trim().replace(/"/gu, "")).filter(Boolean);
@@ -389,7 +390,7 @@ test("quem só opera o PJ abre direto no Sistema PJ", async () => {
   assert.equal(isContractorOnly(["contractorPayments", "epi"]), false, "com outro módulo, o PJ é escolha");
   assert.equal(isContractorOnly([]), false, "sem módulo nenhum não há sistema a abrir");
 
-  const shell = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+  const shell = await painelSource();
   assert.match(shell, /const pjMode = hasContractorModule && \(contractorOnly \|\| appMode === "pj"\);/u);
   assert.match(shell, /if \(pjMode && !isContractorSection\(view\)\) setViewState\("contractorPayments"\);/u,
     "no Sistema PJ nenhuma tela de fora pode abrir");

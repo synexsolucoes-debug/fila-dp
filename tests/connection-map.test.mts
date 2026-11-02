@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { connectionStatusLabel, connectionTone, lastSyncLabel } from "../app/painel/features/shared/connection-status.ts";
+import { painelSource } from "./painel-source.ts";
 
 /**
  * §31 e §57: o diagrama de conexões não pode desenhar linha para conector que
@@ -17,7 +18,7 @@ import { connectionStatusLabel, connectionTone, lastSyncLabel } from "../app/pai
  * para quem já é cliente e vai confiar no desenho para saber o que está ligado.
  */
 
-const painel = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+const painel = await painelSource();
 const codigo = semComentarios(painel);
 
 /**
@@ -33,7 +34,10 @@ const codigo = semComentarios(painel);
 const mapa = (() => {
   const inicio = codigo.indexOf("function ConnectionMap(");
   assert.ok(inicio >= 0, "não achei o componente do diagrama");
-  const fim = codigo.indexOf("\nfunction ", inicio + 1);
+  // A Visão geral exporta os componentes: o próximo pode começar com `export`.
+  const resto = codigo.slice(inicio + 1);
+  const proximo = resto.search(/\n(export )?function /u);
+  const fim = proximo >= 0 ? inicio + 1 + proximo : -1;
   return codigo.slice(inicio, fim > 0 ? fim : undefined);
 })();
 
