@@ -40,6 +40,8 @@ test("api errors expose expected messages and redact unexpected failures", async
     assert.equal(body.code, "INTERNAL_ERROR");
     assert.equal(String(body.error).includes("super-secret"), false);
     assert.match(String(body.requestId), /^[0-9a-f-]{36}$/);
+    // A frase que a tela mostra leva o número do chamado, para a pessoa repassar.
+    assert.ok(String(body.error).includes(`chamado ${String(body.requestId).slice(0, 8)}`), String(body.error));
   } finally {
     console.error = originalConsoleError;
   }

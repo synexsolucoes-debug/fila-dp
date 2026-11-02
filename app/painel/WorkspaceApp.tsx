@@ -1044,6 +1044,10 @@ export function WorkspaceApp({
   const [employeeStartOptions, setEmployeeStartOptions] = useState<EmployeeStartOption[] | null>(null);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [cardForm, setCardForm] = useState<CardForm>(emptyCardForm);
+  /* Rascunho da demanda nova (sessão do navegador). Fechar a gaveta por
+     engano — Esc, clique fora, troca de tela — apagava tudo o que foi digitado. */
+  const [draftRestored, setDraftRestored] = useState(false);
+  const draftKey = snapshot ? `vinculato:rascunho-demanda:${snapshot.workspace.id}:${snapshot.board.id}` : "";
   const [newChecklistItem, setNewChecklistItem] = useState("");
   const [newComment, setNewComment] = useState("");
   const [commentAttachment, setCommentAttachment] = useState<File | null>(null);
@@ -1674,6 +1678,15 @@ export function WorkspaceApp({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [loading]);
 
+  // Guarda o rascunho enquanto a demanda nova está sendo escrita.
+  useEffect(() => {
+    if (!cardModalOpen || selectedCardId || !draftKey) return;
+    const temConteudo = Boolean(cardForm.title.trim() || cardForm.description.trim() || cardForm.nextStep.trim());
+    try {
+      if (temConteudo) window.sessionStorage.setItem(draftKey, JSON.stringify(cardForm));
+    } catch { /* navegador sem armazenamento: o formulário segue funcionando */ }
+  }, [cardForm, cardModalOpen, selectedCardId, draftKey]);
+
   useEffect(() => {
     if (!toast) return;
     const timeout = window.setTimeout(() => setToast(""), 3500);
@@ -2181,10 +2194,33 @@ export function WorkspaceApp({
     }
   }
 
+  function readDraft(): CardForm | null {
+    if (!draftKey) return null;
+    try {
+      const raw = window.sessionStorage.getItem(draftKey);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as Partial<CardForm>;
+      return { ...emptyCardForm, ...parsed, boardId: snapshot?.board.id ?? "" };
+    } catch { return null; }
+  }
+
+  function clearDraft() {
+    setDraftRestored(false);
+    if (!draftKey) return;
+    try { window.sessionStorage.removeItem(draftKey); } catch { /* sem armazenamento: nada a apagar */ }
+  }
+
+  function discardDraft() {
+    clearDraft();
+    setCardForm({ ...emptyCardForm, boardId: snapshot?.board.id ?? "" });
+  }
+
   function openNewCard() {
     if (!canEdit) return;
     setSelectedCardId(null);
-    setCardForm({ ...emptyCardForm, boardId: snapshot?.board.id ?? "" });
+    const draft = readDraft();
+    setDraftRestored(Boolean(draft));
+    setCardForm(draft ?? { ...emptyCardForm, boardId: snapshot?.board.id ?? "" });
     setNewChecklistItem("");
     setCardTab("details");
     setCardModalOpen(true);
@@ -2275,6 +2311,7 @@ export function WorkspaceApp({
           const corpo = await resposta.json() as { error?: string };
           if (!resposta.ok) throw new Error(corpo.error || "Não foi possível iniciar o processo.");
           applySnapshot(await requestSnapshot("/api/workspace"), "Demanda criada a partir do processo.");
+          clearDraft();
           setCardModalOpen(false);
         } catch (causa) {
           setError(causa instanceof Error ? causa.message : "Não foi possível iniciar o processo.");
@@ -2284,7 +2321,7 @@ export function WorkspaceApp({
         return;
       }
       const next = await mutate("/api/cards", { method: "POST", body: JSON.stringify(cardForm) }, "Demanda criada com checklist padrão.");
-      if (next) setCardModalOpen(false);
+      if (next) { clearDraft(); setCardModalOpen(false); }
       return;
     }
 
@@ -3881,6 +3918,10 @@ export function WorkspaceApp({
               })()}
               {(!selectedCard || cardTab === "details") &&
               <form className={`card-form ${!canEdit ? "read-only" : ""}`} onSubmit={saveCard}>
+                {!selectedCard && draftRestored && <p className="demand-draft-note full" role="status">
+                  Rascunho recuperado: é o que estava sendo escrito antes de a janela fechar.
+                  <button type="button" className="secondary-button" onClick={discardDraft}>Descartar rascunho</button>
+                </p>}
                 {/* PRÓXIMO PASSO — o primeiro bloco da gaveta, e não um campo
                     perdido no meio do formulário (§14).
                     A pergunta que alguém faz ao abrir uma demanda é "o que eu
@@ -3890,7 +3931,10 @@ export function WorkspaceApp({
                     quando a demanda é de outra pessoa.
                     O campo fica primeiro porque é o que muda entre uma abertura
                     e a seguinte: título, empresa e processo não mudam. */}
-                <section className="demand-next-step full">
+                {/* Na demanda nova o campo desce para depois da descrição: ainda
+                    não há "o que mudou desde a última vez", e pedir o próximo
+                    passo antes do título invertia a ordem de quem está criando. */}
+                {selectedCard && <section className="demand-next-step full">
                   <header><span>Próximo passo</span></header>
                   <textarea
                     id="card-next-step"
@@ -3902,7 +3946,7 @@ export function WorkspaceApp({
                     aria-label="Próximo passo da demanda"
                     onChange={(event) => setCardForm({ ...cardForm, nextStep: event.target.value })}
                   />
-                </section>
+                </section>}
                 {/* A leitura de SLA por extenso. O cartão mostra "1d de atraso";
                     aqui ficam a data exata, o que resta e o estado — as três
                     coisas que alguém confere antes de prometer um prazo ao
@@ -3949,6 +3993,9 @@ export function WorkspaceApp({
                 {!selectedCard && <label className="full">Processo operacional<select value={cardForm.boardId} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, boardId: event.target.value, listId: "" })}>{snapshot.boards.map((board) => <option value={board.id} key={board.id}>{board.boardType === "process" ? `Processo: ${board.name}` : `Quadro geral: ${board.name}`}</option>)}</select><small className="card-process-helper">A demanda será criada e movimentada somente nas colunas deste processo.</small></label>}
                 <label className="full">Título da demanda<input autoFocus value={cardForm.title} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, title: event.target.value })} placeholder="Ex.: Conciliar colaborador com o ERP" required /></label>
                 <label className="full">Descrição<textarea value={cardForm.description} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, description: event.target.value })} placeholder="Contexto e orientações para execução" rows={4} /></label>
+                {!selectedCard && <label className="full">Próximo passo<textarea id="card-next-step" rows={2} maxLength={280} value={cardForm.nextStep} disabled={!canEdit}
+                  placeholder="O que precisa acontecer agora? Ex.: receber o comprovante pendente e conferir o cadastro."
+                  onChange={(event) => setCardForm({ ...cardForm, nextStep: event.target.value })} /></label>}
                 {/* O tipo vigente entra na lista quando não estiver nela.
                     Demanda criada a partir de um processo publicado recebe o
                     CÓDIGO do processo como tipo — `EPI_ENTREGA`, e não um dos

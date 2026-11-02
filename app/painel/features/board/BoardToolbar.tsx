@@ -10,6 +10,7 @@ import {
   activeFilterCount, defaultDemandFilters, presetViews,
   type BoardViewMode, type DemandFilters, type DemandSort, type SavedBoardView,
 } from "./board.model";
+import { competenceLabel } from "../shared/competence-cycle";
 import styles from "./board.module.css";
 
 const MODES: Array<{ id: BoardViewMode; label: string; icon: LucideIcon; hint: string }> = [
@@ -299,7 +300,7 @@ export function BoardToolbar(props: BoardToolbarProps) {
             <label><span>Competência</span>
               <select value={filters.competence} onChange={(event) => set({ competence: event.target.value })}>
                 <option value="">Todas</option>
-                {props.competences.map((competence) => <option key={competence}>{competence}</option>)}
+                {props.competences.map((competence) => <option key={competence} value={competence}>{competenceLabel(competence)}</option>)}
               </select>
             </label>
           </div>

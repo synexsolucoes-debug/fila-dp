@@ -925,3 +925,30 @@
   .dashboard-shell :has(> [role="dialog"][aria-modal="true"]:not(.search-palette, .notification-drawer, .module-launcher, .attachment-preview-modal)) { padding: 10px !important; }
   .dashboard-shell [role="dialog"][aria-modal="true"]:not(.search-palette, .notification-drawer, .module-launcher, .attachment-preview-modal) { max-height: 94dvh !important; }
 }
+
+/* Indicadores da Visão geral: o número fica logo abaixo do título e o texto de
+   apoio vai para a base. Antes o número tinha `margin-top: auto` e descia
+   quando o apoio era curto — "Obrigações próximas" ficava mais baixo que os
+   vizinhos, e "SLA no prazo" (com barra) mais alto. */
+.dashboard-shell.operational-ui .overview-kpi-value { margin-top: 4px; }
+.dashboard-shell.operational-ui .overview-kpi-support { margin-top: auto; }
+
+/* "Ver integrações" pintava branco sólido no tema escuro: o botão secundário
+   do resumo de conexões usa as superfícies do tema, como os demais. */
+.dashboard-shell.operational-ui .connection-summary header .secondary-button {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+.dashboard-shell.operational-ui .connection-summary header .secondary-button:hover {
+  background: var(--ui-surface-muted, var(--ui-surface));
+}
+
+/* Aviso de rascunho recuperado na gaveta de Nova demanda. */
+.demand-draft-note {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  margin: 0; padding: 10px 12px;
+  border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md);
+  background: var(--ui-surface-muted, var(--ui-surface)); color: var(--ui-text);
+  font-size: .85rem;
+}
