@@ -4,6 +4,7 @@ import test from "node:test";
 
 import { capabilities, capabilitiesForRole, workspaceRoles } from "../lib/authorization.ts";
 import { capabilityAreas, capabilitiesOfArea } from "../lib/capability-catalog.ts";
+import { painelSource } from "./painel-source.ts";
 
 /**
  * A Administração do workspace, na forma da maquete 3.
@@ -18,8 +19,7 @@ import { capabilityAreas, capabilitiesOfArea } from "../lib/capability-catalog.t
 // Os testes abaixo recortam o fonte por delimitadores de linha. Normalizar o
 // fim de linha evita que um checkout no Windows transforme uma garantia de
 // comportamento em uma falha de formatação.
-const painel = (await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8"))
-  .replaceAll("\r\n", "\n");
+const painel = await painelSource();
 
 function bloco(inicio: string, fim: string) {
   const de = painel.indexOf(inicio);

@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
 import test from "node:test";
+import { painelSource } from "./painel-source.ts";
 
 const root = new URL("../", import.meta.url);
 
 async function source(path) {
+  // O painel mora em vários arquivos desde que a Visão geral e as
+  // Configurações saíram do WorkspaceApp; a conferência lê todos juntos.
+  if (path === "app/painel/WorkspaceApp.tsx") return painelSource();
   return readFile(new URL(path, root), "utf8");
 }
 

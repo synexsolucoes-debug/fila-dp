@@ -6,6 +6,7 @@ import {
   DEFAULT_RULE_TRIGGER, RULE_ACTIONS, RULE_TRIGGERS, RULE_TRIGGER_LABELS,
   parseRuleAction, parseRuleTrigger,
 } from "../lib/automation-rules.ts";
+import { painelSource } from "./painel-source.ts";
 
 /**
  * §27: compor automação de verdade.
@@ -104,7 +105,7 @@ test("a tela oferece exatamente os gatilhos que o servidor aceita", async () => 
   /* Uma tela com um gatilho a mais entrega uma regra que o servidor recusa; com
      um a menos, esconde automação que o motor executa. Os dois lados leem daqui
      — e este teste é o que impede a lista de ser recopiada de novo. */
-  const screen = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+  const screen = await painelSource();
   assert.match(screen, /import \{ RULE_TRIGGERS, RULE_TRIGGER_LABELS \} from "@\/lib\/automation-rules"/u);
   assert.match(screen, /RULE_TRIGGERS\.map/u, "o select precisa percorrer a lista, não repeti-la");
 

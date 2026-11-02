@@ -12,6 +12,11 @@ export const painelFiles = [
   "app/painel/WorkspaceApp.tsx",
   "app/painel/features/overview/OverviewView.tsx",
   "app/painel/features/overview/formatting.ts",
+  "app/painel/features/settings/SettingsPanels.tsx",
+  "app/painel/features/settings/settings.types.ts",
+  "app/painel/features/shared/demand-display.tsx",
+  "app/painel/features/shared/ModuleLoading.tsx",
+  "app/painel/features/workspace-views/WorkspaceViews.tsx",
 ] as const;
 
 export async function painelSource(): Promise<string> {

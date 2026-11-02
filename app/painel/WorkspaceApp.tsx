@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { ModuleLoading } from "./features/shared/ModuleLoading";
 import Image from "next/image";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
@@ -9,7 +10,7 @@ import {
 } from "@/lib/panel-routes";
 import { LayoutGrid, Settings,
   ArrowLeft,
-  ArrowRight,
+  
   BarChart3,
   Bell,
   Blocks,
@@ -24,7 +25,7 @@ import { LayoutGrid, Settings,
   CalendarClock,
   CalendarDays,
   CheckCircle2,
-  ChevronDown,
+  
   ChevronRight,
   CircleAlert,
   CircleHelp,
@@ -51,8 +52,8 @@ import { LayoutGrid, Settings,
   Stethoscope,
 
   Timer,
-  Trash2,
-  Upload,
+  
+  
   Users,
   WalletCards,
   Workflow,
@@ -62,9 +63,12 @@ import { LayoutGrid, Settings,
 import { VinculatoLogo } from "@/app/components/VinculatoLogo";
 import { activityDetails, activityLabel, compactSlaLabel, formatDate, formatMoment, plural } from "./features/overview/formatting";
 import { OverviewView } from "./features/overview/OverviewView";
+import { DemandTableView, InboxView, PayrollView, PlannerView } from "./features/workspace-views/WorkspaceViews";
+import { DemandAreaFlow, formatDue, processColors, slaLabel } from "./features/shared/demand-display";
+import { AdminIndicators, CompanySettings, FieldsSettings, ListsSettings, MemberCompanyAccess, MemberEmployeeLink, PermissionMatrix, RulesSettings, TemplatesSettings } from "./features/settings/SettingsPanels";
+import { roleLabels, type CatalogHandler, type ConfirmationRequest } from "./features/settings/settings.types";
 import type { Card, CardAttachment, InboxItem, ProcessFlowSummary, WorkspaceMember, WorkspaceRole, WorkspaceSnapshot } from "@/lib/fila-dp-types";
 import type { ActionTarget } from "@/lib/action-center";
-import { RULE_TRIGGERS, RULE_TRIGGER_LABELS } from "@/lib/automation-rules";
 import { hasSubNavigation, isContractorOnly, visibleProcessGroups } from "@/lib/process-navigation";
 import { ModuleLauncher, type LauncherModule } from "./features/shared/ModuleLauncher";
 import { CompanyPicker } from "./features/shared/CompanyPicker";
@@ -78,8 +82,8 @@ import {
 } from "@/lib/theme";
 import { DENSITY_KEY, parseDensity, type Density } from "@/lib/density";
 import { chooseRegistrationFormAttachment } from "@/lib/registration-form-file";
-import { capabilitiesForRole, hasCapability, workspaceRoles } from "@/lib/authorization";
-import { capabilityAreas, capabilitiesOfArea, capabilityCatalog, roleSummaries, type CapabilityArea } from "@/lib/capability-catalog";
+import { capabilitiesForRole, hasCapability } from "@/lib/authorization";
+import { roleSummaries } from "@/lib/capability-catalog";
 import { formatWorkingMinutes } from "@/lib/fila-dp-sla";
 import { overviewPeriodLabel, overviewPeriods, periodWindowEnd, periodWindowStart, withinPeriod, type OverviewPeriod } from "@/lib/overview-period";
 import { AnimatedDrawer, AnimatedTabs, CenterToast, competenceLabel, ProcessTabsProvider, ViewPaneActiveContext, MemberModules, PageTransition } from "./features/shared";
@@ -100,9 +104,6 @@ import { contagem } from "./features/shared/plural";
 /* Cada módulo do painel é carregado quando é aberto (§ desempenho).
    Antes, as vinte telas vinham no mesmo pacote: quem usava só EPI baixava
    Pagamento PJ, Folha e Processos para abrir o painel. */
-function ModuleLoading() {
-  return <div className="module-loading" role="status" aria-live="polite">Abrindo módulo…</div>;
-}
 const HistoryView = dynamic(() => import("./features/history/HistoryView").then((module) => module.HistoryView), { loading: ModuleLoading });
 const PortfolioView = dynamic(() => import("./features/portfolio/PortfolioView").then((module) => module.PortfolioView), { loading: ModuleLoading });
 const DpOperationsView = dynamic(() => import("./features/dp/DpOperationsView").then((module) => module.DpOperationsView), { loading: ModuleLoading });
@@ -122,9 +123,7 @@ const AgentsView = dynamic(() => import("./features/work/AgentsView").then((modu
 const CardProcessPanel = dynamic(() => import("./features/work/CardProcessPanel").then((module) => module.CardProcessPanel), { loading: ModuleLoading });
 const TriageView = dynamic(() => import("./features/work/TriageView").then((module) => module.TriageView), { loading: ModuleLoading });
 const WorkCenterView = dynamic(() => import("./features/work/WorkCenterView").then((module) => module.WorkCenterView), { loading: ModuleLoading });
-const PayrollImportDialog = dynamic(() => import("./features/payroll/PayrollImportDialog").then((module) => module.PayrollImportDialog), { loading: ModuleLoading });
 const TrelloImportPanel = dynamic(() => import("./features/boards/TrelloImportPanel").then((module) => module.TrelloImportPanel), { loading: ModuleLoading });
-const PayrollMovementsPanel = dynamic(() => import("./features/payroll/PayrollMovementsPanel").then((module) => module.PayrollMovementsPanel), { loading: ModuleLoading });
 const PaymentsView = dynamic(() => import("./features/payments/PaymentsView").then((module) => module.PaymentsView), { loading: ModuleLoading });
 
 /* Os oito destinos do Pagamento PJ (§74) estão escritos aqui um a um, e não
@@ -219,15 +218,6 @@ type RealtimeStatus = "syncing" | "current" | "delayed";
 type User = { displayName: string; email: string; fullName: string | null };
 type SearchResult = { id: string; title: string; company: string; processType: string; priority: string; slaStatus: string; dueAt: string | null; assigneeName: string; archived: boolean; listId: string };
 type SearchRecord = { kind: string; id: string; title: string; subtitle: string; badge: string; target: ActionTarget | "registrations" };
-type CatalogHandler = (payload: Record<string, unknown>, message: string) => Promise<WorkspaceSnapshot | null>;
-type SnapshotMutation = (url: string, options: RequestInit, message?: string) => Promise<WorkspaceSnapshot | null>;
-type ConfirmationRequest = {
-  title: string;
-  description: string;
-  confirmLabel: string;
-  action: () => void | Promise<unknown>;
-};
-type ConfirmHandler = (request: ConfirmationRequest) => void;
 type RecoveryLink = { name: string; url: string; expiresAt: string };
 type AuthSession = { id: string; deviceLabel: string; createdAt: string; lastSeenAt: string; expiresAt: string; current: boolean };
 type CardForm = {
@@ -298,16 +288,6 @@ type StartableProcess = {
 type EmployeeStartOption = {
   id: string; company_id: string; full_name: string; social_name: string;
   registration_number: string; employment_status: string;
-};
-
-const processColors: Record<string, string> = {
-  "CONCILIAÇÃO CADASTRAL": "blue",
-  "FÉRIAS": "purple",
-  "BENEFÍCIOS": "green",
-  "RESCISÃO": "orange",
-  "CADASTRO": "gray",
-  "FOLHA": "red",
-  "OUTROS": "gray",
 };
 
 /**
@@ -539,13 +519,6 @@ const searchRecordColors: Record<string, string> = {
   contractor: "orange", competence: "blue", integration: "gray",
 };
 
-const roleLabels: Record<WorkspaceRole, string> = {
-  admin: "Administrador",
-  member: "Membro",
-  observer: "Observador",
-  guest: "Convidado",
-};
-
 async function requestSnapshot(url: string, options?: RequestInit): Promise<WorkspaceSnapshot> {
   const headers = new Headers(options?.headers);
   if (!(options?.body instanceof FormData) && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
@@ -639,33 +612,10 @@ function initials(value: string) {
   return initialsOf(value, "DP");
 }
 
-function formatDue(value: string | null) {
-  if (!value || typeof value !== "string") return "Sem prazo";
-  if (!value.includes("T")) return formatDate(value);
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return formatDate(value);
-  return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(date);
-}
-
 function dueInputValue(value: string, defaultTime: string) {
   if (!value) return "";
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return `${value}T${defaultTime}`;
   return value.slice(0, 16);
-}
-
-function formatReceived(value: string) {
-  // Inbox items can come from SQLite as `YYYY-MM-DD HH:mm:ss`, from an API
-  // as an ISO string, or briefly have no timestamp while a webhook is being
-  // processed. Never render `NaN` when the value cannot be parsed.
-  const raw = String(value ?? "").trim();
-  if (!raw) return "agora";
-  const normalized = raw.includes("T") ? raw : raw.replace(" ", "T");
-  const date = new Date(normalized + (/[zZ]|[+-]\d{2}:?\d{2}$/.test(normalized) ? "" : "Z"));
-  if (Number.isNaN(date.getTime())) return "agora";
-  const diffMinutes = Math.max(0, Math.floor((Date.now() - date.getTime()) / 60000));
-  if (diffMinutes < 60) return `há ${diffMinutes || 1} min`;
-  if (diffMinutes < 1440) return `há ${Math.floor(diffMinutes / 60)} h`;
-  return `há ${Math.floor(diffMinutes / 1440)} d`;
 }
 
 function realtimeCursor(date = new Date()) {
@@ -757,29 +707,6 @@ function dueValue(card: Card) {
 
 /** Ordem de urgência, do mais para o menos. */
 const priorityRank: Record<Card["priority"], number> = { urgent: 0, high: 1, normal: 2, low: 3 };
-
-function slaLabel(card: Card) {
-  if (card.slaStatus === "overdue") return `Atrasada • ${formatDue(card.dueAt)}`;
-  if (card.slaStatus === "warning") return card.dueAt ? `Atenção • ${formatDue(card.dueAt)}` : "Atenção no SLA";
-  if (card.slaStatus === "paused") return "SLA pausado";
-  if (card.slaStatus === "completed") return "Concluída";
-  return card.dueAt ? formatDue(card.dueAt) : "Sem prazo";
-}
-
-/**
- * Origem e destino são parte do processo operacional, não uma etiqueta livre.
- * O cartão recebe somente os IDs; os nomes configuráveis são resolvidos pelo
- * catálogo do workspace para que renomear uma área não deixe snapshots textuais
- * espalhados pelas demandas.
- */
-function DemandAreaFlow({ card, areas }: { card: Card; areas: WorkspaceSnapshot["areas"] }) {
-  if (!card.requesterAreaId && !card.responsibleAreaId) return null;
-  const requester = areas.find((area) => area.id === card.requesterAreaId)?.name ?? "Área não informada";
-  const responsible = areas.find((area) => area.id === card.responsibleAreaId)?.name ?? "Área não informada";
-  return <span className="demand-area-flow" aria-label={`Fluxo entre áreas: ${requester} para ${responsible}`}>
-    <span>{requester}</span><ArrowRight aria-hidden="true" /><span>{responsible}</span>
-  </span>;
-}
 
 function formatFileSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -4095,70 +4022,6 @@ export function WorkspaceApp({
    DP Operacional: são os tipos que as regras de corte e as rotinas usam. */
 const processTypeOptions = ["CONCILIAÇÃO CADASTRAL", "RESCISÃO", "FÉRIAS", "PONTO", "VARIÁVEIS", "ALTERAÇÃO SALARIAL", "AFASTAMENTO", "BENEFÍCIOS", "FOLHA", "CADASTRO", "ROTINA DP", "OUTROS"];
 
-function MemberCompanyAccess({ member, companies, busy, onSave }: { member: WorkspaceSnapshot["members"][number]; companies: WorkspaceSnapshot["companies"]; busy: boolean; onSave: (userId: string, companyIds: string[]) => Promise<void> }) {
-  const [selectedIds, setSelectedIds] = useState<string[]>(member.companyIds);
-  if (member.role === "admin") return <span className="member-company-summary">Todas as empresas</span>;
-  return <details className="member-company-access"><summary>{selectedIds.length ? `${contagem(selectedIds.length, "empresa liberada", "empresas liberadas")}` : "Nenhuma empresa liberada"}</summary><div>{companies.map((company) => <label key={company.id}><input type="checkbox" checked={selectedIds.includes(company.id)} disabled={busy} onChange={(event) => setSelectedIds((current) => event.target.checked ? [...current, company.id] : current.filter((id) => id !== company.id))} />{company.tradeName || company.legalName}{company.isPrincipal && <em>Matriz</em>}</label>)}</div><button type="button" disabled={busy} onClick={() => void onSave(member.userId, selectedIds)}>Salvar empresas</button></details>;
-}
-
-/**
- * Portal do Gestor, passo 1 (§4.20): qual colaborador esta conta representa —
- * a ponte entre login e "de quem sou gestor" (`fdp_employees.manager_employee_id`,
- * já existente, mas sem ligação com nenhuma conta até este vínculo existir).
- * Busca por nome/matrícula em vez de uma lista só, porque o cadastro de
- * colaboradores pode ter milhares de linhas — o mesmo motivo por que a
- * própria ficha de colaboradores (RegistrationsView) pagina e busca, nunca
- * lista tudo de uma vez.
- */
-function MemberEmployeeLink({ member, busy, onSave }: { member: WorkspaceSnapshot["members"][number]; busy: boolean; onSave: (userId: string, employeeId: string) => Promise<void> }) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<Array<{ id: string; fullName: string; companyName: string; registrationNumber: string }>>([]);
-  const [searching, setSearching] = useState(false);
-  const [linkedName, setLinkedName] = useState("");
-  // O snapshot não junta `fdp_employees` (mantém essa consulta livre da
-  // tabela de colaboradores — tests/registrations-phase3.test.mts); o nome
-  // de quem já está vinculado é buscado à parte, só quando existe vínculo.
-  useEffect(() => {
-    let active = true;
-    const frame = window.requestAnimationFrame(() => {
-      if (!member.employeeId) { setLinkedName(""); return; }
-      void fetch(`/api/employees/${member.employeeId}`)
-        .then((response) => response.ok ? response.json() as Promise<{ employee?: Record<string, unknown> }> : null)
-        .then((payload) => { if (active && payload?.employee) setLinkedName(String(payload.employee.fullName ?? payload.employee.full_name ?? "")); })
-        .catch(() => { if (active) setLinkedName(""); });
-    });
-    return () => { active = false; window.cancelAnimationFrame(frame); };
-  }, [member.employeeId]);
-  useEffect(() => {
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => {
-      const trimmed = query.trim();
-      if (!open || trimmed.length < 2) { setResults([]); return; }
-      setSearching(true);
-      void fetch(`/api/employees?search=${encodeURIComponent(trimmed)}&status=active&limit=8`, { signal: controller.signal })
-        .then((response) => response.ok ? response.json() as Promise<{ employees?: Array<Record<string, unknown>> }> : { employees: [] })
-        .then((payload) => setResults((payload.employees ?? []).map((row) => ({
-          id: String(row.id), fullName: String(row.full_name ?? ""),
-          companyName: String(row.company_name ?? ""), registrationNumber: String(row.registration_number ?? ""),
-        }))))
-        .catch(() => setResults([]))
-        .finally(() => setSearching(false));
-    }, 300);
-    return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [open, query]);
-  return <details className="member-employee-link" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
-    <summary>{member.employeeId ? `Colaborador: ${linkedName || "vinculado"}` : "Sem colaborador vinculado"}</summary>
-    <div>
-      <input type="search" placeholder="Buscar por nome ou matrícula" value={query} disabled={busy} onChange={(event) => setQuery(event.target.value)} />
-      {searching && <small>Buscando…</small>}
-      {!searching && query.trim().length >= 2 && results.length === 0 && <small>Nenhum colaborador encontrado.</small>}
-      <ul>{results.map((result) => <li key={result.id}><button type="button" disabled={busy} onClick={() => { void onSave(member.userId, result.id); setQuery(""); setResults([]); }}>{result.fullName} · {result.registrationNumber || "sem matrícula"} · {result.companyName}</button></li>)}</ul>
-      {member.employeeId && <button type="button" className="member-employee-unlink" disabled={busy} onClick={() => void onSave(member.userId, "")}>Remover vínculo</button>}
-    </div>
-  </details>;
-}
-
 function ProcessTablesView({ cards, lists, areas, onOpen }: { cards: Card[]; lists: WorkspaceSnapshot["lists"]; areas: WorkspaceSnapshot["areas"]; onOpen: (card: Card) => void }) {
   const grouped = cards.reduce<Record<string, Card[]>>((accumulator, card) => {
     (accumulator[card.processType] ??= []).push(card);
@@ -4166,423 +4029,6 @@ function ProcessTablesView({ cards, lists, areas, onOpen }: { cards: Card[]; lis
   }, {});
   const processNames = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
   return <div className="process-tables-view">{processNames.length === 0 && <div className="empty-view"><span>▤</span><strong>Nenhuma demanda encontrada</strong><p>Crie uma demanda para iniciar uma tabela de processo.</p></div>}{processNames.map((process) => <section key={process}><header><div><span>Fluxo específico</span><strong>{process}</strong></div><b>{contagem(grouped[process].length, "demanda", "demandas")}</b></header><DemandTableView cards={grouped[process]} lists={lists} areas={areas} onOpen={onOpen} /></section>)}</div>;
-}
-
-function CompanySettings({ companies, members, busy, onCreateCompany, onUpdateCompany, onDeleteCompany, onOpenAccess }: { companies: WorkspaceSnapshot["companies"]; members: WorkspaceSnapshot["members"]; busy: boolean; onCreateCompany: (payload: Record<string, unknown>) => Promise<WorkspaceSnapshot | null>; onUpdateCompany: (id: string, payload: Record<string, unknown>) => Promise<WorkspaceSnapshot | null>; onDeleteCompany: (id: string, name: string) => void; onOpenAccess: () => void }) {
-  /* `null` = formulário fechado, `""` = cadastrando, um id = editando aquela
-     empresa. Um estado só, porque cadastrar e editar são o mesmo formulário:
-     manter dois formulários lado a lado é como o cadastro de campos acaba
-     divergindo do de edição sem ninguém perceber. */
-  const [editing, setEditing] = useState<string | null>(null);
-  const companyName = new Map(companies.map((company) => [company.id, company.tradeName || company.legalName]));
-  const principalCompanies = companies.filter((company) => company.isPrincipal);
-  const orderedCompanies = [...companies].sort((a, b) => Number(b.isPrincipal) - Number(a.isPrincipal) || (companyName.get(a.parentCompanyId ?? "") ?? "").localeCompare(companyName.get(b.parentCompanyId ?? "") ?? "") || (a.tradeName || a.legalName).localeCompare(b.tradeName || b.legalName));
-  const current = editing ? companies.find((company) => company.id === editing) ?? null : null;
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    const payload = {
-      legalName: data.get("legalName"), tradeName: data.get("tradeName"), taxId: data.get("taxId"),
-      externalCode: data.get("externalCode"), email: data.get("email"), phone: data.get("phone"),
-      companyType: data.get("companyType"), parentCompanyId: data.get("parentCompanyId"),
-    };
-    const result = current
-      // Ao editar, a situação também é editável: desativar um CNPJ é o caminho
-      // de quem não pode excluí-lo por causa do histórico.
-      ? await onUpdateCompany(current.id, { ...payload, status: data.get("status") })
-      : await onCreateCompany(payload);
-    if (result) { form.reset(); setEditing(null); }
-  }
-
-  return <div className="company-settings-view">
-    <section className="company-settings-intro">
-      <span><Building2 aria-hidden="true" /></span><div><strong>Empresas do grupo</strong><p>Cadastre a empresa principal e os CNPJs vinculados. Esses cadastros ficam disponíveis para demandas, folha, permissões e integrações.</p></div><b>{contagem(companies.length, "empresa", "empresas")}</b>
-    </section>
-    <section className="company-settings-access"><div><strong>Controle de acesso por empresa</strong><p>Após cadastrar um CNPJ, escolha quais usuários poderão consultar ou operar demandas daquela empresa.</p></div><button className="secondary-button" onClick={onOpenAccess}><Users aria-hidden="true" /> Gerenciar usuários e acessos</button></section>
-    <section className="company-settings-catalog">
-      <header><div><strong>Cadastros do grupo</strong><span>CNPJ, estrutura societária, contato e código externo para Sankhya.</span></div><button className="primary-button" disabled={busy} onClick={() => setEditing((value) => value === null ? "" : null)}><Plus aria-hidden="true" /> {editing === null ? "Cadastrar empresa" : "Fechar formulário"}</button></header>
-      {editing !== null && <form className="company-settings-form" key={editing || "new"} onSubmit={submit}>
-        <label>Tipo<select name="companyType" defaultValue={current ? (current.isPrincipal ? "principal" : "subsidiary") : companies.some((company) => company.isPrincipal) ? "subsidiary" : "principal"} disabled={busy}><option value="principal">Empresa principal do grupo</option><option value="subsidiary">Empresa / CNPJ do grupo</option></select></label>
-        <label>Empresa principal<select name="parentCompanyId" defaultValue={current?.parentCompanyId ?? ""} disabled={busy}><option value="">Vincular à principal automaticamente</option>{principalCompanies.filter((company) => company.id !== current?.id).map((company) => <option key={company.id} value={company.id}>{company.tradeName || company.legalName}</option>)}</select></label>
-        <label>Razão social<input name="legalName" defaultValue={current?.legalName ?? ""} placeholder="Empresa Exemplo Ltda." maxLength={160} required disabled={busy} /></label>
-        <label>Nome fantasia<input name="tradeName" defaultValue={current?.tradeName ?? ""} placeholder="Empresa Exemplo" maxLength={160} disabled={busy} /></label>
-        <label>CNPJ<input name="taxId" defaultValue={current?.taxId ?? ""} placeholder="00.000.000/0001-00" maxLength={30} disabled={busy} /></label>
-        <label>Código Sankhya<input name="externalCode" defaultValue={current?.externalCode ?? ""} placeholder="COD_EMPRESA" maxLength={80} disabled={busy} /></label>
-        <label>E-mail<input type="email" name="email" defaultValue={current?.email ?? ""} maxLength={160} disabled={busy} /></label>
-        <label>Telefone<input name="phone" defaultValue={current?.phone ?? ""} maxLength={40} disabled={busy} /></label>
-        {current && <label>Situação<select name="status" defaultValue={current.status} disabled={busy}><option value="active">Ativa</option><option value="inactive">Inativa</option></select></label>}
-        <div className="company-settings-form-actions">
-          {current && <button type="button" className="secondary-button" disabled={busy} onClick={() => setEditing(null)}>Cancelar</button>}
-          <button className="primary-button" disabled={busy}>{current ? "Salvar alterações" : "Salvar empresa"}</button>
-        </div>
-      </form>}
-      <div className="company-settings-list">
-        {orderedCompanies.length === 0 && <div className="empty-view"><span><Building2 aria-hidden="true" /></span><strong>Nenhuma empresa cadastrada</strong><p>Cadastre a empresa principal para estruturar o grupo e liberar acessos.</p></div>}
-        {orderedCompanies.map((company) => {
-          const allowedMembers = members.filter((member) => member.role === "admin" || member.companyIds.includes(company.id)).length;
-          return <article className={company.isPrincipal ? "principal" : "subsidiary"} key={company.id}><i>{company.isPrincipal ? "P" : "↳"}</i><div><strong>{company.tradeName || company.legalName}{company.isPrincipal && <em>Principal</em>}{company.status === "inactive" && <em className="inactive">Inativa</em>}</strong><small>{company.isPrincipal ? "Empresa raiz do grupo" : `Grupo: ${companyName.get(company.parentCompanyId ?? "") ?? "Principal"}`} · {company.taxId || "CNPJ não informado"}</small></div><span><small>Usuários com acesso</small><b>{allowedMembers}</b></span><span><small>Sankhya</small><b>{company.externalCode || "Não vinculado"}</b></span><button className="secondary-button" type="button" disabled={busy} onClick={() => setEditing(editing === company.id ? null : company.id)} aria-label={`Editar ${company.tradeName || company.legalName}`}>{editing === company.id ? "Editando" : "Editar"}</button><button className="danger-link" type="button" disabled={busy} onClick={() => onDeleteCompany(company.id, company.legalName)}>Excluir</button></article>;
-        })}
-      </div>
-    </section>
-  </div>;
-}
-
-function PayrollView({ companies, metrics, busy, canEdit, onSaveMetric, onImportPayroll }: { companies: WorkspaceSnapshot["companies"]; metrics: WorkspaceSnapshot["hrMetrics"]; busy: boolean; canEdit: boolean; onSaveMetric: (payload: Record<string, unknown>) => Promise<WorkspaceSnapshot | null>; onImportPayroll: (body: FormData) => Promise<WorkspaceSnapshot | null> }) {
-  const currentPeriod = new Date().toISOString().slice(0, 7);
-  const [selectedPeriod, setSelectedPeriod] = useState(currentPeriod);
-  const [importOpen, setImportOpen] = useState(false);
-  const [form, setForm] = useState({
-    companyId: companies.find((company) => company.status === "active")?.id ?? "", period: currentPeriod,
-    headcountStart: "0", headcountEnd: "0", leavesCount: "0", admissions: "0", voluntaryTerminations: "0", involuntaryTerminations: "0",
-    baseSalary: "0", variablePay: "0", overtimePay: "0", additionalPay: "0", vacationPay: "0", thirteenthPay: "0", terminationPay: "0",
-    employeeInss: "0", employeeIrrf: "0", employeeOtherDeductions: "0",
-    employerInss: "0", ratContribution: "0", thirdPartyContributions: "0", fgts: "0", fgtsPenalty: "0",
-    benefitsCost: "0", provisionsCost: "0", otherCosts: "0", notes: "",
-  });
-  const companyName = new Map(companies.map((company) => [company.id, company.tradeName || company.legalName]));
-  const periods = [...new Set([currentPeriod, ...metrics.map((metric) => metric.period)])].sort((a, b) => b.localeCompare(a));
-  const selectedMetrics = metrics.filter((metric) => metric.period === selectedPeriod);
-  const toNumber = (value: string | number) => Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
-  const totalCost = selectedMetrics.reduce((total, metric) => total + metric.payrollCost, 0);
-  const totalHeadcount = selectedMetrics.reduce((total, metric) => total + metric.headcount, 0);
-  const totalAdmissions = selectedMetrics.reduce((total, metric) => total + metric.admissions, 0);
-  const totalTerminations = selectedMetrics.reduce((total, metric) => total + metric.terminations, 0);
-  const turnover = totalHeadcount ? ((totalAdmissions + totalTerminations) / 2 / totalHeadcount) * 100 : 0;
-  const costPerEmployee = totalHeadcount ? totalCost / totalHeadcount : 0;
-  const componentTotals = [
-    { label: "Remuneração bruta", value: selectedMetrics.reduce((total, metric) => total + metric.grossPayroll, 0), color: "#62D5B2" },
-    { label: "Encargos", value: selectedMetrics.reduce((total, metric) => total + metric.employerCharges, 0), color: "#73b8ff" },
-    { label: "Benefícios", value: selectedMetrics.reduce((total, metric) => total + metric.benefitsCost, 0), color: "#b99cff" },
-    { label: "Provisões e outros", value: selectedMetrics.reduce((total, metric) => total + metric.provisionsCost + metric.otherCosts, 0), color: "#F4A261" },
-  ];
-  const formHeadcount = (toNumber(form.headcountStart) + toNumber(form.headcountEnd)) / 2;
-  const formTerminations = toNumber(form.voluntaryTerminations) + toNumber(form.involuntaryTerminations);
-  const formGrossPayroll = toNumber(form.baseSalary) + toNumber(form.variablePay) + toNumber(form.overtimePay) + toNumber(form.additionalPay) + toNumber(form.vacationPay) + toNumber(form.thirteenthPay) + toNumber(form.terminationPay);
-  const formDeductions = toNumber(form.employeeInss) + toNumber(form.employeeIrrf) + toNumber(form.employeeOtherDeductions);
-  const formNetPay = Math.max(0, formGrossPayroll - formDeductions);
-  const formEmployerCharges = toNumber(form.employerInss) + toNumber(form.ratContribution) + toNumber(form.thirdPartyContributions) + toNumber(form.fgts) + toNumber(form.fgtsPenalty);
-  const formTotal = formGrossPayroll + formEmployerCharges + toNumber(form.benefitsCost) + toNumber(form.provisionsCost) + toNumber(form.otherCosts);
-  const expectedHeadcount = Math.max(0, toNumber(form.headcountStart) + toNumber(form.admissions) - formTerminations);
-  const money = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-  type NumericFormKey = Exclude<keyof typeof form, "companyId" | "period" | "notes">;
-  const numericField = (label: string, key: NumericFormKey, step = "1") => <label key={key}>{label}<input type="number" min="0" step={step} value={form[key]} disabled={busy} onChange={(event) => setForm({ ...form, [key]: event.target.value })} /></label>;
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const result = await onSaveMetric({ ...form, headcount: formHeadcount, terminations: formTerminations, grossPayroll: formGrossPayroll, employerCharges: formEmployerCharges, netPay: formNetPay, payrollCost: formTotal, source: "manual" });
-    if (result) setForm((current) => ({ ...current, headcountStart: "0", headcountEnd: "0", leavesCount: "0", admissions: "0", voluntaryTerminations: "0", involuntaryTerminations: "0", baseSalary: "0", variablePay: "0", overtimePay: "0", additionalPay: "0", vacationPay: "0", thirteenthPay: "0", terminationPay: "0", employeeInss: "0", employeeIrrf: "0", employeeOtherDeductions: "0", employerInss: "0", ratContribution: "0", thirdPartyContributions: "0", fgts: "0", fgtsPenalty: "0", benefitsCost: "0", provisionsCost: "0", otherCosts: "0", notes: "" }));
-  }
-
-  return <div className="payroll-view">
-    <section className="payroll-toolbar"><div><span>Competência</span><h2>Painel consolidado da folha</h2><p>Os indicadores são recalculados automaticamente a cada lançamento, importação ou sincronização.</p></div><div className="payroll-toolbar-actions">{canEdit && <button className="secondary-button" onClick={() => setImportOpen(true)}><Upload aria-hidden="true" /> Importar extrato PDF</button>}<label>Período<select value={selectedPeriod} onChange={(event) => setSelectedPeriod(event.target.value)}>{periods.map((period) => <option key={period}>{period}</option>)}</select></label></div></section>
-    <section className="payroll-kpi-grid"><article><span>Custo total da folha</span><strong>{money(totalCost)}</strong><small>{contagem(selectedMetrics.length, "empresa", "empresas")} com competência</small></article><article><span>Headcount médio</span><strong>{totalHeadcount}</strong><small>{totalAdmissions} admissões · {totalTerminations} desligamentos</small></article><article><span>Turnover</span><strong>{turnover.toFixed(2)}%</strong><small>Movimentação ÷ headcount médio</small></article><article><span>Custo por colaborador</span><strong>{money(costPerEmployee)}</strong><small>Baseado no headcount médio</small></article></section>
-    <div className="payroll-layout">
-      <section className="payroll-composition"><header><div><strong>Composição do custo</strong><span>Distribuição da competência selecionada</span></div><b>{money(totalCost)}</b></header><div className="payroll-bars">{componentTotals.map((item) => <div key={item.label}><span><strong>{item.label}</strong><small>{money(item.value)}</small></span><i><b style={{ width: `${totalCost ? Math.min(100, (item.value / totalCost) * 100) : 0}%`, backgroundColor: item.color }} /></i></div>)}</div></section>
-      <section className="payroll-company-breakdown"><header><div><strong>Folha por empresa</strong><span>{contagem(selectedMetrics.length, "lançamento", "lançamentos")} em {selectedPeriod}</span></div></header>{selectedMetrics.length === 0 && <div className="empty-view"><span><WalletCards aria-hidden="true" /></span><strong>Sem lançamentos nesta competência</strong><p>Registre os dados da folha para gerar os indicadores automaticamente.</p></div>}{selectedMetrics.map((metric) => <article key={metric.id}><div><strong>{companyName.get(metric.companyId) ?? "Empresa removida"}</strong><small>{metric.headcount} colaboradores · {metric.admissions} admissões · {metric.terminations} desligamentos · líquido {money(metric.netPay)}</small></div><span>{money(metric.payrollCost)}</span><b>{metric.source === "sankhya" ? "Sankhya" : metric.source === "pdf_import" ? "PDF" : "Manual"}</b></article>)}</section>
-    </div>
-    {importOpen && <PayrollImportDialog companies={companies} importing={busy} onClose={() => setImportOpen(false)} onImport={onImportPayroll} onImported={(period) => { setImportOpen(false); setSelectedPeriod(period); }} />}
-    {/* Movimentos para o Sankhya: lança os eventos variáveis por colaborador e
-        gera a planilha do Importador de Movimentos (docs/movimentos-para-o-sankhya.md). */}
-    <PayrollMovementsPanel companies={companies} canEdit={canEdit} />
-    {canEdit && <section className="payroll-entry-panel"><header><div><span>Novo lançamento</span><h2>Registrar dados da folha</h2><p>Informe os valores já apurados na folha ou no ERP.</p></div><b>Total calculado: {money(formTotal)}</b></header><form onSubmit={(event) => void submit(event)}>
-      <label>Empresa<select value={form.companyId} required disabled={busy} onChange={(event) => setForm({ ...form, companyId: event.target.value })}><option value="" disabled>Selecione</option>{companies.filter((company) => company.status === "active").map((company) => <option value={company.id} key={company.id}>{company.tradeName || company.legalName}</option>)}</select></label>
-      <label>Competência<input type="month" value={form.period} required disabled={busy} onChange={(event) => setForm({ ...form, period: event.target.value })} /></label>
-      <fieldset className="payroll-form-section"><legend>Pessoas e movimentação</legend>{numericField("Headcount no início", "headcountStart")}{numericField("Headcount no fim", "headcountEnd")}{numericField("Afastados no período", "leavesCount")}{numericField("Admissões", "admissions")}{numericField("Desligamentos voluntários", "voluntaryTerminations")}{numericField("Desligamentos involuntários", "involuntaryTerminations")}<p>Headcount médio: <strong>{formHeadcount.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</strong> · encerramento esperado: <strong>{expectedHeadcount.toLocaleString("pt-BR")}</strong></p></fieldset>
-      <fieldset className="payroll-form-section"><legend>Proventos da competência</legend>{numericField("Salário-base", "baseSalary", "0.01")}{numericField("Variáveis / comissões", "variablePay", "0.01")}{numericField("Horas extras", "overtimePay", "0.01")}{numericField("Adicionais", "additionalPay", "0.01")}{numericField("Férias + 1/3", "vacationPay", "0.01")}{numericField("13º salário", "thirteenthPay", "0.01")}{numericField("Verbas rescisórias", "terminationPay", "0.01")}<p>Remuneração bruta calculada: <strong>{money(formGrossPayroll)}</strong></p></fieldset>
-      <fieldset className="payroll-form-section"><legend>Descontos do colaborador</legend>{numericField("INSS do colaborador", "employeeInss", "0.01")}{numericField("IRRF", "employeeIrrf", "0.01")}{numericField("Outros descontos", "employeeOtherDeductions", "0.01")}<p>Descontos: <strong>{money(formDeductions)}</strong> · líquido calculado: <strong>{money(formNetPay)}</strong></p></fieldset>
-      <fieldset className="payroll-form-section"><legend>Encargos do empregador</legend>{numericField("INSS patronal", "employerInss", "0.01")}{numericField("RAT", "ratContribution", "0.01")}{numericField("Terceiros", "thirdPartyContributions", "0.01")}{numericField("FGTS", "fgts", "0.01")}{numericField("Multa de FGTS", "fgtsPenalty", "0.01")}<p>Encargos patronais calculados: <strong>{money(formEmployerCharges)}</strong></p></fieldset>
-      <fieldset className="payroll-form-section"><legend>Custos complementares</legend>{numericField("Benefícios", "benefitsCost", "0.01")}{numericField("Provisões", "provisionsCost", "0.01")}{numericField("Outros custos", "otherCosts", "0.01")}<p>Use provisões para férias, 13º e demais ajustes que sua operação acompanhar separadamente.</p></fieldset>
-      <div className="payroll-live-totals" aria-live="polite"><span>Bruto<strong>{money(formGrossPayroll)}</strong></span><span>Descontos<strong>{money(formDeductions)}</strong></span><span>Líquido<strong>{money(formNetPay)}</strong></span><span>Encargos<strong>{money(formEmployerCharges)}</strong></span><span>Custo total<strong>{money(formTotal)}</strong></span></div>
-      <label className="wide">Observações<textarea rows={3} maxLength={500} value={form.notes} disabled={busy} onChange={(event) => setForm({ ...form, notes: event.target.value })} placeholder="Ex.: ajuste de competência, acordo coletivo ou variação relevante" /></label><button className="primary-button" disabled={busy || !form.companyId}><WalletCards aria-hidden="true" /> Salvar e atualizar painel</button>
-    </form></section>}
-  </div>;
-}
-
-export function LegacyCompaniesView({ companies, metrics, cards, busy, canEdit, onCreateCompany, onDeleteCompany, onSaveMetric, onOpenCard }: { companies: WorkspaceSnapshot["companies"]; metrics: WorkspaceSnapshot["hrMetrics"]; cards: Card[]; busy: boolean; canEdit: boolean; onCreateCompany: (payload: Record<string, unknown>) => Promise<WorkspaceSnapshot | null>; onDeleteCompany: (id: string, name: string) => void; onSaveMetric: (payload: Record<string, unknown>) => Promise<WorkspaceSnapshot | null>; onOpenCard: (card: Card) => void }) {
-  const [showCompanyForm, setShowCompanyForm] = useState(false);
-  const [showMetricForm, setShowMetricForm] = useState(false);
-  const [selectedCompanyId, setSelectedCompanyId] = useState("");
-  async function submitCompany(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const data = new FormData(event.currentTarget);
-    const result = await onCreateCompany({ legalName: data.get("legalName"), tradeName: data.get("tradeName"), taxId: data.get("taxId"), externalCode: data.get("externalCode"), email: data.get("email"), phone: data.get("phone"), companyType: data.get("companyType"), parentCompanyId: data.get("parentCompanyId") });
-    if (result) { event.currentTarget.reset(); setShowCompanyForm(false); }
-  }
-  async function submitMetric(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const data = new FormData(event.currentTarget);
-    const result = await onSaveMetric({ companyId: data.get("companyId"), period: data.get("period"), headcount: data.get("headcount"), admissions: data.get("admissions"), terminations: data.get("terminations"), payrollCost: data.get("payrollCost"), source: "manual" });
-    if (result) { event.currentTarget.reset(); setShowMetricForm(false); }
-  }
-  const companyName = new Map(companies.map((company) => [company.id, company.tradeName || company.legalName]));
-  const principalCompanies = companies.filter((company) => company.isPrincipal);
-  const subsidiaryCompanies = companies.filter((company) => !company.isPrincipal).sort((a, b) => (companyName.get(a.parentCompanyId ?? "") ?? "").localeCompare(companyName.get(b.parentCompanyId ?? "") ?? "") || (a.tradeName || a.legalName).localeCompare(b.tradeName || b.legalName));
-  const orderedCompanies = [...principalCompanies, ...subsidiaryCompanies];
-  const latest = metrics.slice(0, 12);
-  const activeCompanies = companies.filter((company) => company.status === "active").length;
-  const payrollTotal = latest.reduce((total, metric) => total + metric.payrollCost, 0);
-  const selectedCompany = companies.find((company) => company.id === selectedCompanyId) ?? companies[0] ?? null;
-  const companyCards = selectedCompany ? cards.filter((card) => card.companyId === selectedCompany.id) : [];
-  const companyDocumentPending = companyCards.reduce((total, card) => total + card.checklist.filter((item) => !item.completed).length, 0);
-  const companyMetrics = selectedCompany ? metrics.filter((metric) => metric.companyId === selectedCompany.id).sort((a, b) => b.period.localeCompare(a.period)) : [];
-  return <div className="companies-view">
-    <div className="companies-toolbar"><div><strong>Grupo empresarial</strong><span>Defina a empresa principal e cadastre os CNPJs do grupo para demandas, folha e indicadores.</span></div><div className="companies-actions">{canEdit && <><button className="primary-button" onClick={() => setShowCompanyForm((value) => !value)}><Plus aria-hidden="true" /> Cadastrar empresa</button><button className="secondary-button" onClick={() => setShowMetricForm((value) => !value)}><WalletCards aria-hidden="true" /> Registrar folha</button></>}</div></div>
-    <div className="companies-overview"><article><div><strong>{activeCompanies}</strong><span>Empresas ativas</span></div></article><article><div><strong>{metrics.length}</strong><span>Competências registradas</span></div></article><article><div><strong>{payrollTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong><span>Folha nos registros recentes</span></div></article></div>
-    {selectedCompany && <section className="company-profile-card"><header><div><span>{selectedCompany.isPrincipal ? "EMPRESA PRINCIPAL DO GRUPO" : "EMPRESA DO GRUPO"}</span><h2>{selectedCompany.tradeName || selectedCompany.legalName}</h2><p>{selectedCompany.legalName}</p></div><em className={selectedCompany.status}>{selectedCompany.status === "active" ? "Ativa" : "Inativa"}</em></header><div className="company-profile-data"><div><span>Estrutura</span><strong>{selectedCompany.isPrincipal ? "Empresa principal" : companyName.get(selectedCompany.parentCompanyId ?? "") || "Grupo principal"}</strong></div><div><span>CNPJ</span><strong>{selectedCompany.taxId || "Não informado"}</strong></div><div><span>Contato</span><strong>{selectedCompany.email || selectedCompany.phone || "Não informado"}</strong></div><div><span>Código Sankhya</span><strong>{selectedCompany.externalCode || "Não vinculado"}</strong></div><div><span>Demandas abertas</span><strong>{companyCards.filter((card) => card.slaStatus !== "completed").length}</strong></div><div><span>Documentos pendentes</span><strong>{companyDocumentPending}</strong></div><div><span>Última folha</span><strong>{companyMetrics[0] ? companyMetrics[0].payrollCost.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "Sem registro"}</strong></div></div><div className="company-profile-demands"><strong>Demandas relacionadas</strong>{companyCards.slice(0, 4).map((card) => <button key={card.id} onClick={() => onOpenCard(card)}><i className={card.slaStatus} /><span>{card.title}<small>{card.processType} • {slaLabel(card)}</small></span><ArrowRight aria-hidden="true" /></button>)}{companyCards.length === 0 && <p>Não há demandas vinculadas a esta empresa.</p>}</div></section>}
-    {showCompanyForm && <form className="company-form catalog-card" onSubmit={submitCompany}><header><div><strong>Cadastro no grupo empresarial</strong><span>A primeira empresa será definida como principal. As demais podem ser vinculadas a ela.</span></div></header><div className="catalog-form"><label>Tipo<select name="companyType" defaultValue={companies.some((company) => company.isPrincipal) ? "subsidiary" : "principal"}><option value="principal">Empresa principal do grupo</option><option value="subsidiary">Empresa / CNPJ do grupo</option></select></label><label>Empresa principal<select name="parentCompanyId" defaultValue=""><option value="">Vincular à principal automaticamente</option>{principalCompanies.map((company) => <option key={company.id} value={company.id}>{company.tradeName || company.legalName}</option>)}</select></label><label>Razão social<input name="legalName" required placeholder="Empresa Exemplo Ltda." /></label><label>Nome fantasia<input name="tradeName" placeholder="Empresa Exemplo" /></label><label>CNPJ<input name="taxId" placeholder="00.000.000/0001-00" /></label><label>Código Sankhya<input name="externalCode" placeholder="COD_EMPRESA" /></label><label>E-mail<input type="email" name="email" /></label><label>Telefone<input name="phone" /></label><button className="primary-button" disabled={busy}>Salvar empresa</button></div></form>}
-    {showMetricForm && <form className="metric-form catalog-card" onSubmit={submitMetric}><header><div><strong>Registrar custo e movimentação da folha</strong><span>Turnover = (admissões + desligamentos) ÷ 2 ÷ headcount médio.</span></div></header><div className="catalog-form"><label>Empresa<select name="companyId" required defaultValue=""><option value="" disabled>Selecione</option>{companies.filter((company) => company.status === "active").map((company) => <option key={company.id} value={company.id}>{company.tradeName || company.legalName}</option>)}</select></label><label>Competência<input type="month" name="period" required defaultValue={new Date().toISOString().slice(0, 7)} /></label><label>Headcount<input type="number" name="headcount" min="0" defaultValue="0" /></label><label>Admissões<input type="number" name="admissions" min="0" defaultValue="0" /></label><label>Desligamentos<input type="number" name="terminations" min="0" defaultValue="0" /></label><label>Custo da folha<input type="number" name="payrollCost" min="0" step="0.01" defaultValue="0" /></label><button className="primary-button" disabled={busy || companies.length === 0}>Salvar competência</button></div></form>}
-    <section className="companies-list catalog-card"><header><div><strong>Empresas do grupo</strong><span>{contagem(companies.length, "empresa", "empresas")} • vínculo para demandas e indicadores</span></div></header>{companies.length === 0 && <div className="empty-view"><span><Building2 aria-hidden="true" /></span><strong>Nenhuma empresa cadastrada</strong><p>Cadastre a empresa principal do grupo para começar.</p></div>}{orderedCompanies.map((company) => <article className={`${selectedCompany?.id === company.id ? "selected" : ""}${company.isPrincipal ? " principal" : " subsidiary"}`} key={company.id} tabIndex={0} role="button" onClick={() => setSelectedCompanyId(company.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setSelectedCompanyId(company.id); }}><i aria-hidden="true">{company.isPrincipal ? "P" : "↳"}</i><div><strong>{company.tradeName || company.legalName}{company.isPrincipal && <em>Principal</em>}</strong><small>{company.isPrincipal ? "Empresa raiz do grupo" : `Grupo: ${companyName.get(company.parentCompanyId ?? "") ?? "Principal"}`} • {company.taxId || "CNPJ não informado"}</small></div><span>{company.email || company.phone || "Sem contato"}</span>{canEdit && <button disabled={busy} onClick={(event) => { event.stopPropagation(); void onDeleteCompany(company.id, company.legalName); }} aria-label={`Excluir ${company.tradeName || company.legalName}`}><Trash2 aria-hidden="true" /><span>Excluir</span></button>}</article>)}</section>
-    <section className="metrics-list catalog-card"><header><div><strong>Histórico de folha</strong><span>{contagem(metrics.length, "competência registrada", "competências registradas")}</span></div></header>{latest.length === 0 && <div className="empty-view"><span><WalletCards aria-hidden="true" /></span><strong>Nenhum indicador de folha</strong><p>Registre uma competência ou conecte o Sankhya.</p></div>}{latest.map((metric) => <article key={metric.id}><div><strong>{companyName.get(metric.companyId) ?? "Empresa removida"}</strong><small>{metric.period} • origem {metric.source}</small></div><span>{metric.headcount} colaboradores</span><span>{metric.admissions} admissões / {metric.terminations} desligamentos</span><b>{metric.payrollCost.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</b></article>)}</section>
-  </div>;
-}
-
-function DemandTableView({ cards, lists, areas, onOpen }: { cards: Card[]; lists: WorkspaceSnapshot["lists"]; areas: WorkspaceSnapshot["areas"]; onOpen: (card: Card) => void }) {
-  const listNames = new Map(lists.map((list) => [list.id, list.name]));
-  return (
-    <section className="demand-table-view">
-      <header><div><strong>Visão gerencial</strong><span>{contagem(cards.length, "demanda", "demandas")} nos filtros atuais</span></div><span>Selecione uma linha para abrir os detalhes.</span></header>
-      <div className="demand-table-scroll">
-        <table>
-          <thead><tr><th>Demanda</th><th>Fluxo entre áreas</th><th>Processo</th><th>Status</th><th>Responsáveis</th><th>Prazo / SLA</th><th>Checklist</th></tr></thead>
-          <tbody>{cards.map((card) => {
-            const complete = card.checklist.filter((item) => item.completed).length;
-            return <tr key={card.id} tabIndex={0} onClick={() => onOpen(card)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") onOpen(card); }}><td><strong>{card.title}</strong><small>{card.company || "Sem empresa"}</small></td><td><DemandAreaFlow card={card} areas={areas} /></td><td><span className={`table-process ${processColors[card.processType] ?? "gray"}`}>{card.processType}</span></td><td>{listNames.get(card.listId) ?? "—"}</td><td>{card.assignees.map((item) => item.name).join(", ") || card.assigneeName || "Não atribuído"}</td><td><em className={card.slaStatus}>{slaLabel(card)}</em></td><td>{complete}/{card.checklist.length}</td></tr>;
-          })}</tbody>
-        </table>
-        {cards.length === 0 && <div className="empty-view"><span>▤</span><strong>Nenhuma demanda encontrada</strong><p>Ajuste os filtros para ampliar a visão.</p></div>}
-      </div>
-    </section>
-  );
-}
-
-/**
- * A faixa de indicadores da Administração (maquete 3).
- *
- * Os cinco números que dizem o tamanho do que está sendo administrado, antes
- * dos formulários que o alteram. Todos saem do snapshot que a modal já tem em
- * mãos — nenhuma consulta nova, e nenhum valor escrito no código.
- *
- * A maquete traz também "Plano e utilização" com barras de consumo. Ele não
- * entra: a tela de plano foi tirada do painel de propósito (§44), e há teste
- * guardando essa retirada. Ressuscitá-la de lado, como faixa de progresso sem
- * a tela por trás, seria mostrar consumo sem lugar nenhum para agir sobre ele.
- */
-function AdminIndicators({ snapshot }: { snapshot: WorkspaceSnapshot }) {
-  const ativas = snapshot.companies.filter((company) => company.status === "active").length;
-  const comErro = snapshot.integrations.filter((item) => item.status === "error").length;
-  const conectadas = snapshot.integrations.filter((item) => item.status === "connected").length;
-  const semAtivar = snapshot.members.filter((member) => !member.isActivated).length;
-  const etapas = snapshot.boards.reduce((total, board) => total + board.stages.length, 0);
-
-  const indicadores = [
-    {
-      key: "members", icon: Users, label: "Usuários com acesso",
-      value: String(snapshot.members.length),
-      support: semAtivar ? `${semAtivar} ainda sem ativar o acesso` : "Todos com acesso ativado",
-      alert: semAtivar > 0,
-    },
-    {
-      key: "companies", icon: Building2, label: "Empresas do grupo",
-      value: String(snapshot.companies.length),
-      support: `${ativas} em operação`,
-      alert: false,
-    },
-    {
-      key: "boards", icon: ClipboardList, label: "Quadros da operação",
-      value: String(snapshot.boards.length),
-      support: plural(etapas, "etapa configurada", "etapas configuradas"),
-      alert: false,
-    },
-    {
-      key: "integrations", icon: Cable, label: "Integrações com erro",
-      value: String(comErro),
-      support: `${contagem(conectadas, "conectada", "conectadas")} de ${contagem(snapshot.integrations.length, "configurada", "configuradas")}`,
-      alert: comErro > 0,
-    },
-  ];
-
-  return <section className="admin-indicators" aria-label={`Indicadores da administração — ${snapshot.workspace.name}`}>
-    {indicadores.map((item) => {
-      return <article key={item.key} className={`admin-indicator${item.alert ? " requires-attention" : ""}`}>
-        <span className="admin-indicator-top"><span>{item.label}</span></span>
-        <strong>{item.value}</strong>
-        <small>{item.support}</small>
-      </article>;
-    })}
-  </section>;
-}
-
-/**
- * A matriz de permissões (maquete 3).
- *
- * O modelo já existia inteiro e nunca chegou a uma tela: `capabilitiesForRole`
- * nasceu com o comentário "a tela de usuários precisa mostrar o que cada papel
- * concede — sem isso o administrador escolhe 'Membro' ou 'Observador' no
- * escuro", e nenhum componente jamais o chamou. O seletor de papel logo acima
- * desta matriz é exatamente essa escolha no escuro.
- *
- * As linhas são as capacidades reais, agrupadas pelas áreas do catálogo e
- * escritas na linguagem dele — `competences.transition` não diz nada a quem
- * administra; "Avançar a competência entre as etapas do fechamento" diz.
- *
- * A maquete desenha três estados por célula: concedido, parcial e negado. O
- * "parcial" não existe no modelo — uma capacidade é do papel ou não é — então
- * ele não é desenhado. Inventar um meio-termo numa matriz de permissão é o
- * tipo de enfeite que faz alguém conceder acesso achando que concedeu menos.
- */
-function PermissionMatrix() {
-  const [aberta, setAberta] = useState<CapabilityArea | "">("");
-  const papeis = workspaceRoles;
-  const concedidas = new Map(papeis.map((papel) => [papel, new Set<string>(capabilitiesForRole(papel))]));
-
-  return <section className="permission-matrix" aria-labelledby="permission-matrix-title">
-    <header>
-      <div>
-        <strong id="permission-matrix-title">O que cada papel permite</strong>
-        <span>Permissões de cada papel.</span>
-      </div>
-    </header>
-    {capabilityAreas.map((area) => {
-      const itens = capabilitiesOfArea(area.key);
-      if (itens.length === 0) return null;
-      const expandida = aberta === area.key;
-      return <div className="permission-area" key={area.key}>
-        <button type="button" aria-expanded={expandida}
-          onClick={() => setAberta(expandida ? "" : area.key)}>
-          <span>{area.label}</span>
-          <b>{plural(itens.length, "permissão", "permissões")}</b>
-          <ChevronDown aria-hidden="true" data-open={expandida ? "true" : "false"} />
-        </button>
-        {expandida && <div className="overview-table-scroll">
-          <table className="overview-table permission-table">
-            <thead><tr>
-              <th scope="col">Permissão</th>
-              {papeis.map((papel) => <th scope="col" key={papel}>{roleLabels[papel]}</th>)}
-            </tr></thead>
-            <tbody>
-              {itens.map((capability) => <tr key={capability}>
-                <th scope="row">{capabilityCatalog[capability].label}</th>
-                {papeis.map((papel) => {
-                  const tem = concedidas.get(papel)?.has(capability) ?? false;
-                  /* O símbolo sozinho não basta: quem usa leitor de tela ouve
-                     "check" sem saber de quê, e quem não distingue verde de
-                     cinza vê duas marcas parecidas. O texto acessível diz o
-                     par inteiro — papel e permissão. */
-                  return <td key={papel} className={tem ? "concedida" : "negada"}>
-                    <span aria-hidden="true">{tem ? "\u2713" : "\u2014"}</span>
-                    <span className="sr-only">
-                      {roleLabels[papel]}: {tem ? "permitido" : "não permitido"}
-                    </span>
-                  </td>;
-                })}
-              </tr>)}
-            </tbody>
-          </table>
-        </div>}
-      </div>;
-    })}
-  </section>;
-}
-
-function ListsSettings({ snapshot, busy, isAdmin, onMutate, onConfirm }: { snapshot: WorkspaceSnapshot; busy: boolean; isAdmin: boolean; onMutate: SnapshotMutation; onConfirm: ConfirmHandler }) {
-  const [deleteTargets, setDeleteTargets] = useState<Record<string, string>>({});
-  const lists = [...snapshot.lists].sort((a, b) => a.position - b.position);
-  const behaviorLabel: Record<string, string> = { running: "SLA em andamento", paused: "SLA pausado", completed: "SLA concluído" };
-
-  async function createList(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    const next = await onMutate("/api/lists", { method: "POST", body: JSON.stringify({ boardId: snapshot.board.id, name: data.get("name"), slaBehavior: data.get("slaBehavior") }) }, "Coluna criada no quadro.");
-    if (next) form.reset();
-  }
-
-  async function saveList(event: FormEvent<HTMLFormElement>, id: string) {
-    event.preventDefault();
-    const data = new FormData(event.currentTarget);
-    await onMutate(`/api/lists/${id}`, { method: "PATCH", body: JSON.stringify({ name: data.get("name"), slaBehavior: data.get("slaBehavior") }) }, "Coluna atualizada.");
-  }
-
-  async function reorder(listId: string, direction: -1 | 1) {
-    const index = lists.findIndex((list) => list.id === listId);
-    const neighbour = lists[index + direction];
-    const current = lists[index];
-    if (!current || !neighbour) return;
-    const first = await onMutate(`/api/lists/${current.id}`, { method: "PATCH", body: JSON.stringify({ position: neighbour.position }) }, "Ordem da coluna atualizada.");
-    if (first) await onMutate(`/api/lists/${neighbour.id}`, { method: "PATCH", body: JSON.stringify({ position: current.position }) });
-  }
-
-  function removeList(listId: string, listName: string, cards: number) {
-    const moveToListId = deleteTargets[listId] ?? "";
-    if (cards > 0 && !moveToListId) return;
-    onConfirm({
-      title: "Excluir coluna?",
-      description: cards > 0 ? `${contagem(cards, "demanda será transferida", "demandas serão transferidas")} para a coluna selecionada antes da exclusão.` : `A coluna “${listName}” será removida do quadro.`,
-      confirmLabel: "Excluir coluna",
-      action: () => onMutate(`/api/lists/${listId}`, { method: "DELETE", body: cards > 0 ? JSON.stringify({ moveToListId }) : undefined }, "Coluna excluída com segurança."),
-    });
-  }
-
-  return <div className="settings-stack"><section className="catalog-section list-manager"><header><div><strong>Colunas do quadro</strong><span>Renomeie, ordene, controle o SLA e mova demandas com segurança antes de excluir.</span></div><b>{lists.length}</b></header><div className="list-manager-items">{lists.map((list, index) => <form key={list.id} onSubmit={(event) => void saveList(event, list.id)}><div className="list-order-controls"><button type="button" disabled={!isAdmin || busy || index === 0} onClick={() => void reorder(list.id, -1)} aria-label={`Mover ${list.name} para a esquerda`}>↑</button><button type="button" disabled={!isAdmin || busy || index === lists.length - 1} onClick={() => void reorder(list.id, 1)} aria-label={`Mover ${list.name} para a direita`}>↓</button></div><label>Nome<input name="name" defaultValue={list.name} maxLength={80} disabled={!isAdmin || busy} required /></label><label>SLA<select name="slaBehavior" defaultValue={list.slaBehavior} disabled={!isAdmin || busy}><option value="running">Em andamento</option><option value="paused">Pausado</option><option value="completed">Concluído</option></select></label><small>{contagem(list.cards.length, "demanda", "demandas")} · {behaviorLabel[list.slaBehavior]}</small>{isAdmin && <><button className="secondary-button" disabled={busy}>Salvar</button>{list.cards.length > 0 && <label className="list-transfer">Mover para<select value={deleteTargets[list.id] ?? ""} disabled={busy} onChange={(event) => setDeleteTargets((current) => ({ ...current, [list.id]: event.target.value }))}><option value="">Escolha antes de excluir</option>{lists.filter((target) => target.id !== list.id).map((target) => <option value={target.id} key={target.id}>{target.name}</option>)}</select></label>}<button type="button" className="danger-link list-delete" disabled={busy || (list.cards.length > 0 && !deleteTargets[list.id])} onClick={() => removeList(list.id, list.name, list.cards.length)}>Excluir</button></>}</form>)}</div></section>{isAdmin && <section className="catalog-section"><header><div><strong>Nova coluna</strong><span>Use uma coluna com SLA pausado apenas quando houver uma justificativa operacional.</span></div></header><form className="catalog-form list-create-form" onSubmit={createList}><label>Nome da coluna<input name="name" placeholder="Ex.: Aguardando aprovação" maxLength={80} required /></label><label>Comportamento do SLA<select name="slaBehavior" defaultValue="running"><option value="running">Em andamento</option><option value="paused">Pausado</option><option value="completed">Concluído</option></select></label><button className="primary-button" disabled={busy}>Criar coluna</button></form></section>}<section className="catalog-section card-archive-settings"><header><div><strong>Arquivo automático</strong><span>Demanda concluída ou cancelada sai do quadro depois de alguns dias e fica no Arquivo, de onde pode ser restaurada.</span></div></header><form onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); void onMutate("/api/catalog", { method: "POST", body: JSON.stringify({ resource: "card-archive", completedArchiveDays: Number(data.get("completedArchiveDays")) }) }, "Regra de arquivo atualizada."); }}><label>Arquivar concluídas após<select name="completedArchiveDays" defaultValue={String(snapshot.settings.completedArchiveDays ?? 7)} disabled={!isAdmin || busy}><option value="1">1 dia</option><option value="3">3 dias</option><option value="7">7 dias</option><option value="15">15 dias</option><option value="30">30 dias</option><option value="0">Nunca</option></select></label>{isAdmin && <button className="primary-button" disabled={busy}>Salvar</button>}</form></section></div>;
-}
-
-function FieldsSettings({ snapshot, busy, isAdmin, onCatalog, onConfirm }: { snapshot: WorkspaceSnapshot; busy: boolean; isAdmin: boolean; onCatalog: CatalogHandler; onConfirm: ConfirmHandler }) {
-  async function createLabel(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    const next = await onCatalog({ resource: "label", name: data.get("name"), color: data.get("color") }, "Etiqueta criada.");
-    if (next) form.reset();
-  }
-  async function createField(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    const next = await onCatalog({ resource: "field", name: data.get("name"), fieldKey: data.get("fieldKey"), fieldType: data.get("fieldType"), required: data.get("required") === "on", options: String(data.get("options") ?? "").split(",").map((item) => item.trim()).filter(Boolean) }, "Campo personalizado criado.");
-    if (next) form.reset();
-  }
-  return (
-    <div className="settings-stack">
-      <section className="catalog-section">
-        <header><div><strong>Etiquetas operacionais</strong><span>Cores para urgência, área ou classificação complementar.</span></div><b>{snapshot.labels.length}</b></header>
-        <div className="label-catalog">
-          {snapshot.labels.map((label) => <article key={label.id}><i style={{ backgroundColor: label.color }} /><strong>{label.name}</strong>{isAdmin && <button disabled={busy} onClick={() => onConfirm({ title: "Excluir etiqueta?", description: `A etiqueta “${label.name}” será removida da operação.`, confirmLabel: "Excluir etiqueta", action: () => onCatalog({ resource: "label", operation: "delete", id: label.id }, "Etiqueta excluída.") })} aria-label={`Excluir ${label.name}`}>×</button>}</article>)}
-        </div>
-        {isAdmin && <form className="catalog-form compact" onSubmit={createLabel}><label>Nome<input name="name" maxLength={40} placeholder="Ex.: Urgente" required /></label><label>Cor<select name="color" defaultValue="#dc2626"><option value="#dc2626">Vermelho</option><option value="#ea580c">Laranja</option><option value="#d97706">Amarelo</option><option value="#16a34a">Verde</option><option value="#0891b2">Ciano</option><option value="#2563eb">Azul</option><option value="#7c3aed">Roxo</option><option value="#64748b">Cinza</option></select></label><button className="primary-button" disabled={busy}>Adicionar</button></form>}
-      </section>
-      <section className="catalog-section">
-        <header><div><strong>Campos personalizados</strong><span>Dados estruturados visíveis nos cartões de DP.</span></div><b>{snapshot.customFields.length}</b></header>
-        <div className="field-catalog">
-          {snapshot.customFields.map((field) => <article key={field.id}><div><strong>{field.name}{field.required && <em>Obrigatório</em>}</strong><small>{field.fieldKey} • {field.fieldType}{field.options.length ? ` • ${field.options.join(", ")}` : ""}</small></div>{isAdmin && <button disabled={busy} onClick={() => onConfirm({ title: "Excluir campo?", description: `O campo “${field.name}” deixará de estar disponível nas demandas.`, confirmLabel: "Excluir campo", action: () => onCatalog({ resource: "field", operation: "delete", id: field.id }, "Campo excluído.") })} aria-label={`Excluir ${field.name}`}>×</button>}</article>)}
-        </div>
-        {isAdmin && <form className="catalog-form fields-form" onSubmit={createField}><label>Nome<input name="name" placeholder="Ex.: Matrícula" maxLength={60} required /></label><label>Identificador<input name="fieldKey" placeholder="matricula" pattern="[A-Za-z0-9_]+" required /></label><label>Tipo<select name="fieldType" defaultValue="text"><option value="text">Texto</option><option value="number">Número</option><option value="date">Data</option><option value="select">Lista</option></select></label><label className="wide">Opções da lista<input name="options" placeholder="Opção 1, Opção 2" /></label><label className="catalog-check"><input type="checkbox" name="required" /> Obrigatório</label><button className="primary-button" disabled={busy}>Criar campo</button></form>}
-      </section>
-    </div>
-  );
-}
-
-function TemplatesSettings({ snapshot, busy, isAdmin, onCatalog, onConfirm, onUseTemplate }: { snapshot: WorkspaceSnapshot; busy: boolean; isAdmin: boolean; onCatalog: CatalogHandler; onConfirm: ConfirmHandler; onUseTemplate: (id: string) => void }) {
-  async function createTemplate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    const checklist = String(data.get("checklist") ?? "").split("\n").map((item) => item.trim()).filter(Boolean);
-    const next = await onCatalog({ resource: "template", name: data.get("name"), processType: data.get("processType"), description: data.get("description"), checklist, defaultSlaDays: Number(data.get("defaultSlaDays")) }, "Template criado.");
-    if (next) form.reset();
-  }
-  return (
-    <div className="settings-stack">
-      <section className="catalog-section">
-        <header><div><strong>Templates de processos</strong><span>Checklists e SLA prontos para iniciar uma demanda sem esquecer etapas.</span></div><b>{snapshot.templates.length}</b></header>
-        <div className="template-catalog">
-          {snapshot.templates.map((template) => <article key={template.id}><div><span>{template.processType}</span><strong>{template.name}</strong><small>{contagem(template.checklist.length, "etapa", "etapas")} • SLA de {contagem(template.defaultSlaDays, "dia", "dias")} útil(eis)</small></div><button onClick={() => onUseTemplate(template.id)}>Usar</button>{isAdmin && <button className="danger" disabled={busy} onClick={() => onConfirm({ title: "Excluir template?", description: `O template “${template.name}” e seu checklist padrão serão removidos.`, confirmLabel: "Excluir template", action: () => onCatalog({ resource: "template", operation: "delete", id: template.id }, "Template excluído.") })}>Excluir</button>}</article>)}
-        </div>
-      </section>
-      {isAdmin && <section className="catalog-section"><header><div><strong>Novo template</strong><span>Uma etapa por linha no checklist.</span></div></header><form className="catalog-form template-form" onSubmit={createTemplate}><label>Nome<input name="name" placeholder="Ex.: Conciliação cadastral" required /></label><label>Processo<select name="processType" defaultValue="CONCILIAÇÃO CADASTRAL"><option>Conciliação cadastral</option><option>Férias</option><option>Rescisão</option><option>Benefícios</option><option>Folha</option><option>Cadastro</option><option>Outros</option></select></label><label>SLA (dias úteis)<input type="number" min="1" max="60" name="defaultSlaDays" defaultValue="3" required /></label><label className="wide">Descrição<textarea name="description" rows={2} placeholder="Orientações para o processo" /></label><label className="wide">Etapas<textarea name="checklist" rows={7} placeholder={'Importar dados concluídos\nVincular registros\nTratar divergências'} required /></label><button className="primary-button" disabled={busy}>Salvar template</button></form></section>}
-    </div>
-  );
 }
 
 function SlaSettings({ snapshot, busy, isAdmin, onCatalog }: { snapshot: WorkspaceSnapshot; busy: boolean; isAdmin: boolean; onCatalog: CatalogHandler }) {
@@ -4602,152 +4048,6 @@ function SlaSettings({ snapshot, busy, isAdmin, onCatalog }: { snapshot: Workspa
   return <div className="settings-stack"><section className="catalog-section"><header><div><strong>Calendário operacional</strong><span>O prazo ignora dias não úteis e feriados cadastrados.</span></div></header><form className="calendar-settings-form" onSubmit={saveCalendar}><fieldset disabled={!isAdmin || busy}><legend>Dias úteis</legend><div>{weekdays.map((day, index) => <label key={day}><input type="checkbox" name="businessDays" value={index} defaultChecked={snapshot.settings.businessDays.includes(index)} />{day}</label>)}</div></fieldset><label>Início do expediente<input type="time" name="dayStart" defaultValue={snapshot.settings.dayStart} disabled={!isAdmin || busy} /></label><label>Fim do expediente<input type="time" name="dayEnd" defaultValue={snapshot.settings.dayEnd} disabled={!isAdmin || busy} /></label><label>Atualização da tela<select name="realtimeSeconds" defaultValue={snapshot.settings.realtimeSeconds} disabled={!isAdmin || busy}><option value="5">5 segundos</option><option value="15">15 segundos</option><option value="30">30 segundos</option><option value="60">1 minuto</option><option value="120">2 minutos</option></select></label>{isAdmin && <button className="primary-button" disabled={busy}>Salvar calendário</button>}</form></section>
     <section className="catalog-section"><header><div><strong>Políticas por processo</strong><span>Meta e janela de atenção em dias úteis.</span></div></header><div className="sla-policy-list">{snapshot.slaPolicies.map((policy) => <form key={policy.id} onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); void onCatalog({ resource: "sla", processType: policy.processType, targetBusinessDays: Number(data.get("target")), warningBusinessDays: Number(data.get("warning")), active: data.get("active") === "on" }, `SLA de ${policy.processType} atualizado.`); }}><strong>{policy.processType}</strong><label>Meta<input type="number" name="target" min="1" max="60" defaultValue={policy.targetBusinessDays} disabled={!isAdmin || busy} /></label><label>Alertar antes<input type="number" name="warning" min="0" max="60" defaultValue={policy.warningBusinessDays} disabled={!isAdmin || busy} /></label><label className="catalog-check"><input type="checkbox" name="active" defaultChecked={policy.active} disabled={!isAdmin || busy} /> Ativa</label>{isAdmin && <button disabled={busy}>Salvar</button>}</form>)}</div></section>
     <section className="catalog-section"><header><div><strong>Feriados e exceções</strong><span>{contagem(snapshot.holidays.length, "data", "datas")} fora do expediente.</span></div></header><div className="holiday-list">{snapshot.holidays.map((holiday) => <article key={holiday.date}><time>{formatDate(holiday.date, true)}</time><strong>{holiday.name}</strong>{isAdmin && <button onClick={() => void onCatalog({ resource: "holiday", operation: "delete", date: holiday.date }, "Feriado removido.")} disabled={busy}>×</button>}</article>)}</div>{isAdmin && <form className="catalog-form compact" onSubmit={addHoliday}><label>Data<input type="date" name="date" required /></label><label>Nome<input name="name" placeholder="Ex.: Feriado municipal" required /></label><button className="primary-button" disabled={busy}>Adicionar</button></form>}</section></div>;
-}
-
-function RulesSettings({ snapshot, busy, isAdmin, onCatalog, onConfirm }: { snapshot: WorkspaceSnapshot; busy: boolean; isAdmin: boolean; onCatalog: CatalogHandler; onConfirm: ConfirmHandler }) {
-  type ConditionType = "always" | "processType" | "priority" | "toList";
-  type ActionType = "moveTo" | "slaStatus" | "labelId" | "notify";
-  /* Rótulos e gatilhos vêm de `lib/automation-rules` (§27): a tela que
-     oferecesse um gatilho a mais entregaria uma regra que o servidor recusa, e
-     um a menos esconderia automação que o motor executa. */
-  const triggerLabels = RULE_TRIGGER_LABELS as Record<string, string>;
-  const [editorOpen, setEditorOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [name, setName] = useState("");
-  const [trigger, setTrigger] = useState("card.created");
-  const [conditionType, setConditionType] = useState<ConditionType>("always");
-  const [conditionValue, setConditionValue] = useState("");
-  const [actionType, setActionType] = useState<ActionType>("moveTo");
-  const [actionValue, setActionValue] = useState("");
-  const [editorError, setEditorError] = useState("");
-
-  const actionLabel = (action: Record<string, unknown>) => {
-    if (typeof action.moveTo === "string") return `mover para ${snapshot.lists.find((list) => list.kind === action.moveTo)?.name ?? action.moveTo}`;
-    if (typeof action.slaStatus === "string") return action.slaStatus === "overdue" ? "marcar SLA como atrasado" : action.slaStatus === "completed" ? "marcar como concluída" : action.slaStatus === "paused" ? "pausar o SLA" : "recalcular o SLA";
-    if (typeof action.labelId === "string") return `aplicar etiqueta ${snapshot.labels.find((label) => label.id === action.labelId)?.name ?? "selecionada"}`;
-    if (typeof action.notify === "string") return `notificar o responsável: “${action.notify}”`;
-    return "executar ação configurada";
-  };
-  const conditionLabel = (condition: Record<string, unknown>) => {
-    if (condition.processType) return `processo é ${condition.processType}`;
-    if (condition.priority) return `prioridade é ${condition.priority}`;
-    if (condition.listKind) return `coluna é ${snapshot.lists.find((list) => list.kind === condition.listKind)?.name ?? condition.listKind}`;
-    if (condition.assignee === "present") return "há responsável atribuído";
-    if (condition.allItems === true) return "checklist completo";
-    if (condition.dueAt === "past") return "prazo vencido";
-    return "sem condição adicional";
-  };
-  const defaultActionFor = (nextTrigger: string): { type: ActionType; value: string } => {
-    if (nextTrigger === "sla.tick") return { type: "slaStatus", value: "overdue" };
-    if (nextTrigger === "checklist.completed") return { type: "moveTo", value: snapshot.lists.find((list) => list.kind === "done")?.kind ?? "" };
-    if (nextTrigger === "assignee.added") return { type: "moveTo", value: snapshot.lists.find((list) => list.kind === "analysis")?.kind ?? "" };
-    return { type: "moveTo", value: snapshot.lists[0]?.kind ?? "" };
-  };
-  function changeTrigger(nextTrigger: string) {
-    setTrigger(nextTrigger);
-    setConditionType("always");
-    setConditionValue("");
-    const nextAction = defaultActionFor(nextTrigger);
-    setActionType(nextAction.type);
-    setActionValue(nextAction.value);
-  }
-  function edit(rule?: WorkspaceSnapshot["rules"][number]) {
-    setEditorOpen(true);
-    setEditingId(rule?.id ?? null);
-    setName(rule?.name ?? "");
-    const nextTrigger = rule?.trigger ?? "card.created";
-    setTrigger(nextTrigger);
-    const condition = rule?.condition ?? {};
-    if (typeof condition.processType === "string") { setConditionType("processType"); setConditionValue(condition.processType); }
-    else if (typeof condition.priority === "string") { setConditionType("priority"); setConditionValue(condition.priority); }
-    else if (typeof condition.listKind === "string") { setConditionType("toList"); setConditionValue(condition.listKind); }
-    else { setConditionType("always"); setConditionValue(""); }
-    const action = rule?.action ?? {};
-    if (typeof action.slaStatus === "string") { setActionType("slaStatus"); setActionValue(action.slaStatus); }
-    else if (typeof action.labelId === "string") { setActionType("labelId"); setActionValue(action.labelId); }
-    else if (typeof action.moveTo === "string") { setActionType("moveTo"); setActionValue(action.moveTo); }
-    else if (typeof action.notify === "string") { setActionType("notify"); setActionValue(action.notify); }
-    else { const nextAction = defaultActionFor(nextTrigger); setActionType(nextAction.type); setActionValue(nextAction.value); }
-    setEditorError("");
-  }
-  async function save(event: FormEvent) {
-    event.preventDefault();
-    if (!name.trim()) return;
-    if (!actionValue) { setEditorError("Escolha a ação que a automação deverá executar."); return; }
-    const fixedCondition = trigger === "assignee.added" ? { assignee: "present" } : trigger === "checklist.completed" ? { allItems: true } : trigger === "sla.tick" ? { dueAt: "past" } : {};
-    const condition = conditionType === "processType" ? { processType: conditionValue } : conditionType === "priority" ? { priority: conditionValue } : conditionType === "toList" ? { listKind: conditionValue } : fixedCondition;
-    const action = actionType === "moveTo" ? { moveTo: actionValue } : actionType === "slaStatus" ? { slaStatus: actionValue } : actionType === "notify" ? { notify: actionValue } : { labelId: actionValue };
-    const result = await onCatalog({ resource: "rule", operation: editingId ? "update" : "create", id: editingId ?? "", name, trigger, condition, action, enabled: true }, editingId ? "Automação atualizada." : "Automação criada.");
-    if (result) setEditorOpen(false);
-  }
-  const showConditionSelector = trigger === "card.created" || trigger === "card.moved";
-  const fixedConditionText = trigger === "assignee.added" ? "Só continua se houver um responsável atribuído." : trigger === "checklist.completed" ? "Só continua quando todas as etapas estiverem concluídas." : trigger === "sla.tick" ? "Só continua quando o prazo estiver vencido." : "Sem condição adicional.";
-
-  return <div className="settings-stack"><section className="catalog-section rules-editor"><header><div><strong>Editor No-Code</strong><span>Regras ativas que executam tarefas automaticamente no fluxo do DP.</span></div>{isAdmin && <button className="secondary-button" onClick={() => edit()}><Plus aria-hidden="true" /> Nova regra</button>}</header><div className="rule-catalog no-code-rule-catalog">{snapshot.rules.length === 0 && <div className="empty-view"><span><ListChecks aria-hidden="true" /></span><strong>Nenhuma automação criada</strong><p>Crie uma regra para padronizar o fluxo da sua operação.</p></div>}{snapshot.rules.map((rule) => <article key={rule.id}><div><strong>{rule.name}</strong><div className="rule-flow"><span>Quando {triggerLabels[rule.trigger] ?? rule.trigger}</span><ArrowRight aria-hidden="true" /><span>Se {conditionLabel(rule.condition)}</span><ArrowRight aria-hidden="true" /><span>Então {actionLabel(rule.action)}</span></div></div>{isAdmin && <><button onClick={() => edit(rule)}>Editar</button><button className="danger" disabled={busy} onClick={() => onConfirm({ title: "Excluir automação?", description: `A regra “${rule.name}” deixará de ser executada na operação.`, confirmLabel: "Excluir automação", action: () => onCatalog({ resource: "rule", operation: "delete", id: rule.id }, "Automação excluída.") })}>Excluir</button></>}</article>)}</div></section>{isAdmin && editorOpen && <form className="catalog-section rule-editor-form no-code-editor" onSubmit={save}><header><div><strong>{editingId ? "Editar automação" : "Nova automação"}</strong><span>Escolha o evento, a condição e o resultado desejado. O sistema traduz isso para uma regra auditável.</span></div><button type="button" className="danger-link" onClick={() => setEditorOpen(false)}>Cancelar</button></header><div className="no-code-editor-body"><label className="wide">Nome da automação<input value={name} onChange={(event) => setName(event.target.value)} placeholder="Ex.: Ao concluir checklist, finalizar demanda" required /></label><section><span>1. Quando</span><label>Gatilho<select value={trigger} onChange={(event) => changeTrigger(event.target.value)}>{RULE_TRIGGERS.map((item) => <option key={item} value={item}>Quando {RULE_TRIGGER_LABELS[item]}</option>)}</select></label></section><ArrowRight className="flow-arrow" aria-hidden="true" /><section><span>2. Se</span>{showConditionSelector ? <><label>Condição<select value={conditionType} onChange={(event) => { setConditionType(event.target.value as ConditionType); setConditionValue(""); }}><option value="always">Sem condição adicional</option>{trigger === "card.created" && <><option value="processType">O processo for</option><option value="priority">A prioridade for</option></>}{trigger === "card.moved" && <option value="toList">A coluna de destino for</option>}</select></label>{conditionType === "processType" && <label>Processo<select value={conditionValue} onChange={(event) => setConditionValue(event.target.value)} required><option value="">Selecione</option>{["ADMISSÃO", "FÉRIAS", "RESCISÃO", "BENEFÍCIOS", "FOLHA", "CADASTRO", "OUTROS"].map((item) => <option key={item}>{item}</option>)}</select></label>}{conditionType === "priority" && <label>Prioridade<select value={conditionValue} onChange={(event) => setConditionValue(event.target.value)} required><option value="">Selecione</option>{["low", "normal", "high", "urgent"].map((nivel) => <option key={nivel} value={nivel}>{PRIORITY_LABELS[nivel]}</option>)}</select></label>}{conditionType === "toList" && <label>Coluna<select value={conditionValue} onChange={(event) => setConditionValue(event.target.value)} required><option value="">Selecione</option>{snapshot.lists.map((list) => <option value={list.kind} key={list.id}>{list.name}</option>)}</select></label>}</> : <div className="fixed-rule-condition"><CheckCircle2 aria-hidden="true" />{fixedConditionText}</div>}</section><ArrowRight className="flow-arrow" aria-hidden="true" /><section><span>3. Então</span><label>Ação<select value={actionType} onChange={(event) => { setActionType(event.target.value as ActionType); setActionValue(""); }}><option value="moveTo">Mover a demanda</option><option value="slaStatus">Atualizar o SLA</option><option value="labelId">Aplicar uma etiqueta</option><option value="notify">Notificar o responsável</option></select></label>{actionType === "moveTo" && <label>Coluna de destino<select value={actionValue} onChange={(event) => setActionValue(event.target.value)} required><option value="">Selecione</option>{snapshot.lists.map((list) => <option value={list.kind} key={list.id}>{list.name}</option>)}</select></label>}{actionType === "slaStatus" && <label>Novo status<select value={actionValue} onChange={(event) => setActionValue(event.target.value)} required><option value="">Selecione</option><option value="safe">Dentro do prazo</option><option value="overdue">Atrasado</option><option value="paused">Pausado</option><option value="completed">Concluído</option></select></label>}{actionType === "labelId" && <label>Etiqueta<select value={actionValue} onChange={(event) => setActionValue(event.target.value)} required><option value="">Selecione</option>{snapshot.labels.map((label) => <option value={label.id} key={label.id}>{label.name}</option>)}</select></label>}{actionType === "notify" && <label>Aviso<input value={actionValue} onChange={(event) => setActionValue(event.target.value)} maxLength={160} placeholder="Ex.: Documentação vencida — conferir a demanda" required /></label>}</section></div>{editorError && <p className="no-code-editor-error" role="alert"><CircleAlert aria-hidden="true" />{editorError}</p>}<footer><span>Prévia: Quando {triggerLabels[trigger] ?? trigger}, se {conditionType === "always" ? fixedConditionText.toLowerCase() : "a condição selecionada for atendida"}, então {actionType === "moveTo" ? "a demanda será movida" : actionType === "slaStatus" ? "o SLA será atualizado" : actionType === "notify" ? "quem responde pela demanda será avisado" : "uma etiqueta será aplicada"}.</span><button className="primary-button" disabled={busy}>Salvar automação</button></footer></form>}</div>;
-}
-
-function InboxView({ items, busy, canEdit, onConvert, onNew }: { items: InboxItem[]; busy: boolean; canEdit: boolean; onConvert: (item: InboxItem) => Promise<void>; onNew: () => void }) {
-  const pending = items.filter((item) => item.status === "new");
-  const converted = items.filter((item) => item.status === "converted");
-  const channelLabels: Record<string, string> = { whatsapp: "WhatsApp", email: "E-mail", teams: "Teams", manual: "Registro manual" };
-  return (
-    <div className="inbox-layout">
-      <section className="inbox-list-panel">
-        {/* O botão de criar fica só no cabeçalho da tela ("Nova solicitação"):
-            o segundo, aqui dentro, fazia a mesma coisa com outro nome. */}
-        <header><div><strong>Aguardando triagem</strong><span>{contagem(pending.length, "nova", "novas")} • {contagem(converted.length, "convertida", "convertidas")}</span></div></header>
-        {pending.length === 0
-          ? <div className="inbox-items"><div className="empty-view"><span><CheckCircle2 aria-hidden="true" /></span><strong>Nada aguardando triagem</strong><p>Solicitações recebidas por e-mail, Teams ou registro manual aparecem aqui.</p>{canEdit && <button className="secondary-button" onClick={onNew}><Plus aria-hidden="true" /> Registrar solicitação</button>}</div></div>
-          : <div className="inbox-table-wrap"><table className="inbox-table">
-            <thead><tr><th scope="col">Recebida</th><th scope="col">Canal</th><th scope="col">Remetente</th><th scope="col">Assunto</th>{canEdit && <th scope="col"><span className="sr-only">Ação</span></th>}</tr></thead>
-            <tbody>{pending.map((item) => <tr key={item.id}>
-              <td className="numeric">{formatReceived(item.receivedAt)}</td>
-              <td>{channelLabels[item.channel] ?? item.channel}</td>
-              <td>{item.senderName}</td>
-              <td className="inbox-subject"><strong>{item.subject}</strong>{item.body && <span>{item.body}</span>}</td>
-              {canEdit && <td><button className="secondary-button" disabled={busy} onClick={() => void onConvert(item)}>Transformar em demanda</button></td>}
-            </tr>)}</tbody>
-          </table></div>}
-      </section>
-    </div>
-  );
-}
-
-function PlannerView({ cards, blocks, connections, onOpen, onCreateBlock, onDeleteBlock, onSaveConnection }: { cards: Card[]; blocks: WorkspaceSnapshot["plannerBlocks"]; connections: WorkspaceSnapshot["calendarConnections"]; onOpen: (card: Card) => void; onCreateBlock: (payload: Record<string, unknown>) => Promise<WorkspaceSnapshot | null>; onDeleteBlock: (id: string) => Promise<WorkspaceSnapshot | null>; onSaveConnection: (payload: Record<string, unknown>) => Promise<WorkspaceSnapshot | null> }) {
-  const scheduled = cards.filter((card) => card.dueAt && card.slaStatus !== "completed").sort((a, b) => String(a.dueAt).localeCompare(String(b.dueAt)));
-  const grouped = scheduled.reduce<Record<string, Card[]>>((accumulator, card) => { const key = card.dueAt!.slice(0, 10); (accumulator[key] ??= []).push(card); return accumulator; }, {});
-  const [showBlockForm, setShowBlockForm] = useState(false);
-  const [blockTitle, setBlockTitle] = useState("");
-  const [blockStart, setBlockStart] = useState("");
-  const [blockEnd, setBlockEnd] = useState("");
-  const [blockCardId, setBlockCardId] = useState("");
-  const [blockError, setBlockError] = useState("");
-  const [showConnectionForm, setShowConnectionForm] = useState(false);
-  const [calendarProvider, setCalendarProvider] = useState("google");
-  const [calendarId, setCalendarId] = useState("");
-  async function createBlock(event: FormEvent) {
-    event.preventDefault();
-    const start = new Date(blockStart);
-    const end = new Date(blockEnd);
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
-      setBlockError("O término precisa ser posterior ao início do bloco.");
-      return;
-    }
-    setBlockError("");
-    const next = await onCreateBlock({ title: blockTitle, startAt: start.toISOString(), endAt: end.toISOString(), cardId: blockCardId || null, blockType: "focus" });
-    if (next) { setBlockTitle(""); setBlockStart(""); setBlockEnd(""); setBlockCardId(""); setShowBlockForm(false); }
-  }
-  async function saveConnection(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const next = await onSaveConnection({ provider: calendarProvider, externalCalendarId: calendarId, config: { calendarLabel: calendarId || "Calendário principal" } });
-    if (next) { setCalendarId(""); setShowConnectionForm(false); }
-  }
-  return (
-    <div className="planner-layout">
-      <section className="planner-calendar"><header><div><strong>Agenda por prazo</strong><span>{contagem(scheduled.length, "atividade programada", "atividades programadas")} • {contagem(blocks.length, "bloco", "blocos")} de foco</span></div><button className="secondary-button" onClick={() => { setShowBlockForm((value) => !value); setBlockError(""); }}><Plus aria-hidden="true" /> Bloco de tempo</button></header>{showBlockForm && <form className="planner-block-form" onSubmit={createBlock}><label>Título<input value={blockTitle} onChange={(event) => setBlockTitle(event.target.value)} placeholder="Ex.: Conferir admissões" required /></label><label>Início<input type="datetime-local" value={blockStart} onChange={(event) => setBlockStart(event.target.value)} required /></label><label>Fim<input type="datetime-local" value={blockEnd} onChange={(event) => setBlockEnd(event.target.value)} required /></label><label>Demanda<select value={blockCardId} onChange={(event) => setBlockCardId(event.target.value)}><option value="">Bloco geral</option>{cards.map((card) => <option key={card.id} value={card.id}>{card.title}</option>)}</select></label><button className="primary-button">Salvar bloco</button>{blockError && <p className="planner-form-error" role="alert">{blockError}</p>}</form>}{blocks.length > 0 && <div className="planner-block-list">{blocks.map((block) => <article key={block.id}><CalendarClock aria-hidden="true" /><div><strong>{block.title}</strong><small>{new Date(block.startAt).toLocaleString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })} – {new Date(block.endAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</small></div><button onClick={() => void onDeleteBlock(block.id)} aria-label={`Excluir ${block.title}`}><Trash2 aria-hidden="true" /></button></article>)}</div>}{Object.keys(grouped).length === 0 && <div className="empty-view"><span><CalendarClock aria-hidden="true" /></span><strong>Nenhum prazo agendado</strong><p>Defina uma data nas demandas para montar o planner.</p></div>}{Object.entries(grouped).map(([date, dateCards]) => <div className="planner-day" key={date}><div><strong>{formatDate(date, true)}</strong><span>{contagem(dateCards.length, "demanda", "demandas")}</span></div><div>{dateCards.map((card) => <button key={card.id} onClick={() => onOpen(card)}><i className={processColors[card.processType] ?? "gray"} /><span><strong>{card.title}</strong><small>{card.assigneeName || "Sem responsável"} • {card.company || card.processType}</small></span><em className={card.slaStatus}><Clock3 aria-hidden="true" />{slaLabel(card)}</em></button>)}</div></div>)}</section>
-      <aside className="planner-focus"><span>Foco do dia</span><h2>{scheduled.filter((card) => card.slaStatus === "warning" || card.slaStatus === "overdue").length}</h2><p>demanda(s) precisam de atenção imediata.</p><div><i /><span><strong>Priorize atrasos</strong><small>Comece pelos SLAs vencidos antes de assumir novas atividades.</small></span></div><section className="planner-connections"><header><strong>Calendários externos</strong><button onClick={() => setShowConnectionForm((value) => !value)}>{showConnectionForm ? "Cancelar" : "Configurar"}</button></header>{connections.length === 0 && <p>Conecte Google ou Microsoft Calendar para preparar a sincronização da agenda.</p>}{connections.map((connection) => <article key={connection.id}><CalendarDays aria-hidden="true" /><span><strong>{connection.provider === "microsoft" ? "Microsoft Calendar" : "Google Calendar"}</strong><small>{connection.externalCalendarId || "Calendário principal"} · {connection.status === "connected" ? "conectado" : "aguardando OAuth"}</small></span></article>)}{showConnectionForm && <form onSubmit={saveConnection}><select value={calendarProvider} onChange={(event) => setCalendarProvider(event.target.value)}><option value="google">Google Calendar</option><option value="microsoft">Microsoft Calendar</option></select><input value={calendarId} onChange={(event) => setCalendarId(event.target.value)} placeholder="ID ou nome do calendário (opcional)" /><button className="secondary-button">Salvar configuração</button></form>}</section></aside>
-    </div>
-  );
 }
 
 function IndicatorsView({ cards, companyId, scopeLabel, rules, busy, canManageRules, canExportWorkspace, onToggleRule, onExport, hrMetrics, companies }: { cards: Card[]; companyId: string; scopeLabel: string; canExportWorkspace: boolean; rules: WorkspaceSnapshot["rules"]; busy: boolean; canManageRules: boolean; onToggleRule: (id: string, enabled: boolean) => Promise<void>; onExport: () => void; hrMetrics: WorkspaceSnapshot["hrMetrics"]; companies: WorkspaceSnapshot["companies"] }) {

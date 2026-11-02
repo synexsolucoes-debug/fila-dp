@@ -5,6 +5,7 @@ import test from "node:test";
 import {
   archiveFinishedCards, DEFAULT_COMPLETED_ARCHIVE_DAYS, FINISHED_AT_SQL, normalizeCompletedArchiveDays,
 } from "../lib/card-auto-archive.ts";
+import { painelSource } from "./painel-source.ts";
 
 const read = (path: string) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
@@ -81,7 +82,7 @@ test("a migration cria a configuração com 7 dias e a data de arquivamento", as
 });
 
 test("a coluna de concluídas avisa para onde as demandas vão", async () => {
-  const painel = await read("app/painel/WorkspaceApp.tsx");
+  const painel = await painelSource();
   assert.match(painel, /Vão para o Arquivo após/u);
   assert.match(painel, /resource: "card-archive"/u);
 });
