@@ -1,6 +1,6 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, prepareAuditEvent } from "@/lib/fila-dp-db";
-import { requireNamedCapability } from "@/lib/authorization";
+import { requireNamedCapability, requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { cleanText } from "@/lib/clean-text";
 import { cutoffStatuses, ruleFromRow } from "@/lib/dp-cutoff";
@@ -16,6 +16,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ co
     const { code } = await params;
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "dp_operations.access");
     requireNamedCapability(workspace, "portfolio.manage", "alterar regras de corte");
     const row = await d1.prepare("SELECT * FROM fdp_cutoff_rules WHERE workspace_id = ? AND code = ?").bind(workspace.id, code).first<Record<string, unknown>>();
     if (!row) throw ApiError.notFound("Regra não encontrada.", "CUTOFF_RULE_NOT_FOUND");

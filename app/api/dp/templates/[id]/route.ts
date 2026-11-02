@@ -1,6 +1,6 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, prepareAuditEvent } from "@/lib/fila-dp-db";
-import { requireNamedCapability } from "@/lib/authorization";
+import { requireNamedCapability, requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { templateBody, templateFromRow, validateTemplateInput } from "@/lib/dp-recurring";
 
@@ -14,6 +14,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const { id } = await params;
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "dp_operations.access");
     requireNamedCapability(workspace, "portfolio.manage", "alterar rotinas do DP");
     const row = await d1.prepare("SELECT * FROM fdp_recurring_templates WHERE workspace_id = ? AND id = ?").bind(workspace.id, id).first<Record<string, unknown>>();
     if (!row) throw ApiError.notFound("Rotina não encontrada.", "RECURRING_TEMPLATE_NOT_FOUND");

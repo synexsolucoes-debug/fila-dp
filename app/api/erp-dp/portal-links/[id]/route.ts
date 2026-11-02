@@ -11,6 +11,7 @@ export async function DELETE(request: Request, context: RouteContext) {
   try {
     const { id } = await context.params;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "erp.access");
     requireCapability(workspace, "payroll.manage");
     const link = await d1.prepare("SELECT id, company_id, employee_id FROM fdp_employee_portal_links WHERE workspace_id = ? AND id = ?")
       .bind(workspace.id, id).first<{ id: string; company_id: string; employee_id: string }>();

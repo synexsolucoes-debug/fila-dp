@@ -19,6 +19,7 @@ export async function GET(request: Request, context: RouteContext) {
     const { id } = await context.params;
     const employeeId = new URL(request.url).searchParams.get("employeeId") ?? "";
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "erp.access");
     requireCapability(workspace, "payroll.read");
     const row = await d1.prepare("SELECT * FROM fdp_payroll_runs WHERE workspace_id = ? AND id = ?").bind(workspace.id, id).first<Record<string, unknown>>();
     if (!row) throw ApiError.notFound("Folha não encontrada.", "PAYROLL_RUN_NOT_FOUND");

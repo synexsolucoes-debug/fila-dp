@@ -18,6 +18,7 @@ export async function GET(request: Request) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "erp.access");
     requireCapability(workspace, "employees.read");
     const url = new URL(request.url);
     const at = optionalDate(url.searchParams.get("at")) ?? todayInBrazil();

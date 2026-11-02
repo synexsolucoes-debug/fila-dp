@@ -14,6 +14,7 @@ export async function GET(request: Request) {
   try {
     const employeeId = new URL(request.url).searchParams.get("employeeId") ?? "";
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "erp.access");
     requireCapability(workspace, "payroll.read");
     await payrollEmployee(d1, workspace.id, user.id, workspace.role, employeeId);
     const rows = await d1.prepare(`SELECT id, expires_at, revoked_at, opened_count, last_opened_at, created_at FROM fdp_employee_portal_links
@@ -31,6 +32,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "erp.access");
     requireCapability(workspace, "payroll.manage");
     const employee = await payrollEmployee(d1, workspace.id, user.id, workspace.role, String(body.employeeId ?? ""));
     const token = createPortalToken(workspace.id);

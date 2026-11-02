@@ -24,6 +24,14 @@ export const capabilities = [
      observador — continua vendo os anexos e deixa de ver o conteúdo deles. */
   "admission.sheet.read",
   "reports.read",
+  /* Módulos em construção (migration 0121). Só o papel de administrador tem
+     estas permissões; para qualquer outra pessoa o módulo abre apenas com a
+     liberação individual que o administrador dá em Usuários e acessos. Nenhum
+     papel além do administrador recebe estas permissões. */
+  "erp.access",
+  "dp_operations.access",
+  "portfolio.access",
+  "agents.access",
   "hr.read",
   "hr.write",
   "integrations.status.read",

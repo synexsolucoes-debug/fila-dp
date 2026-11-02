@@ -17,6 +17,7 @@ export async function GET(request: Request) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "erp.access");
     requireCapability(workspace, "employees.read");
     const companyId = cleanText(new URL(request.url).searchParams.get("companyId"), 120);
     const empty = { active: 0, onLeave: 0, terminated: 0, approvedMovements: 0, openRetroactive: 0, contractDeadlines: 0, cycles: [] };

@@ -17,6 +17,7 @@ export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "erp.access");
     requireCapability(workspace, "payroll.read");
     const cycleId = url.searchParams.get("cycleId") ?? "";
     if (cycleId) {
@@ -51,6 +52,7 @@ export async function POST(request: Request) {
     if (!companyId) throw ApiError.badRequest("Escolha a empresa.", "PAYROLL_COMPANY_REQUIRED");
     if (!/^\d{4}-(0[1-9]|1[0-2])$/u.test(competence)) throw ApiError.badRequest("Informe a competência.", "PAYROLL_COMPETENCE_REQUIRED");
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "erp.access");
     requireCapability(workspace, "payroll.manage");
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, companyId);
     const runId = await calculateRun(d1, {

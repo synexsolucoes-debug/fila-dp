@@ -128,6 +128,7 @@ export const expectedMigrations = [
   "0118_erp_dp_payroll_rules.sql",
   "0119_erp_dp_employee_portal.sql",
   "0120_completed_card_archive.sql",
+  "0121_restricted_modules.sql",
 ] as const;
 
 /** Última migration conhecida por esta versão. */

@@ -13,6 +13,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const { id } = await context.params;
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "erp.access");
     requireCapability(workspace, "employees.manage");
     const row = await d1.prepare("SELECT id, company_id, employee_id, status FROM fdp_vacation_schedules WHERE workspace_id = ? AND id = ?")
       .bind(workspace.id, id).first<{ id: string; company_id: string; employee_id: string; status: string }>();

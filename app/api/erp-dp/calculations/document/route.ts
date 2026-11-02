@@ -19,6 +19,7 @@ export async function POST(request: Request) {
     const body = await request.json() as Record<string, unknown>;
     if (body.type !== "vacation" && body.type !== "termination") throw ApiError.badRequest("Documento só para férias e rescisão.", "DOCUMENT_TYPE_INVALID");
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "erp.access");
     requireCapability(workspace, "payroll.read");
     const calculation = await calculate(d1, workspace, user.id, body);
     const company = await documentCompany(d1, workspace.id, calculation.employee.companyId);

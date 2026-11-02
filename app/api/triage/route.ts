@@ -1,6 +1,6 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getCompanyAccessScope, getWorkspaceContext } from "@/lib/fila-dp-db";
-import { hasCapability, requireNamedCapability } from "@/lib/authorization";
+import { hasCapability, requireNamedCapability, requireCapability } from "@/lib/authorization";
 import {
   confidenceBand, originLabel, proposalLabel, summarizePayload, triageResolveHref,
   uncertaintyExplanation, type TriageItem,
@@ -42,6 +42,7 @@ export async function GET(request: Request) {
   if (!auth.user) return auth.response;
   try {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "agents.access");
     requireNamedCapability(workspace, "integrations.status.read", "consultar a triagem");
 
     const url = new URL(request.url);

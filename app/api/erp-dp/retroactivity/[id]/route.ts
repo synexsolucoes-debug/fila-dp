@@ -17,6 +17,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const { id } = await context.params;
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "erp.access");
     requireCapability(workspace, "movements.manage");
     const status = body.status === "posted" || body.status === "waived" || body.status === "open" ? body.status : "";
     if (!status) throw ApiError.badRequest("Informe se o retroativo foi lançado, dispensado ou reaberto.", "RETRO_STATUS_INVALID");
