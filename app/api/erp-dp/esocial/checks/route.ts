@@ -60,6 +60,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "erp.access");
     requireCapability(workspace, "obligations.manage");
     const rawItems = Array.isArray(body.items) ? body.items as Record<string, unknown>[] : [body];
     if (!rawItems.length || rawItems.length > 500) throw ApiError.badRequest("Envie de 1 a 500 eventos por vez.", "ESOCIAL_BATCH_SIZE");
@@ -92,6 +93,7 @@ export async function DELETE(request: Request) {
   try {
     const url = new URL(request.url);
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "erp.access");
     requireCapability(workspace, "obligations.manage");
     const historyRecordId = cleanText(url.searchParams.get("historyRecordId"), 120);
     const eventCode = cleanText(url.searchParams.get("eventCode"), 10);

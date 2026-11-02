@@ -23,6 +23,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "erp.access");
     requireCapability(workspace, "movements.manage");
     const employeeId = cleanText(body.employeeId, 120);
     const returnDate = optionalDate(body.returnDate, true) as string;

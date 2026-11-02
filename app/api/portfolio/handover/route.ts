@@ -1,6 +1,6 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getCompanyAccessScope, getWorkspaceContext } from "@/lib/fila-dp-db";
-import { requireNamedCapability } from "@/lib/authorization";
+import { requireNamedCapability, requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { cleanText } from "@/lib/clean-text";
 import { handOverToBackup } from "@/lib/portfolio-service";
@@ -11,6 +11,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "portfolio.access");
     requireNamedCapability(workspace, "portfolio.manage", "repassar demandas ao backup");
     const userId = cleanText(body.userId, 120);
     if (!userId) throw ApiError.badRequest("Selecione de quem são as demandas.", "HANDOVER_USER_REQUIRED");

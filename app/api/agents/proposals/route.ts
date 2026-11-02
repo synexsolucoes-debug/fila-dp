@@ -1,6 +1,6 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, prepareAuditEvent } from "@/lib/fila-dp-db";
-import { hasCapability, requireNamedCapability } from "@/lib/authorization";
+import { hasCapability, requireNamedCapability, requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import {
   agentProposalStatuses, decideAgentProposal, sanitizeAgentProposal, statusForDecision,
@@ -29,6 +29,7 @@ export async function GET(request: Request) {
   if (!auth.user) return auth.response;
   try {
     const { d1, workspace } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "agents.access");
     requireNamedCapability(workspace, "integrations.status.read", "consultar a triagem de agentes");
 
     const url = new URL(request.url);
@@ -70,6 +71,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({})) as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "agents.access");
     /* Registrar proposta de agente é operar integração, não abrir demanda: quem
        não administra integração não injeta trabalho pela porta do robô. */
     requireNamedCapability(workspace, "integrations.execute", "registrar uma proposta de agente");

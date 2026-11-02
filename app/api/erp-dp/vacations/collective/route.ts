@@ -24,6 +24,7 @@ export async function POST(request: Request) {
       throw ApiError.badRequest("Cada período de férias coletivas tem no mínimo 10 dias (CLT art. 139, §1º).", "COLLECTIVE_TOO_SHORT");
     }
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "erp.access");
     requireCapability(workspace, "employees.manage");
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, companyId);
     const rows = await d1.prepare(`SELECT id, full_name, registration_number, admission_date FROM fdp_employees

@@ -275,7 +275,8 @@ test("contagem por tipo e por titular", () => {
 test("Central de Trabalho: alerta do DP é fonte, atribuída ao responsável, e abre a ficha", () => {
   const source = workItemSources.find((item) => item.key === "dp_alert");
   assert.ok(source);
-  assert.equal(source.capability, "portfolio.read");
+  // DP Operacional está em construção: o alerta só aparece para quem foi liberado.
+  assert.equal(source.capability, "dp_operations.access");
   const mine = buildWorkItemQuery({ source, workspaceId: "ws", userId: "u1", scope: "mine", companyIds: null });
   assert.match(mine.sql, /AND a\.assigned_user_id = \?/u);
   assert.deepEqual(mine.parameters, ["ws", "u1"]);

@@ -123,6 +123,12 @@ export const moduleWriteCapabilities: Record<string, readonly Capability[]> = {
   saas: ["saas.manage"],
   // Relatórios são leitura; não há escrita a negar além da própria visão.
   indicators: [],
+  // Módulos em construção (migration 0121): a permissão de acesso é a única
+  // porta, e negar o módulo fecha a porta.
+  erp_dp: ["erp.access"],
+  dp_operations: ["dp_operations.access"],
+  portfolio: ["portfolio.access"],
+  agents: ["agents.access"],
 };
 
 /** Módulos que governam cada capacidade de escrita, derivado do mapa acima. */

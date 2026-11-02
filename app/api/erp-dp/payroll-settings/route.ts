@@ -11,6 +11,7 @@ export async function GET(request: Request) {
     const companyId = new URL(request.url).searchParams.get("companyId") ?? "";
     if (!companyId) throw ApiError.badRequest("Escolha a empresa.", "SETTINGS_COMPANY_REQUIRED");
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "erp.access");
     requireCapability(workspace, "payroll.read");
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, companyId);
     return Response.json({ settings: await companySettings(d1, workspace.id, companyId) });
@@ -24,6 +25,7 @@ export async function PUT(request: Request) {
     const companyId = String(body.companyId ?? "");
     if (!companyId) throw ApiError.badRequest("Escolha a empresa.", "SETTINGS_COMPANY_REQUIRED");
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "erp.access");
     requireCapability(workspace, "payroll.manage");
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, companyId);
     const settings = parseSettings(body);

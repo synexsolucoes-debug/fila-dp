@@ -12,6 +12,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "erp.access");
     requireCapability(workspace, "payroll.read");
     return Response.json(await calculate(d1, workspace, user.id, body));
   } catch (error) { return apiError(error); }

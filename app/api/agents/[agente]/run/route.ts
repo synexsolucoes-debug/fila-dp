@@ -1,6 +1,6 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, prepareAuditEvent } from "@/lib/fila-dp-db";
-import { requireNamedCapability } from "@/lib/authorization";
+import { requireNamedCapability, requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { manualRunKey } from "@/lib/agent-schedule";
 import { asAgentQueueConflict, prepareNextRun, requireSchedulableAgent } from "@/lib/agent-scheduler";
@@ -39,6 +39,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     const { agente } = await params;
     const body = await request.json().catch(() => ({})) as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "agents.access");
     requireNamedCapability(workspace, "integrations.execute", "executar um agente");
 
     const channel = requireSchedulableAgent(agente);

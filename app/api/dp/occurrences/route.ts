@@ -1,6 +1,6 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, prepareAuditEvent, requireCompanyAccess } from "@/lib/fila-dp-db";
-import { requireNamedCapability } from "@/lib/authorization";
+import { requireNamedCapability, requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { cleanText } from "@/lib/clean-text";
 import { addDays, isIsoDay } from "@/lib/dp-calendar";
@@ -22,6 +22,7 @@ export async function GET(request: Request) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
     const { d1, workspace } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "dp_operations.access");
     requireNamedCapability(workspace, "portfolio.read", "consultar as ocorrências do DP");
     const { from, to } = period(new URL(request.url));
     const end = addDays(to, 1);
@@ -62,6 +63,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "dp_operations.access");
     requireNamedCapability(workspace, "portfolio.manage", "registrar ocorrências do DP");
     const occurredOn = cleanText(body.occurredOn, 10) || todayInBrazil();
     const fact = cleanText(body.fact, 1000);

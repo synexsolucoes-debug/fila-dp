@@ -430,22 +430,22 @@ const viewCatalog: Record<View, ViewEntry> = {
     description: "Controle entradas, aprovações, saídas e fechamento de Benefícios, Psicologia e Prestadores PJ.",
   },
   agents: {
-    label: "Agentes", icon: Bot, module: "integrations", hiddenFor: ["guest", "observer"], ownHeader: true,
+    label: "Agentes", icon: Bot, module: "agents", hiddenFor: ["guest", "observer"], ownHeader: true,
     eyebrow: "Central de agentes", title: "Agentes",
     description: "Estado, cadência, execução e histórico dos agentes que leem os sistemas de origem.",
   },
   triage: {
-    label: "Triagem", icon: ShieldQuestion, module: "integrations", hiddenFor: ["guest"], ownHeader: true,
+    label: "Triagem", icon: ShieldQuestion, module: "agents", hiddenFor: ["guest"], ownHeader: true,
     eyebrow: "Central de triagem", title: "O que o sistema não teve certeza",
     description: "Entradas que a automação não conseguiu classificar sozinha e aguardam decisão humana.",
   },
   portfolio: {
-    label: "Carteira", icon: Briefcase, module: "registrations", hiddenFor: ["guest"],
+    label: "Carteira", icon: Briefcase, module: "portfolio", hiddenFor: ["guest"],
     eyebrow: "Operação do DP", title: "Carteira",
     description: "Quem responde por cada empresa: titular, backup, ausências da equipe e demandas sem responsável.",
   },
   dpOperations: {
-    label: "DP Operacional", icon: CalendarCheck2, module: "registrations", hiddenFor: ["guest"],
+    label: "DP Operacional", icon: CalendarCheck2, module: "dpOperations", hiddenFor: ["guest"],
     eyebrow: "Operação do DP", title: "DP Operacional",
     description: "Minha semana, calendário do mês, ocorrências fora do prazo de corte, alertas do Sankhya e o painel da gestão.",
   },
@@ -1880,7 +1880,6 @@ export function WorkspaceApp({
     : false;
   const canComment = snapshot ? ["admin", "member", "guest"].includes(snapshot.workspace.role) : false;
   const isAdmin = snapshot?.workspace.role === "admin";
-  const canUseErp = snapshot ? hasCapability(snapshot.workspace.role, "employees.read") : false;
   const activeDepartments = useMemo(
     () => (snapshot?.areas ?? []).filter((area) => area.status === "active"),
     [snapshot?.areas],
@@ -1898,6 +1897,12 @@ export function WorkspaceApp({
     [snapshot?.modules],
   );
   const hasModule = useCallback((route: string) => enabledModules.size === 0 || enabledModules.has(route), [enabledModules]);
+  /* O ERP DP é módulo em construção (migration 0121): abre para o
+     administrador e para quem ele liberar nominalmente, e para mais ninguém.
+     Antes bastava ler cadastro, e não havia como tirar o acesso de alguém. */
+  const canUseErp = snapshot
+    ? (enabledModules.size ? enabledModules.has("erpDp") : hasCapability(snapshot.workspace.role, "erp.access"))
+    : false;
 
   /**
    * Quantos recortes estão ligados.

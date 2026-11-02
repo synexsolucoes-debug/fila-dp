@@ -1,6 +1,6 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getWorkspaceContext } from "@/lib/fila-dp-db";
-import { requireNamedCapability } from "@/lib/authorization";
+import { requireNamedCapability, requireCapability } from "@/lib/authorization";
 import { isCompetence } from "@/lib/dp-calendar";
 import { calendarMatrix } from "@/lib/dp-recurring";
 import { loadBusinessCalendar, loadRecurringTemplates } from "@/lib/dp-recurring-service";
@@ -11,6 +11,7 @@ export async function GET(request: Request) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
     const { d1, workspace } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "dp_operations.access");
     requireNamedCapability(workspace, "portfolio.read", "consultar o calendário do DP");
     const requested = new URL(request.url).searchParams.get("competencia") ?? "";
     const competence = isCompetence(requested) ? requested : todayInBrazil().slice(0, 7);

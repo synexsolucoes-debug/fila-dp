@@ -16,6 +16,7 @@ export async function GET(request: Request) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "erp.access");
     requireCapability(workspace, "movements.read");
     const companyId = cleanText(new URL(request.url).searchParams.get("companyId"), 120);
     const scope = await companyScopeClause(d1, workspace.id, user.id, workspace.role, companyId, "r.company_id");

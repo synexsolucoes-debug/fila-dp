@@ -1,6 +1,6 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getWorkspaceContext } from "@/lib/fila-dp-db";
-import { requireNamedCapability } from "@/lib/authorization";
+import { requireNamedCapability, requireCapability } from "@/lib/authorization";
 import { addDays, isIsoDay, weekStart } from "@/lib/dp-calendar";
 import { todayInBrazil } from "@/lib/employee-history";
 
@@ -12,6 +12,7 @@ export async function GET(request: Request) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "dp_operations.access");
     requireNamedCapability(workspace, "portfolio.read", "consultar a semana do DP");
     const today = todayInBrazil();
     const requested = new URL(request.url).searchParams.get("inicio") ?? "";

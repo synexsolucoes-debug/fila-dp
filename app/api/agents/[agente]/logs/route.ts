@@ -1,6 +1,6 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getWorkspaceContext } from "@/lib/fila-dp-db";
-import { requireNamedCapability } from "@/lib/authorization";
+import { requireNamedCapability, requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { requireAgentChannel } from "@/lib/agent-scheduler";
 import { cleanText } from "@/lib/registrations";
@@ -39,6 +39,7 @@ export async function GET(request: Request, { params }: RouteContext) {
   try {
     const { agente } = await params;
     const { d1, workspace } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "agents.access");
     requireNamedCapability(workspace, "integrations.logs.view", "consultar o histórico do agente");
 
     const channel = requireAgentChannel(agente);

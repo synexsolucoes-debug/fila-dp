@@ -17,6 +17,7 @@ export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "erp.access");
     requireCapability(workspace, "employees.read");
     const scope = await companyScopeClause(d1, workspace.id, user.id, workspace.role, url.searchParams.get("companyId") ?? "", "e.company_id");
     const today = todayInBrazil();
