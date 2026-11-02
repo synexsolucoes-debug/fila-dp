@@ -9,6 +9,7 @@ import {
   type AccountingAccounts, type CompanyPayrollSettings, type EmployerContribution, type Guide,
 } from "@/lib/payroll-obligations";
 import styles from "./erp-record.module.css";
+import { contagem } from "../shared/plural";
 
 /**
  * Obrigações e pagamento da folha fechada (§4.40): guias com vencimento,
@@ -70,7 +71,7 @@ export function ErpObligationsPanel({ runId, canManage }: { runId: string; canMa
     </div>
     <ul className={styles.notes}>{summary.notes.map((note) => <li key={note}>{note}</li>)}</ul>
     {data.missingBank > 0 && <p className={styles.infoNote}><AlertTriangle aria-hidden="true" /><span>
-      <strong>{data.missingBank} pessoa(s) sem conta de salário</strong>
+      <strong>{contagem(data.missingBank, "pessoa", "pessoas")} sem conta de salário</strong>
       <small>Ficam fora do CNAB. Cadastre em Ficha funcional › Remuneração › Conta de salário.</small></span></p>}
     {canManage && <div className={styles.chips}>
       <a className={styles.primaryButton} href={file("cnab")} download><Landmark aria-hidden="true" /> Pagamento CNAB 240</a>

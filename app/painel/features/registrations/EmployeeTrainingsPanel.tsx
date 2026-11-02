@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { AlertTriangle, Check, GraduationCap, LoaderCircle, Plus, RefreshCw, XCircle } from "lucide-react";
 import { EmptyState, ErrorBanner, LoadingState, StatusPill } from "../shared";
 import styles from "./registrations.module.css";
+import { contagem } from "../shared/plural";
 
 type TrainingRecord = {
   id: string;
@@ -97,7 +98,7 @@ export function EmployeeTrainingsPanel({ employeeId, companyId, canManage }: { e
   }
 
   return <div className={styles.employeePanel}>
-    <header className={styles.sectionTitle}><h3>Treinamentos obrigatórios (NR)</h3><span>{trainings.length} registro(s)</span></header>
+    <header className={styles.sectionTitle}><h3>Treinamentos obrigatórios (NR)</h3><span>{contagem(trainings.length, "registro", "registros")}</span></header>
     {canManage && (creating
       ? <TrainingEditor employeeId={employeeId} companyId={companyId} onCancel={() => setCreating(false)}
           onSaved={async () => { setCreating(false); await load(); }} />

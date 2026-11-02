@@ -12,6 +12,7 @@ import type {
   EmployeeOption, EpiCatalogOption, EpiDashboard, EpiEmployeeCompliance, EpiProduct, EpiRequirement,
 } from "./epi.types";
 import styles from "./epi.module.css";
+import { contagem } from "../shared/plural";
 
 const statusTone: Record<EpiComplianceStatus, string> = {
   missing: "danger", expired: "danger", overdue: "warning", due_soon: "warning", compliant: "active", unconfigured: "neutral",
@@ -58,7 +59,7 @@ export function EpiDashboardPanel({ dashboard, month, onMonth, onPeople, onRequi
       </button>
       <button className={styles.summaryCard} data-tone={summary.overdueEmployees ? "warning" : "safe"} onClick={() => onPeople("overdue")}>
         <span><CalendarClock aria-hidden="true" />Trocas atrasadas</span><strong>{summary.overdueEmployees}</strong>
-        <small>{summary.dueSoonEmployees} troca(s) próxima(s)</small>
+        <small>{contagem(summary.dueSoonEmployees, "troca próxima", "trocas próximas")}</small>
       </button>
       <article className={styles.summaryCard} data-tone={summary.stockShortages ? "danger" : "safe"}>
         <span><HardHat aria-hidden="true" />Rupturas previstas</span><strong>{summary.stockShortages}</strong>
@@ -66,7 +67,7 @@ export function EpiDashboardPanel({ dashboard, month, onMonth, onPeople, onRequi
       </article>
       <article className={styles.summaryCard}>
         <span><PackageCheck aria-hidden="true" />Entregas no mês</span><strong>{summary.monthlyDeliveries}</strong>
-        <small>{summary.monthlyEmployeesServed} colaborador(es) · {currency(summary.monthlyDeliveredValue)}</small>
+        <small>{contagem(summary.monthlyEmployeesServed, "colaborador", "colaboradores")} · {currency(summary.monthlyDeliveredValue)}</small>
       </article>
     </div>
 
@@ -94,7 +95,7 @@ export function EpiDashboardPanel({ dashboard, month, onMonth, onPeople, onRequi
         <header><div><span>Utilização em {month}</span><h3>EPIs mais entregues</h3></div><BarChart3 aria-hidden="true" /></header>
         {dashboard.utilization.length ? <div className={styles.usageList}>
           {dashboard.utilization.map((item) => <div key={item.productId} className={styles.usageRow}>
-            <div><strong>{item.productName}</strong><small>{item.delivered} entregue(s) · {item.returned} devolvido(s) · saldo {item.availableQuantity}</small></div>
+            <div><strong>{item.productName}</strong><small>{contagem(item.delivered, "entregue", "entregues")} · {contagem(item.returned, "devolvido", "devolvidos")} · saldo {item.availableQuantity}</small></div>
             <div className={styles.usageBar}><span style={{ width: `${item.delivered / maxUsage * 100}%` }} /></div>
             <b>{currency(item.deliveredValue)}</b>
           </div>)}
@@ -104,7 +105,7 @@ export function EpiDashboardPanel({ dashboard, month, onMonth, onPeople, onRequi
         <header><div><span>Planejamento de estoque</span><h3>Falta para cobrir colaboradores</h3></div><AlertTriangle aria-hidden="true" /></header>
         {dashboard.shortages.length ? <div className={styles.shortageList}>
           {dashboard.shortages.map((item) => <div key={item.productId}>
-            <span><strong>{item.productName}</strong><small>{item.missing} necessário(s) · {item.available} disponível(is)</small></span>
+            <span><strong>{item.productName}</strong><small>{contagem(item.missing, "necessário", "necessários")} · {item.available} disponível(is)</small></span>
             <StatusPill status="danger" label={`Faltam ${item.shortage}`} />
           </div>)}
         </div> : <div className={styles.allGood}><CheckCircle2 aria-hidden="true" /><span><strong>Saldo suficiente para as faltas atuais</strong><small>Não há ruptura calculada a partir das regras cadastradas.</small></span></div>}

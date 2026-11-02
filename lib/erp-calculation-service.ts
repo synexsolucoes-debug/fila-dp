@@ -1,5 +1,5 @@
 import { ApiError } from "./api-errors.ts";
-import type { WorkspaceRole } from "./fila-dp-types";
+import type { WorkspaceRole } from "./fila-dp-types.ts";
 import { asBadRequest, contractEndOf, payrollEmployee, remunerationRecords } from "./erp-payroll-service.ts";
 import { monthlySalaryOf, parseMoney, remunerationAt } from "./remuneration.ts";
 import {

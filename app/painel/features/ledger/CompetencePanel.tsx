@@ -11,6 +11,7 @@ import type { PanelTone } from "../shared/status-tone";
 import styles from "./ledger.module.css";
 import type { LedgerBatch, LedgerCompetenceSummary, LedgerReturnResult } from "./ledger.api";
 import type { LedgerPermissions } from "./ledger.types";
+import { contagem } from "../shared/plural";
 
 const tone: Record<LedgerBatchStatus, PanelTone> = {
   draft: "neutral",
@@ -107,7 +108,7 @@ export function CompetencePanel({
             <article>
               <span>Descontos programados</span>
               <strong>{formatBRL(summary.scheduledAmount)}</strong>
-              <small>{summary.scheduledCount} parcela(s)</small>
+              <small>{contagem(summary.scheduledCount, "parcela", "parcelas")}</small>
             </article>
             <article>
               <span>Descontos confirmados</span>
@@ -130,12 +131,12 @@ export function CompetencePanel({
             <article>
               <span>Parcelas de competências anteriores</span>
               <strong>{formatBRL(summary.overdueAmount)}</strong>
-              <small>{summary.overdueCount} parcela(s) sem confirmação — elas não somem</small>
+              <small>{contagem(summary.overdueCount, "parcela", "parcelas")} sem confirmação — elas não somem</small>
             </article>
             <article>
               <span>Saldos futuros</span>
               <strong>{formatBRL(summary.futureAmount)}</strong>
-              <small>{summary.futureCount} parcela(s) programadas adiante</small>
+              <small>{contagem(summary.futureCount, "parcela", "parcelas")} programadas adiante</small>
             </article>
             <article>
               <span>Lançamentos sem aprovação</span>
@@ -220,8 +221,8 @@ export function CompetencePanel({
         <div className={styles.preview}>
           <strong>
             {returnResult.confirmed} confirmação(ões) registrada(s)
-            {returnResult.blank ? ` · ${returnResult.blank} linha(s) em branco` : ""}
-            {returnResult.problems.length ? ` · ${returnResult.problems.length} linha(s) com problema` : ""}
+            {returnResult.blank ? ` · ${contagem(returnResult.blank, "linha", "linhas")} em branco` : ""}
+            {returnResult.problems.length ? ` · ${contagem(returnResult.problems.length, "linha", "linhas")} com problema` : ""}
           </strong>
           {returnResult.message && <small>{returnResult.message}</small>}
           {returnResult.problems.length > 0 && (
@@ -231,7 +232,7 @@ export function CompetencePanel({
               ))}
             </ol>
           )}
-          {returnResult.problems.length > 20 && <small>e mais {returnResult.problems.length - 20} linha(s).</small>}
+          {returnResult.problems.length > 20 && <small>e mais {contagem(returnResult.problems.length - 20, "linha", "linhas")}.</small>}
         </div>
       )}
 

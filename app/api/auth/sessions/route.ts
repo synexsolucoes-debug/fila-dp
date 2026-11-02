@@ -1,4 +1,4 @@
-import { clearAuthSession, type ChatGPTUser } from "@/app/chatgpt-auth";
+import { clearAuthSession, type SessionUser } from "@/lib/auth/session";
 import { getD1 } from "@/db";
 import { getApiUser } from "@/lib/fila-dp-api";
 
@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 const noStoreHeaders = { "Cache-Control": "no-store" };
 
-function persistedSession(user: ChatGPTUser): user is ChatGPTUser & { id: string; sessionId: string } {
+function persistedSession(user: SessionUser): user is SessionUser & { id: string; sessionId: string } {
   return Boolean(user.id && user.sessionId);
 }
 

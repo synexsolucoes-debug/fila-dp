@@ -52,10 +52,11 @@ test("as telas do ERP moram na pasta do ERP", async () => {
 
 test("o painel só conhece o ERP pela troca de modo", async () => {
   const app = await read("app/painel/WorkspaceApp.tsx");
-  const mentions = app.match(/ErpDpView/gu) ?? [];
-  // Um import e um uso — na aba do ERP, escondida fora do modo ERP.
-  assert.equal(mentions.length, 2);
-  assert.match(app, /hidden=\{!erpMode\}><ErpDpView /u);
+  // Uma declaração (o módulo é carregado sob demanda) e um uso — na aba do
+  // ERP, escondida fora do modo ERP.
+  assert.equal((app.match(/const ErpDpView = dynamic\(/gu) ?? []).length, 1);
+  assert.equal((app.match(/<ErpDpView /gu) ?? []).length, 1);
+  assert.match(app, /hidden=\{!erpMode\}>(?:<ViewPaneActiveContext\.Provider value=\{erpMode\}>)?<ErpDpView /u);
 });
 
 test("a Central de Trabalho do Vinculato não recebe prazos do ERP", () => {

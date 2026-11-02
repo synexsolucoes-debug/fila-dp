@@ -9,6 +9,7 @@ import {
 } from "@/lib/vacation-balance";
 import { vacationDaysByAbsences } from "@/lib/payroll-calc";
 import styles from "./erp-record.module.css";
+import { contagem } from "../shared/plural";
 
 /**
  * Férias do ERP DP — a cota 2006 do SAP: o período que mais aperta de cada
@@ -113,7 +114,7 @@ function CollectiveForm({ companyId, onDone }: { companyId: string; onDone: () =
   return <form className={styles.requirementEditor} onSubmit={(event) => void submit(event)}>
     <header><div><span>CLT arts. 139 a 141</span><h3>Férias coletivas da empresa</h3></div></header>
     {error && <ErrorBanner title="Não programado" message={error} />}
-    {result && <p className={styles.infoNote}><Check aria-hidden="true" /><span><strong>{result.planned} pessoa(s) programada(s)</strong>
+    {result && <p className={styles.infoNote}><Check aria-hidden="true" /><span><strong>{contagem(result.planned, "pessoa programada", "pessoas programadas")}</strong>
       <small>{result.skipped.length ? `Fora: ${result.skipped.map((item) => `${item.name} (${item.reason})`).join("; ")}` : "Todos couberam nas regras."}</small></span></p>}
     <div className={styles.formGrid}>
       <label><span>Início *</span><input type="date" required value={startDate} onChange={(event) => setStartDate(event.target.value)} /></label>

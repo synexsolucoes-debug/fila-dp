@@ -25,7 +25,7 @@
  * relatório; uma exceção aqui derrubaria a criação de uma demanda por causa de
  * um contador. A ordem de importância é essa e não a inversa.
  */
-import type { getD1 } from "../db";
+import type { getD1 } from "../db/index.ts";
 
 import { log } from "./observability.ts";
 

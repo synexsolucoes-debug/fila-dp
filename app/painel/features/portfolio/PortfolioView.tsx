@@ -5,6 +5,7 @@ import { Briefcase, CalendarOff, RefreshCw, UserRoundX } from "lucide-react";
 import { dpStatusLabels, dpStatuses, type DpStatus } from "@/lib/portfolio";
 import { ConfirmDialog, EmptyState, ErrorBanner, PageSkeleton } from "../shared";
 import styles from "./portfolio.module.css";
+import { contagem } from "../shared/plural";
 
 /**
  * Carteira do DP (Fase 1 do DP Operacional).
@@ -103,7 +104,7 @@ export function PortfolioView({ canManage }: { canManage: boolean }) {
         body: JSON.stringify({ companyId: pending.company.id, holderUserId: pending.holderUserId, backupUserId: pending.backupUserId }),
       });
       setNotice(result.changed
-        ? `Carteira de ${pending.company.name} atualizada. ${result.reassigned} demanda(s) em aberto passaram para ${memberName.get(pending.holderUserId) ?? "o novo titular"}.`
+        ? `Carteira de ${pending.company.name} atualizada. ${contagem(result.reassigned, "demanda", "demandas")} em aberto passaram para ${memberName.get(pending.holderUserId) ?? "o novo titular"}.`
         : "Nada mudou: titular e backup já eram esses.");
       setPending(null);
       await load();
@@ -149,8 +150,8 @@ export function PortfolioView({ canManage }: { canManage: boolean }) {
       const result = await request<{ reassigned: number; withoutBackup: string[] }>("/api/portfolio/handover", {
         method: "POST", body: JSON.stringify({ userId: absence.userId }),
       });
-      const missing = result.withoutBackup.length ? ` ${result.withoutBackup.length} empresa(s) sem backup ficaram como estavam.` : "";
-      setNotice(`${result.reassigned} demanda(s) em aberto de ${absence.userName} passaram para o backup.${missing}`);
+      const missing = result.withoutBackup.length ? ` ${contagem(result.withoutBackup.length, "empresa", "empresas")} sem backup ficaram como estavam.` : "";
+      setNotice(`${contagem(result.reassigned, "demanda", "demandas")} em aberto de ${absence.userName} passaram para o backup.${missing}`);
       await load();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível repassar as demandas."); }
     finally { setBusy(false); }
@@ -164,7 +165,7 @@ export function PortfolioView({ canManage }: { canManage: boolean }) {
       pending.backupUserId ? `com ${memberName.get(pending.backupUserId) ?? "backup"} de backup` : "sem backup",
       `a partir de hoje (${formatDate(data?.today ?? "")}).`,
       pending.company.holderUserId && pending.company.holderUserId !== pending.holderUserId
-        ? `${pending.company.holderOpenCards} demanda(s) em aberto com ${pending.company.holderName} passarão para o novo titular; as concluídas continuam com quem as concluiu.`
+        ? `${contagem(pending.company.holderOpenCards, "demanda", "demandas")} em aberto com ${pending.company.holderName} passarão para o novo titular; as concluídas continuam com quem as concluiu.`
         : "",
       "A vigência anterior é encerrada, não apagada.",
     ].filter(Boolean).join(" ")

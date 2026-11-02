@@ -141,6 +141,23 @@ export function extractQueries(file, source) {
     }
     index = source.indexOf(marker, index + marker.length);
   }
+  /* SQL guardado em constante para ser importado por mais de um lugar (o
+     produto e um ensaio, por exemplo): `export const ALGO_SQL = "..."`. Sem
+     isto, tirar a consulta de dentro do `.prepare(` a tiraria da verificação. */
+  const constant = /\bconst\s+[A-Z][A-Z0-9_]*_SQL\s*=\s*/gu;
+  let match;
+  while ((match = constant.exec(source))) {
+    const start = match.index + match[0].length;
+    const literal = readStringLiteral(source, start);
+    if (literal && SQL_START.test(literal.text)) {
+      queries.push({
+        file,
+        line: source.slice(0, match.index).split("\n").length,
+        sql: literal.text,
+        interpolated: literal.interpolated,
+      });
+    }
+  }
   return queries;
 }
 

@@ -4,7 +4,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getD1 } from "@/db";
 
-export type ChatGPTUser = {
+export type SessionUser = {
   id?: string;
   sessionId?: string;
   displayName: string;
@@ -58,7 +58,7 @@ export function sessionDeviceLabel(userAgent: string) {
   return `${browser} · ${system}`;
 }
 
-async function readSessionToken(token: string | undefined): Promise<ChatGPTUser | null> {
+async function readSessionToken(token: string | undefined): Promise<SessionUser | null> {
   if (!token || token.length < 32 || !authSecret()) return null;
   const d1 = getD1();
   const session = await d1.prepare(`SELECT u.id, u.email, u.name,
@@ -82,7 +82,7 @@ async function readSessionToken(token: string | undefined): Promise<ChatGPTUser 
   return { id: session.id, sessionId: session.session_id, email: session.email, displayName: session.name, fullName: session.name };
 }
 
-export async function setAuthSession(user: ChatGPTUser, metadata: { address?: string; userAgent?: string } = {}) {
+export async function setAuthSession(user: SessionUser, metadata: { address?: string; userAgent?: string } = {}) {
   if (!user.id) throw new Error("Não foi possível criar uma sessão sem usuário persistido.");
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + SESSION_TTL_SECONDS * 1000).toISOString();
@@ -137,7 +137,7 @@ export async function verifyPassword(password: string, salt: string, expectedHas
   }
 }
 
-export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
+export async function getSessionUser(): Promise<SessionUser | null> {
   const requestCookies = await cookies();
   const sessionUser = await readSessionToken(requestCookies.get(SESSION_COOKIE)?.value);
   if (sessionUser) return sessionUser;
@@ -157,18 +157,18 @@ export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
   return { displayName: fullName ?? email, email, fullName };
 }
 
-export async function requireChatGPTUser(returnTo: string): Promise<ChatGPTUser> {
-  const user = await getChatGPTUser();
+export async function requireSessionUser(returnTo: string): Promise<SessionUser> {
+  const user = await getSessionUser();
   if (user) return user;
-  redirect(`${chatGPTSignInPath(returnTo)}`);
+  redirect(`${signInPath(returnTo)}`);
 }
 
-export function chatGPTSignInPath(returnTo: string): string {
+export function signInPath(returnTo: string): string {
   const safeReturnTo = safeRelativeReturnPath(returnTo);
   return `${SIGN_IN_PATH}?return_to=${encodeURIComponent(safeReturnTo)}`;
 }
 
-export function chatGPTSignOutPath(returnTo = "/"): string {
+export function signOutPath(returnTo = "/"): string {
   const safeReturnTo = safeRelativeReturnPath(returnTo);
   return `${SIGN_OUT_PATH}?return_to=${encodeURIComponent(safeReturnTo)}`;
 }

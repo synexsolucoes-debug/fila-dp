@@ -5,6 +5,7 @@ import { CalendarClock, Plus, ReceiptText, Users, WalletCards } from "lucide-rea
 import { AnimatedModal } from "../shared";
 import type { Contractor } from "./payments.types";
 import styles from "./payments.module.css";
+import { contagem } from "../shared/plural";
 
 /**
  * O lançamento de crédito e desconto do PJ, nas duas formas em que a operação
@@ -272,7 +273,7 @@ export function ContractorEntryDialog({
           <div className={styles.batchList}>
             <p className={styles.dialogSummary}>
               Preencha só quem recebe esta rubrica. Linha em branco não vira lançamento.
-              {preenchidos > 0 ? ` ${preenchidos} prestador(es) com valor.` : ""}
+              {preenchidos > 0 ? ` ${contagem(preenchidos, "prestador", "prestadores")} com valor.` : ""}
             </p>
             {ativos.length === 0
               ? <p className={styles.noteLine}>Nenhum prestador ativo nesta empresa.</p>
@@ -289,7 +290,7 @@ export function ContractorEntryDialog({
 
         {travados.size > 0 && (
           <p className={styles.noteLine}>
-            {travados.size} prestador(es) já têm o fechamento de {competenceLabel} concluído e não recebem lançamento mensal.
+            {contagem(travados.size, "prestador", "prestadores")} já têm o fechamento de {competenceLabel} concluído e não recebem lançamento mensal.
             Para lançar, reabra o pagamento deles em Pagamentos, com justificativa.
           </p>
         )}
@@ -300,7 +301,7 @@ export function ContractorEntryDialog({
         <footer className={styles.dialogFooter}>
           <button type="button" className={styles.secondaryButton} onClick={onClose} disabled={busy}>Cancelar</button>
           <button type="submit" className={styles.primaryButton} disabled={!podeEnviar || busy}>
-            {busy ? "Lançando…" : mode === "rubrica" && preenchidos > 0 ? `Lançar para ${preenchidos} prestador(es)` : "Lançar"}
+            {busy ? "Lançando…" : mode === "rubrica" && preenchidos > 0 ? `Lançar para ${contagem(preenchidos, "prestador", "prestadores")}` : "Lançar"}
           </button>
         </footer>
       </form>

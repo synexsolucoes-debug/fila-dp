@@ -19,7 +19,7 @@
  * não sente a coluna cheia, e quem abre recebe o quadro já arrumado, sem
  * depender de um cron que pode estar parado.
  */
-import type { getD1 } from "../db";
+import type { getD1 } from "../db/index.ts";
 
 type Database = ReturnType<typeof getD1>;
 

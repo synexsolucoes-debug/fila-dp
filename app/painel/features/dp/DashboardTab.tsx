@@ -5,6 +5,7 @@ import { Download, Send } from "lucide-react";
 import { ErrorBanner, LoadingState } from "../shared";
 import { dpRequest, errorText } from "./dp.api";
 import styles from "./dp.module.css";
+import { contagem } from "../shared/plural";
 
 type ReportRow = { area: string; total: number; open: number; outside: number; outsidePercent: number };
 type Holder = { userId: string; name: string; companies: number; employeesClt: number; contractorsPj: number; openCards: number; overdueCards: number; alerts: number };
@@ -73,7 +74,7 @@ export function DashboardTab({ canManage }: { canManage: boolean }) {
     setBusy(true);
     try {
       const result = await dpRequest<{ recipients: number }>("/api/dp/report", { method: "POST", body: JSON.stringify({ competencia: period }) });
-      setNotice(`Relatório de ${period.slice(5)}/${period.slice(0, 4)} enviado para ${result.recipients} destinatário(s).`);
+      setNotice(`Relatório de ${period.slice(5)}/${period.slice(0, 4)} enviado para ${contagem(result.recipients, "destinatário", "destinatários")}.`);
     } catch (cause) { setError(errorText(cause, "Não foi possível enviar.")); }
     finally { setBusy(false); }
   }

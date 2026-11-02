@@ -5,6 +5,7 @@ import { CalendarDays, Wand2 } from "lucide-react";
 import { EmptyState, ErrorBanner, LoadingState } from "../shared";
 import { brDate, dpRequest, errorText, weekdayShort } from "./dp.api";
 import styles from "./dp.module.css";
+import { contagem } from "../shared/plural";
 
 type CalendarPayload = {
   competence: string;
@@ -39,7 +40,7 @@ export function CalendarTab({ canManage }: { canManage: boolean }) {
       const result = await dpRequest<{ created: number; existing: number; skipped: string[] }>("/api/dp/recurring/generate", {
         method: "POST", body: JSON.stringify({ competencia: competence }),
       });
-      setNotice(result.skipped.length ? result.skipped.join(" ") : `${result.created} demanda(s) criada(s); ${result.existing} já existia(m).`);
+      setNotice(result.skipped.length ? result.skipped.join(" ") : `${contagem(result.created, "demanda criada", "demandas criadas")}; ${result.existing} já existia(m).`);
       await load();
     } catch (cause) { setError(errorText(cause, "Não foi possível gerar as rotinas.")); }
     finally { setBusy(false); }

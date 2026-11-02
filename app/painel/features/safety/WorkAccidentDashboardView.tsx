@@ -23,6 +23,7 @@ import {
 } from "./safety.api";
 import type { AccidentDraft, SafetyOverview, SafetyTab } from "./safety.types";
 import styles from "./safety.module.css";
+import { contagem } from "../shared/plural";
 
 /**
  * Dashboard de Acidente de Trabalho.
@@ -338,7 +339,7 @@ export function WorkAccidentDashboardView() {
           </article>
 
           <article className={styles.panel} data-area="body">
-            <header><strong>Parte do corpo atingido</strong><span>{dashboard.totals.accidents} acidente(s)</span></header>
+            <header><strong>Parte do corpo atingido</strong><span>{contagem(dashboard.totals.accidents, "acidente", "acidentes")}</span></header>
             <BodyMap items={dashboard.byBodyPart} />
           </article>
 

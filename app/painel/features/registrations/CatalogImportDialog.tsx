@@ -4,6 +4,7 @@ import { FormEvent, useMemo, useState } from "react";
 import { Check, FileSpreadsheet, LoaderCircle, Upload, X } from "lucide-react";
 import type { CatalogResource, Company } from "./registrations.types";
 import styles from "./registrations.module.css";
+import { contagem } from "../shared/plural";
 
 type Classification = "new" | "changed" | "unchanged";
 type Preview = {
@@ -55,7 +56,7 @@ export function CatalogImportDialog({ resource, label, companies, initialCompany
     setBusy("import"); setError("");
     try {
       const result = await send(resource, file, companyId, "import");
-      await onImported(`${result.created ?? 0} criado(s), ${result.updated ?? 0} atualizado(s).`);
+      await onImported(`${contagem(result.created ?? 0, "criado", "criados")}, ${contagem(result.updated ?? 0, "atualizado", "atualizados")}.`);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível importar a planilha."); setBusy(null); }
   }
 
@@ -76,7 +77,7 @@ export function CatalogImportDialog({ resource, label, companies, initialCompany
         </tbody></table></div>
       </div>}
       <footer>
-        <span>{preview ? `${preview.items.length} registro(s) exibido(s) na prévia` : "A importação não apaga itens existentes."}</span>
+        <span>{preview ? `${contagem(preview.items.length, "registro exibido", "registros exibidos")} na prévia` : "A importação não apaga itens existentes."}</span>
         <button type="button" className={styles.secondaryButton} onClick={onClose} disabled={Boolean(busy)}>Cancelar</button>
         <button type="button" className={styles.primaryButton} onClick={() => void importFile()} disabled={!preview || Boolean(busy) || (preview.summary.new + preview.summary.changed === 0)}>{busy === "import" ? <LoaderCircle className={styles.spin} /> : <Upload />} Importar selecionados</button>
       </footer>

@@ -1,4 +1,4 @@
-import { clearAuthSession, getChatGPTUser, safeRelativeReturnPath } from "@/app/chatgpt-auth";
+import { clearAuthSession, getSessionUser, safeRelativeReturnPath } from "@/lib/auth/session";
 import { recordAuthEvent } from "@/lib/auth-events";
 
 export const runtime = "nodejs";
@@ -26,7 +26,7 @@ function redirectTarget(request: Request) {
 export async function POST(request: Request) {
   // A identidade é lida antes de encerrar: depois de `clearAuthSession` não há
   // mais de quem registrar o evento.
-  const user = await getChatGPTUser().catch(() => null);
+  const user = await getSessionUser().catch(() => null);
   await clearAuthSession();
   if (user) {
     await recordAuthEvent({

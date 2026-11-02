@@ -21,6 +21,7 @@ import { InvoiceUploadDialog } from "./InvoiceUploadDialog";
 import { normalizeInvoiceDetail, normalizeInvoicePanel, requestJson, type Row } from "./payments.api";
 import type { InvoiceDetail, InvoicePanel, InvoiceRow } from "./payments.types";
 import styles from "./payments.module.css";
+import { contagem } from "../shared/plural";
 
 /**
  * Notas Fiscais da competência.
@@ -255,8 +256,8 @@ export function ContractorInvoicesSection({ companyId, competence, competenceLab
       setBatch(null);
       setSelected(new Set());
       setToast(payload.failedCount === 0
-        ? `${payload.appliedCount} nota(s) atualizada(s).`
-        : `${payload.appliedCount} nota(s) atualizada(s); ${payload.failedCount} não puderam ser aplicadas.`);
+        ? `${contagem(payload.appliedCount, "nota atualizada", "notas atualizadas")}.`
+        : `${contagem(payload.appliedCount, "nota atualizada", "notas atualizadas")}; ${payload.failedCount} não puderam ser aplicadas.`);
       if (payload.failedCount > 0 && payload.failed[0]) setError(payload.failed[0].message);
       await load(true);
     } catch (cause) {
@@ -271,11 +272,11 @@ export function ContractorInvoicesSection({ companyId, competence, competenceLab
 
   const summary = panel.summary;
   const alerts = [
-    summary.pendingCount > 0 && `${summary.pendingCount} prestador(es) ainda não enviaram nota fiscal.`,
-    summary.awaitingReviewCount > 0 && `${summary.awaitingReviewCount} nota(s) aguardam conferência.`,
-    summary.divergentCount > 0 && `${summary.divergentCount} nota(s) com divergência de valor.`,
+    summary.pendingCount > 0 && `${contagem(summary.pendingCount, "prestador ainda não enviou", "prestadores ainda não enviaram")} nota fiscal.`,
+    summary.awaitingReviewCount > 0 && `${contagem(summary.awaitingReviewCount, "nota aguarda", "notas aguardam")} conferência.`,
+    summary.divergentCount > 0 && `${contagem(summary.divergentCount, "nota", "notas")} com divergência de valor.`,
     summary.rejectedCount + summary.correctionCount > 0
-      && `${summary.rejectedCount + summary.correctionCount} nota(s) precisam ser substituídas.`,
+      && `${contagem(summary.rejectedCount + summary.correctionCount, "nota precisa ser substituída", "notas precisam ser substituídas")}.`,
   ].filter((item): item is string => typeof item === "string");
 
   return (
@@ -409,7 +410,7 @@ export function ContractorInvoicesSection({ companyId, competence, competenceLab
 
       {selectedRows.length > 0 && (permissions?.review || permissions?.approve || permissions?.reject) && (
         <div className={styles.invoiceBatchBar} role="region" aria-label="Ações em lote">
-          <span>{selectedRows.length} nota(s) selecionada(s)</span>
+          <span>{contagem(selectedRows.length, "nota selecionada", "notas selecionadas")}</span>
           {permissions?.review && (
             <button type="button" className={styles.secondaryButton} disabled={busy}
               onClick={() => setBatch({ action: "start_review" })}>
@@ -441,7 +442,7 @@ export function ContractorInvoicesSection({ companyId, competence, competenceLab
           <FileUp aria-hidden="true" />
           <span>
             <strong>Nenhuma Nota Fiscal recebida</strong>
-            Existem {summary.requiredCount} prestador(es) aguardando envio de Nota Fiscal em
+            Existem {contagem(summary.requiredCount, "prestador", "prestadores")} aguardando envio de Nota Fiscal em
             {" "}{competenceLabel(competence)}. Anexe a nota pela ação na linha do prestador assim que ela chegar.
           </span>
         </p>
@@ -600,7 +601,7 @@ export function ContractorInvoicesSection({ companyId, competence, competenceLab
             onSubmit={(event) => { event.preventDefault(); void submitBatch(); }}>
             <header className={styles.dialogHeader}>
               <div>
-                <h2>Solicitar correção de {selectedRows.length} nota(s)</h2>
+                <h2>Solicitar correção de {contagem(selectedRows.length, "nota", "notas")}</h2>
               </div>
             </header>
             <div className={styles.dialogBody}>
@@ -631,10 +632,10 @@ export function ContractorInvoicesSection({ companyId, competence, competenceLab
         <ConfirmDialog
           open={batch !== null}
           title={batch?.action === "approve"
-            ? `Aprovar ${selectedRows.length} nota(s) fiscal(is)?`
-            : `Marcar ${selectedRows.length} nota(s) para conferência?`}
+            ? `Aprovar ${contagem(selectedRows.length, "nota", "notas")} fiscal(is)?`
+            : `Marcar ${contagem(selectedRows.length, "nota", "notas")} para conferência?`}
           consequence={batch?.action === "approve"
-            ? `A aprovação libera o pagamento de ${selectedRows.length} prestador(es) e gera um registro de auditoria por nota. Confira os valores antes de confirmar.`
+            ? `A aprovação libera o pagamento de ${contagem(selectedRows.length, "prestador", "prestadores")} e gera um registro de auditoria por nota. Confira os valores antes de confirmar.`
             : `As notas selecionadas passam para "aguardando conferência" e ficam atribuídas a você.`}
           confirmLabel={batch?.action === "approve" ? "Aprovar todas" : "Marcar para conferência"}
           busy={busy}

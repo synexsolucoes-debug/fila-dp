@@ -116,7 +116,7 @@ test("nenhuma decisão de acesso mora no mapeamento de rotas", async () => {
 test("o painel tem uma rota coringa — senão o F5 devolve 404", async () => {
   const page = await readFile(new URL("../app/painel/[[...secao]]/page.tsx", import.meta.url), "utf8");
   assert.match(page, /parsePanelPath/u, "a rota precisa traduzir o endereço em estado");
-  assert.match(page, /requireChatGPTUser/u, "o endereço é um pedido, não uma permissão");
+  assert.match(page, /requireSessionUser/u, "o endereço é um pedido, não uma permissão");
   assert.match(page, /initialLocation/u, "o estado inicial vem do servidor, não de um efeito");
 });
 

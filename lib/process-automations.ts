@@ -23,7 +23,7 @@
  *   histórico o ator humano que §16 exige — quem propõe passa pelo motor, e o
  *   motor exige ator identificado.
  */
-import type { getD1 } from "../db";
+import type { getD1 } from "../db/index.ts";
 
 import type { DomainEventName } from "./domain-events.ts";
 import { cleanText } from "./registrations.ts";

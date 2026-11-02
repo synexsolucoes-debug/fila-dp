@@ -1,17 +1,19 @@
-import { isoTimestamp } from "./iso-timestamp";
-import { archiveFinishedCards, normalizeCompletedArchiveDays } from "./card-auto-archive";
-import { getD1, getScopedD1 } from "../db";
-import type { ChatGPTUser } from "../app/chatgpt-auth";
-import type { WorkspaceRole, WorkspaceSnapshot } from "./fila-dp-types";
-import { businessMinutesBetween, workingDayMinutes } from "./fila-dp-sla";
-import { getTenantContext, setTenantContext } from "./tenant-context";
-import { hasCapability } from "./authorization";
-import { deniedWriteCapabilities, mergeDepartmentAndMemberGrants, resolveModules, type ModuleCategory, type ModuleDefinition } from "./modules";
-import { ApiError } from "./fila-dp-api";
-import { safeIntegrationError } from "./integrations";
-import { listAccessibleWorkspaces, noAccessibleWorkspaceError, resolveActiveWorkspace } from "./workspace-access";
-import { parseBpmnGraph, stepLabel, type BpmnGraph } from "./bpmn-graph";
-import { stepChecklist, stepConfigOf } from "./process-instances";
+import { isoTimestamp } from "./iso-timestamp.ts";
+import { log } from "./observability.ts";
+import { SNAPSHOT_ACTIVE_CARDS_SQL, SNAPSHOT_ARCHIVE_LIMIT, SNAPSHOT_ARCHIVED_TOTAL_SQL, SNAPSHOT_RECENT_ARCHIVED_SQL } from "./snapshot-queries.ts";
+import { archiveFinishedCards, normalizeCompletedArchiveDays } from "./card-auto-archive.ts";
+import { getD1, getScopedD1 } from "../db/index.ts";
+import type { SessionUser } from "./auth/session.ts";
+import type { WorkspaceRole, WorkspaceSnapshot } from "./fila-dp-types.ts";
+import { businessMinutesBetween, workingDayMinutes } from "./fila-dp-sla.ts";
+import { getTenantContext, setTenantContext } from "./tenant-context.ts";
+import { hasCapability } from "./authorization.ts";
+import { deniedWriteCapabilities, mergeDepartmentAndMemberGrants, resolveModules, type ModuleCategory, type ModuleDefinition } from "./modules.ts";
+import { ApiError } from "./fila-dp-api.ts";
+import { safeIntegrationError } from "./integrations.ts";
+import { listAccessibleWorkspaces, noAccessibleWorkspaceError, resolveActiveWorkspace } from "./workspace-access.ts";
+import { parseBpmnGraph, stepLabel, type BpmnGraph } from "./bpmn-graph.ts";
+import { stepChecklist, stepConfigOf } from "./process-instances.ts";
 
 
 
@@ -59,6 +61,7 @@ export const SNAPSHOT_HISTORY_DAYS = 90;
 export const SNAPSHOT_COMMENT_LIMIT = 500;
 export const SNAPSHOT_INBOX_LIMIT = 200;
 export const SNAPSHOT_ACTIVITY_LIMIT = 150;
+export { SNAPSHOT_ARCHIVE_LIMIT } from "./snapshot-queries.ts";
 
 export type CompanyAccessScope = {
   unrestricted: boolean;
@@ -193,7 +196,7 @@ export async function provisionWorkspaceDefaults(
   ]);
 }
 
-export async function getWorkspaceContext(user: ChatGPTUser) {
+export async function getWorkspaceContext(user: SessionUser) {
   const d1 = getD1();
   const normalizedEmail = user.email.trim().toLowerCase();
 
@@ -383,7 +386,7 @@ export async function loadMemberModuleGrants(d1: ReturnType<typeof getD1>, works
   };
 }
 
-export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<WorkspaceSnapshot> {
+export async function getWorkspaceSnapshot(user: SessionUser): Promise<WorkspaceSnapshot> {
   const { d1, workspace, board, user: userRow, accessible, switchedFrom } = await getWorkspaceContext(user);
   const companyAccess = await getCompanyAccessScope(d1, workspace.id, userRow.id, workspace.role);
   const canManageMembers = hasCapability(workspace, "members.manage");
@@ -397,13 +400,13 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
       .bind(workspace.id).first<{ completed_archive_days: number }>();
     await archiveFinishedCards(d1, workspace.id, normalizeCompletedArchiveDays(archiveSetting?.completed_archive_days));
   } catch (cause) {
-    console.error("[card-auto-archive]", cause instanceof Error ? cause.message : cause);
+    log("error", "card.auto_archive_failed", { workspaceId: workspace.id }, { reason: cause instanceof Error ? cause.message : String(cause) });
   }
   const resolvedModules = await getWorkspaceModules(d1, workspace.id, workspace.role,
     String((workspace as Record<string, unknown>).status ?? "active"),
     (workspace as { memberGrants?: ReadonlyMap<string, boolean> }).memberGrants,
     (workspace as { departmentModules?: ReadonlySet<string> }).departmentModules);
-  const [boardsResult, listsResult, allBoardListsResult, cardsResult, checklistResult, inboxResult,
+  const [boardsResult, listsResult, allBoardListsResult, activeCardsResult, archivedCardsResult, archivedTotalRow, checklistResult, inboxResult,
     rulesResult, commentsResult, activitiesResult, membersResult, labelsResult, cardLabelsResult,
     assigneesResult, customFieldsResult, customValuesResult, attachmentsResult, templatesResult,
     settingsRow, holidaysResult, policiesResult, integrationsResult, plannerResult, calendarsResult,
@@ -414,7 +417,13 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     d1.prepare("SELECT id, name, description, board_type FROM fdp_boards WHERE workspace_id = ? ORDER BY created_at").bind(workspace.id).all(),
     d1.prepare("SELECT id, board_id, name, kind, position, sla_behavior FROM fdp_lists WHERE board_id = ? ORDER BY position").bind(board.id).all(),
     d1.prepare("SELECT l.id, l.board_id, l.name, l.kind, l.position, l.sla_behavior FROM fdp_lists l JOIN fdp_boards b ON b.id = l.board_id WHERE b.workspace_id = ? ORDER BY l.position").bind(workspace.id).all(),
-    d1.prepare("SELECT * FROM fdp_cards WHERE board_id = ? ORDER BY archived, list_id, position, created_at").bind(board.id).all(),
+    d1.prepare(SNAPSHOT_ACTIVE_CARDS_SQL).bind(board.id).all(),
+    // Arquivadas: as mais recentes (SNAPSHOT_ARCHIVE_LIMIT) e o total, os dois
+    // já recortados pelas empresas que a pessoa enxerga.
+    d1.prepare(SNAPSHOT_RECENT_ARCHIVED_SQL)
+      .bind(board.id, companyAccess.unrestricted, [...companyAccess.companyIds], SNAPSHOT_ARCHIVE_LIMIT).all(),
+    d1.prepare(SNAPSHOT_ARCHIVED_TOTAL_SQL)
+      .bind(board.id, companyAccess.unrestricted, [...companyAccess.companyIds]).first<{ total: number }>(),
     // `c.archived = 0` nas coleções por cartão.
     //
     // O arquivo é a maior parte de um quadro com um ano de operação, e nada
@@ -601,7 +610,8 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
   const commentRows = commentsResult.results as Array<Record<string, unknown>>;
   const companyRows = companiesResult.results as Array<Record<string, unknown>>;
   const isVisibleCompany = (companyId: unknown) => companyAccess.unrestricted || Boolean(companyId && companyAccess.companyIds.has(String(companyId)));
-  const cardRows = (cardsResult.results as Array<Record<string, unknown>>).filter((row) => isVisibleCompany(row.company_id));
+  const archivedCardRows = (archivedCardsResult.results as Array<Record<string, unknown>>).filter((row) => isVisibleCompany(row.company_id));
+  const cardRows = [...(activeCardsResult.results as Array<Record<string, unknown>>), ...archivedCardRows].filter((row) => isVisibleCompany(row.company_id));
   const visibleCardIds = new Set(cardRows.map((row) => String(row.id)));
   const activityRows = (activitiesResult.results as Array<Record<string, unknown>>).filter((row) => row.card_id && visibleCardIds.has(String(row.card_id)));
   const inboxRows = (inboxResult.results as Array<Record<string, unknown>>).filter((row) => companyAccess.unrestricted || Boolean(row.converted_card_id && visibleCardIds.has(String(row.converted_card_id))));
@@ -992,6 +1002,7 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
       comments: { loaded: commentRows.length, total: Number(historyTotals?.comments_total ?? commentRows.length) },
       inbox: { loaded: inboxRows.length, total: Number(historyTotals?.inbox_total ?? inboxRows.length) },
       activity: { loaded: Math.min(activityRows.length, 50), total: Number(historyTotals?.activity_total ?? activityRows.length) },
+      archived: { loaded: archivedCardRows.length, total: Number(archivedTotalRow?.total ?? archivedCardRows.length) },
     },
     payrollCycles: (cyclesResult.results as Array<Record<string, unknown>>).map((row) => ({
       id: String(row.id),

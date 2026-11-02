@@ -50,7 +50,6 @@ const MARGIN = 42;
 const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
 const navy = rgb(0.035, 0.102, 0.18);
 const blue = rgb(0.11, 0.45, 0.76);
-const cyan = rgb(0.37, 0.75, 0.95);
 const ink = rgb(0.09, 0.14, 0.2);
 const muted = rgb(0.39, 0.45, 0.52);
 const line = rgb(0.85, 0.88, 0.92);

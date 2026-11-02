@@ -1,4 +1,4 @@
-import { getD1 } from "../db";
+import { getD1 } from "../db/index.ts";
 import { ApiError } from "./api-errors.ts";
 import { resolveAreaModule } from "./areas.ts";
 import { cleanText } from "./clean-text.ts";

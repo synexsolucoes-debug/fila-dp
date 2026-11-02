@@ -10,6 +10,7 @@ import { EmptyState, StatusPill } from "../shared/panel-ui";
 import type { PanelTone } from "../shared/status-tone";
 import styles from "./ledger.module.css";
 import type { LedgerInstallment, LedgerPermissions } from "./ledger.types";
+import { contagem } from "../shared/plural";
 
 const tone: Record<LedgerInstallmentStatus, PanelTone> = {
   scheduled: "neutral",
@@ -88,7 +89,7 @@ export function InstallmentsPanel({
           />
         </label>
         <span>
-          {visible.length} parcela(s) · previsto {formatBRL(totals.planned)} · descontado {formatBRL(totals.discounted)} · saldo {formatBRL(totals.remaining)}
+          {contagem(visible.length, "parcela", "parcelas")} · previsto {formatBRL(totals.planned)} · descontado {formatBRL(totals.discounted)} · saldo {formatBRL(totals.remaining)}
         </span>
       </div>
 

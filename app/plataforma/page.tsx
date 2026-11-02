@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
-import { requireChatGPTUser } from "@/app/chatgpt-auth";
+import { requireSessionUser } from "@/lib/auth/session";
 import { isPlatformAdmin } from "@/lib/platform-authorization";
 import { PlatformApp } from "./PlatformApp";
 
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 };
 
 export default async function PlatformPage() {
-  const user = await requireChatGPTUser("/plataforma");
+  const user = await requireSessionUser("/plataforma");
   if (!isPlatformAdmin(user)) redirect("/painel?platform=forbidden");
   return <Suspense fallback={<main aria-busy="true">Abrindo console global…</main>}><PlatformApp /></Suspense>;
 }

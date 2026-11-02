@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { EmptyState, ErrorBanner, LoadingState, StatusPill, CenterToast } from "../shared";
 import styles from "./registrations.module.css";
+import { contagem } from "../shared/plural";
 
 /**
  * Cadastro de prestador PJ.
@@ -225,7 +226,7 @@ export function ContractorsPanel({ canManage, createSignal, onOpenPayment }: {
     <div className={styles.masterDetail}>
       <aside className={styles.masterPane}>
         <header>
-          <div><span>Prestadores PJ</span><strong>{list.length} contrato(s)</strong></div>
+          <div><span>Prestadores PJ</span><strong>{contagem(list.length, "contrato", "contratos")}</strong></div>
           <button type="button" onClick={() => void loadList()} disabled={busy} aria-label="Recarregar prestadores">
             <RefreshCw aria-hidden="true" />
           </button>

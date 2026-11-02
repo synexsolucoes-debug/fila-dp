@@ -1,6 +1,6 @@
-import type { WorkspaceRole } from "./fila-dp-types";
-import { getCompanyAccessScope, type getWorkspaceContext } from "./fila-dp-db";
-import { ApiError } from "./api-errors";
+import type { WorkspaceRole } from "./fila-dp-types.ts";
+import { getCompanyAccessScope, type getWorkspaceContext } from "./fila-dp-db.ts";
+import { ApiError } from "./api-errors.ts";
 
 type WorkspaceD1 = Awaited<ReturnType<typeof getWorkspaceContext>>["d1"];
 

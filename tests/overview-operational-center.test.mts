@@ -197,7 +197,7 @@ test("o indicador de SLA leva ao quadro já recortado no atraso", () => {
   const sla = bloco('key: "sla-on-time"', '},\n  ];');
   assert.match(sla, /target: "board", sla: "overdue"/u);
   // E os dois números que faziam alguém agir continuam escritos na faixa.
-  assert.match(sla, /\$\{atrasadas\} atrasada\(s\)/u);
+  assert.match(sla, /\$\{contagem\(atrasadas, "atrasada", "atrasadas"\)\}/u);
   assert.match(sla, /\$\{venceHoje\} vencendo hoje/u);
 });
 
@@ -249,7 +249,7 @@ test("a obrigação concluída não é vencimento próximo", () => {
 
 test("o atraso da obrigação é dito como atraso, não como número negativo", () => {
   // "Vence em -2 dias" é o tipo de frase que só um sistema escreve.
-  assert.match(source, /\$\{Math\.abs\(item\.daysRemaining\)\} dia\(s\) em atraso/u);
+  assert.match(source, /\$\{contagem\(Math\.abs\(item\.daysRemaining\), "dia", "dias"\)\} em atraso/u);
   assert.match(source, /item\.daysRemaining === 0 \? "Vence hoje"/u);
 });
 

@@ -53,10 +53,9 @@ test("keeps collaboration and authorization wired to durable workspace data", as
 });
 
 test("ships operational foundations for boards, attachments, planner, reports and SLA", async () => {
-  const [hosting, schema, migration, dashboard, db, catalog, search, reports, planner, webhook, pause] = await Promise.all([
-    source(".openai/hosting.json"),
+  const [schema, migration, dashboard, db, catalog, search, reports, planner, webhook, pause] = await Promise.all([
     source("db/schema.ts"),
-    source("drizzle/0006_sla_pause_fields.sql"),
+    source("drizzle/postgres/0000_romantic_ken_ellis.sql"),
     source("app/painel/WorkspaceApp.tsx"),
     source("lib/fila-dp-db.ts"),
     source("app/api/catalog/route.ts"),
@@ -66,7 +65,6 @@ test("ships operational foundations for boards, attachments, planner, reports an
     source("app/api/integrations/webhook/[channel]/route.ts"),
     source("app/api/cards/[id]/sla/pause/route.ts"),
   ]);
-  assert.match(hosting, /"r2":\s*"ATTACHMENTS"/);
   for (const table of ["fdp_labels", "fdp_custom_fields", "fdp_card_attachments", "fdp_process_templates", "fdp_workspace_settings", "fdp_business_holidays", "fdp_sla_policies", "fdp_notifications", "fdp_integrations", "fdp_planner_blocks", "fdp_calendar_connections", "fdp_card_sla_pauses"]) assert.match(schema + db + migration, new RegExp(table));
   /* Os formatos do quadro, pelo identificador que os liga — e não pelas
      palavras "Kanban" e "Tabela", que desde a Operação DP só existiam em
@@ -109,7 +107,7 @@ test("keeps the responsive visual layer for the new surfaces", async () => {
 
 test("keeps critical workspace and integration security boundaries", async () => {
   const [auth, listsRoute, commentsRoute, syncRoute, integrationEngine, webhookRoute] = await Promise.all([
-    source("app/chatgpt-auth.ts"),
+    source("lib/auth/session.ts"),
     source("app/api/lists/[id]/route.ts"),
     source("app/api/cards/[id]/comments/route.ts"),
     source("app/api/integrations/sync/route.ts"),

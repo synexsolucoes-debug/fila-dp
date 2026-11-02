@@ -11,6 +11,7 @@ import styles from "./ledger.module.css";
 import type {
   LedgerAreaOption, LedgerCompanyOption, LedgerEntryDraft, LedgerPersonOption,
 } from "./ledger.types";
+import { contagem } from "../shared/plural";
 
 const modalityLabels: Record<LedgerModality, string> = {
   single: "Único — desconta em uma competência",
@@ -325,7 +326,7 @@ export function LedgerEntryDialog({
         {previewRows.length > 0 && (
           <div className={styles.preview}>
             <strong>
-              {previewRows.length} parcela(s) · total {formatBRL(fromCents(previewRows.reduce((sum, part) => sum + part.plannedCents, 0)))}
+              {contagem(previewRows.length, "parcela", "parcelas")} · total {formatBRL(fromCents(previewRows.reduce((sum, part) => sum + part.plannedCents, 0)))}
             </strong>
             <ol>
               {previewRows.slice(0, 12).map((part) => (
@@ -334,7 +335,7 @@ export function LedgerEntryDialog({
                 </li>
               ))}
             </ol>
-            {previewRows.length > 12 && <small>e mais {previewRows.length - 12} parcela(s) até {formatCompetence(previewRows.at(-1)!.competence)}.</small>}
+            {previewRows.length > 12 && <small>e mais {contagem(previewRows.length - 12, "parcela", "parcelas")} até {formatCompetence(previewRows.at(-1)!.competence)}.</small>}
             <small>Nenhuma delas nasce descontada. Programar não é descontar.</small>
           </div>
         )}
