@@ -317,7 +317,7 @@ export const processTemplates: readonly ProcessTemplate[] = [
     code: "DP_DEMANDA",
     name: "Demanda entre áreas",
     category: "operacao",
-    processGroup: "operacao-dp",
+    processGroup: "demandas",
     description: "Da abertura pelo solicitante à conclusão, com triagem da área responsável e aprovação quando o caso exige.",
     objective: "Dar rastro e prazo a toda solicitação entre áreas, sem depender de mensagem avulsa.",
     tags: ["demandas", "sla", "triagem"],

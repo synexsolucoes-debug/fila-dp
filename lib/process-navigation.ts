@@ -75,12 +75,25 @@ export const processGroups: readonly ProcessGroup[] = [
   {
     id: "operacao-dp",
     label: "Operação DP",
-    description: "O trabalho do dia, competências, demandas e agenda do departamento pessoal.",
+    description: "O trabalho do dia, a operação por empresa, o fechamento das competências e a carteira do departamento pessoal.",
     kind: "process",
     /* "Meu trabalho" entra primeiro e vira a porta do processo (§46, §48): a
        primeira pergunta de quem abre o Vinculato é "o que eu preciso fazer
        agora?", e a resposta estava espalhada por quatro telas. */
-    views: ["work", "dpOperations", "processes", "board", "portfolio", "inbox", "planner"],
+    views: ["work", "dpOperations", "processes", "portfolio"],
+  },
+  {
+    id: "demandas",
+    label: "Demandas",
+    description: "A fila de solicitações do departamento: o quadro de demandas, a entrada de pedidos e a agenda por prazo.",
+    kind: "process",
+    /* Demandas saiu da Operação DP (pedido de quem usa o quadro): com sete
+       abas no topo — Meu trabalho, DP Operacional, Fechamento, Carteira… —, o
+       quadro parecia uma tela entre muitas, e as abas confundiam mais do que
+       levavam a algum lugar. Ficam juntas só as três telas da mesma fila:
+       o quadro, o Inbox (por onde o pedido entra) e o Planner (a agenda das
+       mesmas demandas). */
+    views: ["board", "inbox", "planner"],
   },
   {
     id: "pagamento-pj",

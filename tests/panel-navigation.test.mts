@@ -73,10 +73,13 @@ test("toda tela pertence a exatamente um processo, e todo processo aponta para t
   assert.equal(new Set(vistas).size, vistas.length, "uma tela em dois processos: o menu a mostraria duas vezes");
 });
 
-test("a Operação DP e os Pagamentos agrupam o que a §26 pede junto", async () => {
-  const { groupOfView } = await import("../lib/process-navigation.ts");
-  // O exemplo literal da §26: demandas, inbox e planner sob a operação.
-  for (const view of ["board", "inbox", "planner", "processes"]) {
+test("Demandas, a Operação DP e os Pagamentos agrupam o que pertence junto", async () => {
+  const { groupOfView, processGroups } = await import("../lib/process-navigation.ts");
+  // Demandas é um módulo próprio, com só as telas da mesma fila: o quadro, a
+  // entrada (Inbox) e a agenda (Planner). As outras telas da operação não
+  // viram abas dentro do quadro.
+  assert.deepEqual(processGroups.find((group) => group.id === "demandas")?.views, ["board", "inbox", "planner"]);
+  for (const view of ["work", "dpOperations", "processes", "portfolio"]) {
     assert.equal(groupOfView(view)?.id, "operacao-dp", `${view} deveria estar na Operação DP`);
   }
   // E a competência de PJ deixa de atravessar três seções: é um processo só,
@@ -95,7 +98,7 @@ test("um processo sem tela alcançável não vira item de menu (§30)", async ()
   // Papel sem acesso a EPI, plano sem os módulos de pagamento: os processos
   // somem inteiros em vez de virarem pastas vazias.
   const grupos = visibleProcessGroups(["overview", "board", "inbox"]);
-  assert.deepEqual(grupos.map((group) => group.id), ["operacao-dp"]);
+  assert.deepEqual(grupos.map((group) => group.id), ["demandas"]);
   assert.deepEqual(grupos[0].views, ["board", "inbox"], "o recorte precisa alcançar os módulos, não só o grupo");
   assert.deepEqual(visibleProcessGroups(["overview"]), [], "sem módulo nenhum, não há processo a mostrar");
 

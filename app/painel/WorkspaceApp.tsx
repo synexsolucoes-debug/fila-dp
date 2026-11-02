@@ -1944,7 +1944,7 @@ export function WorkspaceApp({
     const openCycles = (snapshot?.payrollCycles ?? []).filter((cycle) => cycle.status !== "closed").length;
     const overdueObligations = (snapshot?.upcomingObligations ?? []).filter((item) => item.daysRemaining < 0).length;
     const metrics: Partial<Record<string, LauncherModule["metric"]>> = {
-      "operacao-dp": { value: openDemands, label: plural(openDemands, "demanda aberta", "demandas abertas") },
+      demandas: { value: openDemands, label: plural(openDemands, "demanda aberta", "demandas abertas") },
       pagamentos: { value: openCycles, label: plural(openCycles, "competência em andamento", "competências em andamento") },
     };
     const modules: LauncherModule[] = navGroups.map((group) => ({
