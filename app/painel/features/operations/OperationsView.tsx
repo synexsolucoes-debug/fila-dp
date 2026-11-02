@@ -267,7 +267,7 @@ export function OperationsView({ role, initialTab = "", canManageDp = false }: {
             competência, as demandas que chegaram fora do corte e o que o
             Sankhya sinalizou. Eram três telas para a mesma pergunta. */}
         {tab === "pending" && <div className={styles.pendingStack}>
-          <section aria-labelledby="pending-competence"><h3 id="pending-competence" className={styles.pendingTitle}>Pendências da competência</h3>
+          <section aria-label="Pendências da competência">
           <PendingPanel items={data?.pendingItems ?? []} canManage={Boolean(data?.permissions.managePending && cycle)} onCreate={() => setEditor({ kind: "pending" })} onResolve={(item, status) => setEditor({ kind: "pending-resolution", item, status })} />
           </section>
           <section aria-labelledby="pending-cutoff"><h3 id="pending-cutoff" className={styles.pendingTitle}>Fora do prazo de corte</h3><OccurrencesTab canManage={canManageDp} /></section>

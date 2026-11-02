@@ -336,5 +336,9 @@
 
 /* Pendências do mês: competência, corte e Sankhya numa aba só (§4.44). */
 .pendingStack { display: grid; gap: 22px; min-width: 0; }
+.pendingStack { padding-bottom: 20px; }
 .pendingStack > section { display: grid; gap: 10px; min-width: 0; }
+/* As pendências da competência trazem o próprio cabeçalho, com margem; as
+   seções vindas do DP ganham a mesma margem lateral para não colar na borda. */
+.pendingStack > section + section { padding: 0 20px; }
 .pendingTitle { margin: 0; color: var(--ui-text); font-size: .9rem; }
