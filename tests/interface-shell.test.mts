@@ -34,27 +34,7 @@ test("no desktop o shell trava na viewport e quem rola é o conteúdo", async ()
   assert.match(bloco, /\.dashboard-shell \{[^}]*height: 100dvh/u, "o shell precisa ter a altura da janela");
   assert.match(bloco, /\.dashboard-shell \{[^}]*overflow: hidden/u, "o recorte fica no shell");
   assert.match(bloco, /\.dashboard-content \{[^}]*overflow-y: auto/u, "quem rola é a coluna de conteúdo");
-  // A barra precisa ocupar a coluna inteira: com `100vh` dentro de uma linha
-  // mais alta, o fundo escuro terminava no meio e o menu ficava ilegível.
-  assert.match(bloco, /\.dashboard-sidebar \{[^}]*height: 100%/u);
-});
-
-test("a navegação rola dentro da barra, sem levar marca e conta junto", async () => {
-  const css = await lerCss("app/dashboard-modern.css");
-  const bloco = css.slice(css.indexOf("@media (min-width: 761px)"));
-  assert.match(bloco, /\.dashboard-sidebar nav \{[^}]*overflow-y: auto/u,
-    "com todos os módulos liberados a navegação passa da altura da janela");
-  assert.match(bloco, /\.dashboard-sidebar > :not\(nav\) \{[^}]*flex: 0 0 auto/u,
-    "marca e conta ficam ancoradas");
-});
-
-test("o segundo nível não vira alvo invisível de 19px no notebook", async () => {
-  const css = (await lerCss("app/dashboard-modern.css")).replace(/\r\n?/gu, "\n");
-  const base = css.indexOf(".sidebar-process-views {");
-  const compacto = css.lastIndexOf("@media (max-width: 1180px) and (min-width: 761px)");
-  assert.ok(compacto > base, "o override compacto precisa vir depois da declaração-base para vencer a cascata");
-  assert.match(css.slice(compacto), /\.sidebar-process-views \{ display: none; \}/u,
-    "submódulos sem ícone devem sair do trilho compacto; continuam no cabeçalho contextual");
+  // A barra lateral saiu da interface no redesign (#262) e o CSS dela foi apagado.
 });
 
 test("o layout de celular continua rolando pelo documento", async () => {

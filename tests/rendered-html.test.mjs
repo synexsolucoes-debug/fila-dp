@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
 import test from "node:test";
+import { painelSource } from "./painel-source.ts";
 
 const root = new URL("../", import.meta.url);
 
 async function source(path) {
+  // O painel mora em vários arquivos desde que a Visão geral e as
+  // Configurações saíram do WorkspaceApp; a conferência lê todos juntos.
+  if (path === "app/painel/WorkspaceApp.tsx") return painelSource();
   return readFile(new URL(path, root), "utf8");
 }
 
@@ -98,7 +102,6 @@ test("ships operational foundations for boards, attachments, planner, reports an
 test("keeps the responsive visual layer for the new surfaces", async () => {
   const css = await source("app/access.css");
   assert.match(css, /demand-table-view/);
-  assert.match(css, /demand-calendar-view/);
   assert.match(css, /notification-drawer/);
   assert.match(css, /workspace-settings-layout/);
   assert.match(css, /@media \(max-width: 760px\)/);

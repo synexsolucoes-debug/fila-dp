@@ -9,6 +9,7 @@ import {
   disposalTouchesStock, epiDamageDecisions, epiDiscountDecisions, epiReturnConditions, returnRouting,
 } from "../lib/epi.ts";
 import { buildEpiCompliance } from "../lib/epi-compliance.ts";
+import { painelSource } from "./painel-source.ts";
 
 /**
  * Controle de EPI.
@@ -333,7 +334,7 @@ test("o módulo entra no catálogo apontando para uma tela que existe", async ()
   // os contratos — visível na administração e inalcançável para o cliente.
   assert.match(migration, /INSERT INTO "fdp_plan_modules"[\s\S]*?SELECT p\."id", 'epi' FROM "fdp_saas_plans" p/u);
 
-  const shell = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+  const shell = await painelSource();
   assert.match(shell, /epi: \{\s*\n\s*label: "Controle de EPI"/u);
   assert.match(shell, /module: "epi"/u);
   assert.match(shell, /keepAlive\("epi", <EpiControlView/u);
@@ -548,7 +549,7 @@ test("áreas operacionais são N:N e governam a origem e o destino das demandas"
 });
 
 test("o fluxo entre áreas aparece no quadro e na central sem depender de nomes fixos", async () => {
-  const workspace = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+  const workspace = await painelSource();
   assert.match(workspace, /function DemandAreaFlow/u);
   assert.match(workspace, /areas\.find\(\(area\) => area\.id === card\.requesterAreaId\)/u);
   assert.match(workspace, /areas\.find\(\(area\) => area\.id === card\.responsibleAreaId\)/u);

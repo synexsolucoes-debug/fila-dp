@@ -37,7 +37,7 @@
 }
 
 @media (min-width: 761px) {
-  .dashboard-shell[data-density="compact"] .dashboard-header { height: 52px; }
+
   .dashboard-shell[data-density="compact"] { --content-pad-top: 12px; }
   .dashboard-shell[data-density="compact"] .dashboard-content { padding-bottom: 24px; }
   .dashboard-shell[data-density="compact"] .dashboard-heading { margin-bottom: 14px; }
@@ -62,11 +62,6 @@
 }
 
 .dashboard-shell[data-density="compact"] .dashboard-content :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), select) {
-  padding-block: 4px;
-}
-
-.dashboard-shell[data-density="compact"] .dashboard-sidebar .sidebar-nav-item {
-  min-height: 32px;
   padding-block: 4px;
 }
 

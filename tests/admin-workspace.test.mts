@@ -4,6 +4,7 @@ import test from "node:test";
 
 import { capabilities, capabilitiesForRole, workspaceRoles } from "../lib/authorization.ts";
 import { capabilityAreas, capabilitiesOfArea } from "../lib/capability-catalog.ts";
+import { painelSource } from "./painel-source.ts";
 
 /**
  * A Administração do workspace, na forma da maquete 3.
@@ -18,8 +19,7 @@ import { capabilityAreas, capabilitiesOfArea } from "../lib/capability-catalog.t
 // Os testes abaixo recortam o fonte por delimitadores de linha. Normalizar o
 // fim de linha evita que um checkout no Windows transforme uma garantia de
 // comportamento em uma falha de formatação.
-const painel = (await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8"))
-  .replaceAll("\r\n", "\n");
+const painel = await painelSource();
 
 function bloco(inicio: string, fim: string) {
   const de = painel.indexOf(inicio);
@@ -187,7 +187,8 @@ test("a administração não mantém uma paleta própria", async () => {
      em todo o resto a marca é latão. */
   const css = await readFile(new URL("../app/access.css", import.meta.url), "utf8");
   const bloco = css.slice(css.indexOf(".theme-dark .workspace-modal > header {"),
-    css.indexOf(".theme-dark .workspace-member-list article > button"));
+    // O fim do bloco era a lista de membros antiga, apagada por falta de uso.
+    css.indexOf("@media (max-width: 1050px)", css.indexOf(".theme-dark .workspace-modal > header {")));
   assert.ok(bloco.length > 400, "o recorte do bloco escuro da modal ficou vazio");
   const hexes = [...bloco.matchAll(/#[0-9a-f]{6}\b/gu)].map((match) => match[0]);
   assert.deepEqual(hexes, [],

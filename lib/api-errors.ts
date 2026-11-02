@@ -74,8 +74,16 @@ export function apiErrorResponse(error: unknown) {
     // A mensagem fica só no servidor; o cliente recebe apenas o requestId.
     errorMessage: error instanceof Error ? error.message.slice(0, 300) : undefined,
   });
+  /* O número do chamado vai na própria frase. As telas mostram `error` e
+     descartavam o `requestId` — a pessoa via "Não foi possível concluir a
+     operação" e não tinha o que repassar. Os 8 primeiros caracteres bastam
+     para achar a linha no log, que guarda o identificador inteiro. */
   return Response.json(
-    { error: "Não foi possível concluir a operação.", code: "INTERNAL_ERROR", requestId },
+    {
+      error: `Não foi possível concluir a operação. Se continuar, informe ao suporte o chamado ${requestId.slice(0, 8)}.`,
+      code: "INTERNAL_ERROR",
+      requestId,
+    },
     { status: 500, headers: { "Cache-Control": "no-store" } },
   );
 }

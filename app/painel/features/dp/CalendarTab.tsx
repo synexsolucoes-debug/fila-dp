@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { CalendarDays, Wand2 } from "lucide-react";
-import { EmptyState, ErrorBanner, LoadingState } from "../shared";
+import { competenceLabel, EmptyState, ErrorBanner, LoadingState } from "../shared";
 import { brDate, dpRequest, errorText, weekdayShort } from "./dp.api";
 import styles from "./dp.module.css";
 import { contagem } from "../shared/plural";
@@ -62,7 +62,7 @@ export function CalendarTab({ canManage }: { canManage: boolean }) {
         : <>
           {peakDays.length > 0 && <p className={styles.hint}>Dias de pico: {peakDays.map(brDate).join(", ")}.</p>}
           <div className={styles.tableWrap}><table className={styles.timeline}>
-            <caption className="sr-only">Rotinas por dia da competência {competence}</caption>
+            <caption className="sr-only">Rotinas por dia da competência {competenceLabel(competence)}</caption>
             <thead>
               <tr>
                 <th className={styles.activity} scope="col">Rotina</th>

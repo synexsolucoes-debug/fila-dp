@@ -460,44 +460,9 @@
 /* Linha de usuário: identidade, papel, departamento e ações em cima; as três
    configurações que abrem (empresas, colaborador, módulos) numa segunda linha.
    Antes as nove peças disputavam uma linha só e saíam pela borda. */
-.dashboard-shell.operational-ui .workspace-member-list > article {
-  display: grid;
-  grid-template-columns: 32px minmax(180px, 1fr) 150px 210px auto 32px;
-  align-items: center;
-  gap: 10px 12px;
-  min-height: 0;
-  padding: 14px 16px;
-  border: 0;
-  border-bottom: 1px solid var(--ui-border);
-  border-radius: 0;
-  background: transparent;
-}
-.dashboard-shell.operational-ui .workspace-member-list > article > i { width: 32px; height: 32px; border-radius: 50%; background: var(--ui-primary-soft); color: var(--ui-text); font-size: 12px; }
-.dashboard-shell.operational-ui .workspace-member-list > article > :is(select, b) { min-width: 0; height: 32px; font-size: 13px; }
-.dashboard-shell.operational-ui .workspace-member-list > article > :is(.member-company-access, .member-company-summary) { grid-row: 2; grid-column: 2 / 3; }
-.dashboard-shell.operational-ui .workspace-member-list > article > .member-employee-link { grid-row: 2; grid-column: 3 / 5; }
-.dashboard-shell.operational-ui .workspace-member-list > article > .member-modules-details { grid-row: 2; grid-column: 5 / 7; }
-.dashboard-shell.operational-ui .workspace-member-list > article > details { min-width: 0; }
-.dashboard-shell.operational-ui .workspace-member-list > article > details > summary {
-  width: fit-content;
-  max-width: 100%;
-  overflow: hidden;
-  color: var(--ui-primary);
-  font-size: 13px;
-  font-weight: 500;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  cursor: pointer;
-}
-.dashboard-shell.operational-ui .workspace-member-list > article > details[open] { grid-column: 2 / -1; }
-.dashboard-shell.operational-ui .workspace-member-list > article > details[open] ~ details { grid-row: 3; }
+
 .dashboard-shell.operational-ui .member-company-access label em { margin-left: 6px; padding: 1px 6px; border-radius: 999px; background: var(--ui-surface-muted); color: var(--ui-text-soft); font-size: 11px; font-style: normal; }
 .dashboard-shell.operational-ui .member-recovery-button { height: 32px; padding: 0 10px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface); color: var(--ui-text); font-size: 12px; font-weight: 500; white-space: nowrap; }
-@media (max-width: 1100px) {
-  .dashboard-shell.operational-ui .workspace-member-list > article { grid-template-columns: 32px minmax(0, 1fr) auto; }
-  .dashboard-shell.operational-ui .workspace-member-list > article > * { grid-column: 2 / -1 !important; grid-row: auto !important; }
-  .dashboard-shell.operational-ui .workspace-member-list > article > i { grid-column: 1 !important; }
-}
 
 /* Menu da Administração: o rótulo ocupa a linha (havia `display: grid` herdado
    do desenho com subtítulo, que quebrava uma palavra por linha). */
@@ -924,4 +889,47 @@
 @media (max-width: 640px) {
   .dashboard-shell :has(> [role="dialog"][aria-modal="true"]:not(.search-palette, .notification-drawer, .module-launcher, .attachment-preview-modal)) { padding: 10px !important; }
   .dashboard-shell [role="dialog"][aria-modal="true"]:not(.search-palette, .notification-drawer, .module-launcher, .attachment-preview-modal) { max-height: 94dvh !important; }
+}
+
+/* Indicadores da Visão geral: o número fica logo abaixo do título e o texto de
+   apoio vai para a base. Antes o número tinha `margin-top: auto` e descia
+   quando o apoio era curto — "Obrigações próximas" ficava mais baixo que os
+   vizinhos, e "SLA no prazo" (com barra) mais alto. */
+.dashboard-shell.operational-ui .overview-kpi-value { margin-top: 4px; }
+.dashboard-shell.operational-ui .overview-kpi-support { margin-top: auto; }
+
+/* "Ver integrações" pintava branco sólido no tema escuro: o botão secundário
+   do resumo de conexões usa as superfícies do tema, como os demais. */
+.dashboard-shell.operational-ui .connection-summary header .secondary-button {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+.dashboard-shell.operational-ui .connection-summary header .secondary-button:hover {
+  background: var(--ui-surface-muted, var(--ui-surface));
+}
+
+/* Aviso de rascunho recuperado na gaveta de Nova demanda. */
+.demand-draft-note {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  margin: 0; padding: 10px 12px;
+  border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md);
+  background: var(--ui-surface-muted, var(--ui-surface)); color: var(--ui-text);
+  font-size: .85rem;
+}
+
+/* O quadro é uma grade de uma coluna; sem limite, a coluna cresce até a
+   largura da faixa de indicadores (que no celular rola para o lado) e leva a
+   busca e os filtros para fora da tela. */
+.board-shell { grid-template-columns: minmax(0, 1fr); }
+.board-shell > * { min-width: 0; }
+
+/* Ação no aviso central ("Desfazer"): texto, não ícone. */
+.center-toast > .center-toast-action {
+  width: auto;
+  padding: 0 10px;
+  font: inherit;
+  font-weight: 700;
+  color: var(--ui-accent-text, var(--ui-primary));
+  white-space: nowrap;
 }

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { painelSource } from "./painel-source.ts";
 
 /**
  * Portal do Gestor, passo 1 (§4.20): "DP como central telefônica" — a
@@ -30,7 +31,7 @@ const migrationSource = await readFile(new URL("../drizzle/postgres/0104_manager
 const membersRouteSource = await readFile(new URL("../app/api/members/[id]/route.ts", import.meta.url), "utf8");
 const teamRouteSource = await readFile(new URL("../app/api/gestor/team/route.ts", import.meta.url), "utf8");
 const portalPageSource = await readFile(new URL("../app/gestor/GestorTeamView.tsx", import.meta.url), "utf8");
-const workspaceAppSource = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+const workspaceAppSource = await painelSource();
 const registrationsViewSource = await readFile(new URL("../app/painel/features/registrations/RegistrationsView.tsx", import.meta.url), "utf8");
 
 /* ── a migration: o vínculo é opcional, único, e nunca arrasta a conta ──── */

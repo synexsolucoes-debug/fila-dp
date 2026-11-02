@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { ModuleLoading } from "./features/shared/ModuleLoading";
 import Image from "next/image";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
@@ -9,7 +10,7 @@ import {
 } from "@/lib/panel-routes";
 import { LayoutGrid, Settings,
   ArrowLeft,
-  ArrowRight,
+  
   BarChart3,
   Bell,
   Blocks,
@@ -24,7 +25,7 @@ import { LayoutGrid, Settings,
   CalendarClock,
   CalendarDays,
   CheckCircle2,
-  ChevronDown,
+  
   ChevronRight,
   CircleAlert,
   CircleHelp,
@@ -51,8 +52,8 @@ import { LayoutGrid, Settings,
   Stethoscope,
 
   Timer,
-  Trash2,
-  Upload,
+  
+  
   Users,
   WalletCards,
   Workflow,
@@ -60,9 +61,14 @@ import { LayoutGrid, Settings,
   type LucideIcon,
 } from "lucide-react";
 import { VinculatoLogo } from "@/app/components/VinculatoLogo";
-import type { ActivityEvent, Card, CardAttachment, InboxItem, ProcessFlowSummary, WorkspaceMember, WorkspaceRole, WorkspaceSnapshot } from "@/lib/fila-dp-types";
+import { activityDetails, activityLabel, compactSlaLabel, formatDate, formatMoment, plural } from "./features/overview/formatting";
+import { OverviewView } from "./features/overview/OverviewView";
+import { DemandTableView, InboxView, PayrollView, PlannerView } from "./features/workspace-views/WorkspaceViews";
+import { DemandAreaFlow, formatDue, processColors, slaLabel } from "./features/shared/demand-display";
+import { AdminIndicators, CompanySettings, FieldsSettings, ListsSettings, MemberCompanyAccess, MemberEmployeeLink, PermissionMatrix, RulesSettings, TemplatesSettings } from "./features/settings/SettingsPanels";
+import { roleLabels, type CatalogHandler, type ConfirmationRequest } from "./features/settings/settings.types";
+import type { Card, CardAttachment, InboxItem, ProcessFlowSummary, WorkspaceMember, WorkspaceRole, WorkspaceSnapshot } from "@/lib/fila-dp-types";
 import type { ActionTarget } from "@/lib/action-center";
-import { RULE_TRIGGERS, RULE_TRIGGER_LABELS } from "@/lib/automation-rules";
 import { hasSubNavigation, isContractorOnly, visibleProcessGroups } from "@/lib/process-navigation";
 import { ModuleLauncher, type LauncherModule } from "./features/shared/ModuleLauncher";
 import { CompanyPicker } from "./features/shared/CompanyPicker";
@@ -76,11 +82,11 @@ import {
 } from "@/lib/theme";
 import { DENSITY_KEY, parseDensity, type Density } from "@/lib/density";
 import { chooseRegistrationFormAttachment } from "@/lib/registration-form-file";
-import { capabilitiesForRole, hasCapability, workspaceRoles } from "@/lib/authorization";
-import { capabilityAreas, capabilitiesOfArea, capabilityCatalog, roleSummaries, type CapabilityArea } from "@/lib/capability-catalog";
+import { capabilitiesForRole, hasCapability } from "@/lib/authorization";
+import { roleSummaries } from "@/lib/capability-catalog";
 import { formatWorkingMinutes } from "@/lib/fila-dp-sla";
 import { overviewPeriodLabel, overviewPeriods, periodWindowEnd, periodWindowStart, withinPeriod, type OverviewPeriod } from "@/lib/overview-period";
-import { AnimatedDrawer, AnimatedTabs, CenterToast, competenceLabel, ProcessTabsProvider, ViewPaneActiveContext, connectionStatusLabel, connectionTone, lastSyncLabel, MemberModules, PageTransition } from "./features/shared";
+import { AnimatedDrawer, AnimatedTabs, CenterToast, competenceLabel, ProcessTabsProvider, ViewPaneActiveContext, MemberModules, PageTransition } from "./features/shared";
 import { RequestError, requestErrorFrom, supportReference } from "./request-error";
 import { contractorSections, isContractorSection, type ContractorSectionId } from "./features/payments/contractor-sections";
 import { DemandDeadlineView } from "./features/work/DemandViews";
@@ -98,9 +104,6 @@ import { contagem } from "./features/shared/plural";
 /* Cada módulo do painel é carregado quando é aberto (§ desempenho).
    Antes, as vinte telas vinham no mesmo pacote: quem usava só EPI baixava
    Pagamento PJ, Folha e Processos para abrir o painel. */
-function ModuleLoading() {
-  return <div className="module-loading" role="status" aria-live="polite">Abrindo módulo…</div>;
-}
 const HistoryView = dynamic(() => import("./features/history/HistoryView").then((module) => module.HistoryView), { loading: ModuleLoading });
 const PortfolioView = dynamic(() => import("./features/portfolio/PortfolioView").then((module) => module.PortfolioView), { loading: ModuleLoading });
 const DpOperationsView = dynamic(() => import("./features/dp/DpOperationsView").then((module) => module.DpOperationsView), { loading: ModuleLoading });
@@ -120,11 +123,8 @@ const AgentsView = dynamic(() => import("./features/work/AgentsView").then((modu
 const CardProcessPanel = dynamic(() => import("./features/work/CardProcessPanel").then((module) => module.CardProcessPanel), { loading: ModuleLoading });
 const TriageView = dynamic(() => import("./features/work/TriageView").then((module) => module.TriageView), { loading: ModuleLoading });
 const WorkCenterView = dynamic(() => import("./features/work/WorkCenterView").then((module) => module.WorkCenterView), { loading: ModuleLoading });
-const PayrollImportDialog = dynamic(() => import("./features/payroll/PayrollImportDialog").then((module) => module.PayrollImportDialog), { loading: ModuleLoading });
 const TrelloImportPanel = dynamic(() => import("./features/boards/TrelloImportPanel").then((module) => module.TrelloImportPanel), { loading: ModuleLoading });
-const PayrollMovementsPanel = dynamic(() => import("./features/payroll/PayrollMovementsPanel").then((module) => module.PayrollMovementsPanel), { loading: ModuleLoading });
 const PaymentsView = dynamic(() => import("./features/payments/PaymentsView").then((module) => module.PaymentsView), { loading: ModuleLoading });
-
 
 /* Os oito destinos do Pagamento PJ (§74) estão escritos aqui um a um, e não
    como `ContractorSectionId`: esta união é a lista de telas do painel, e é ela
@@ -145,7 +145,6 @@ type BoardGroupBy = "none" | "company" | "assignee";
 type BoardSort = DemandSort;
 
 /** Destinos que a faixa de indicadores alcança (§14). Subconjunto de `View`. */
-type OverviewFocusTarget = "board" | "processManagement" | "processes" | "integrations" | "history";
 
 type CardTab = "details" | "process" | "checklist" | "attachments" | "sheet" | "activity";
 type SettingsSection = "general" | "companies" | "columns" | "team" | "matrix" | "security" | "fields" | "templates" | "sla" | "automations";
@@ -219,15 +218,6 @@ type RealtimeStatus = "syncing" | "current" | "delayed";
 type User = { displayName: string; email: string; fullName: string | null };
 type SearchResult = { id: string; title: string; company: string; processType: string; priority: string; slaStatus: string; dueAt: string | null; assigneeName: string; archived: boolean; listId: string };
 type SearchRecord = { kind: string; id: string; title: string; subtitle: string; badge: string; target: ActionTarget | "registrations" };
-type CatalogHandler = (payload: Record<string, unknown>, message: string) => Promise<WorkspaceSnapshot | null>;
-type SnapshotMutation = (url: string, options: RequestInit, message?: string) => Promise<WorkspaceSnapshot | null>;
-type ConfirmationRequest = {
-  title: string;
-  description: string;
-  confirmLabel: string;
-  action: () => void | Promise<unknown>;
-};
-type ConfirmHandler = (request: ConfirmationRequest) => void;
 type RecoveryLink = { name: string; url: string; expiresAt: string };
 type AuthSession = { id: string; deviceLabel: string; createdAt: string; lastSeenAt: string; expiresAt: string; current: boolean };
 type CardForm = {
@@ -298,16 +288,6 @@ type StartableProcess = {
 type EmployeeStartOption = {
   id: string; company_id: string; full_name: string; social_name: string;
   registration_number: string; employment_status: string;
-};
-
-const processColors: Record<string, string> = {
-  "CONCILIAÇÃO CADASTRAL": "blue",
-  "FÉRIAS": "purple",
-  "BENEFÍCIOS": "green",
-  "RESCISÃO": "orange",
-  "CADASTRO": "gray",
-  "FOLHA": "red",
-  "OUTROS": "gray",
 };
 
 /**
@@ -539,13 +519,6 @@ const searchRecordColors: Record<string, string> = {
   contractor: "orange", competence: "blue", integration: "gray",
 };
 
-const roleLabels: Record<WorkspaceRole, string> = {
-  admin: "Administrador",
-  member: "Membro",
-  observer: "Observador",
-  guest: "Convidado",
-};
-
 async function requestSnapshot(url: string, options?: RequestInit): Promise<WorkspaceSnapshot> {
   const headers = new Headers(options?.headers);
   if (!(options?.body instanceof FormData) && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
@@ -639,40 +612,10 @@ function initials(value: string) {
   return initialsOf(value, "DP");
 }
 
-function formatDate(value: string | null, long = false) {
-  if (!value || typeof value !== "string") return "Sem prazo";
-  const date = new Date(`${value.slice(0, 10)}T12:00:00`);
-  if (Number.isNaN(date.getTime())) return "Sem prazo";
-  return new Intl.DateTimeFormat("pt-BR", long ? { day: "2-digit", month: "long", year: "numeric" } : { day: "2-digit", month: "short" }).format(date);
-}
-
-function formatDue(value: string | null) {
-  if (!value || typeof value !== "string") return "Sem prazo";
-  if (!value.includes("T")) return formatDate(value);
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return formatDate(value);
-  return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(date);
-}
-
 function dueInputValue(value: string, defaultTime: string) {
   if (!value) return "";
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return `${value}T${defaultTime}`;
   return value.slice(0, 16);
-}
-
-function formatReceived(value: string) {
-  // Inbox items can come from SQLite as `YYYY-MM-DD HH:mm:ss`, from an API
-  // as an ISO string, or briefly have no timestamp while a webhook is being
-  // processed. Never render `NaN` when the value cannot be parsed.
-  const raw = String(value ?? "").trim();
-  if (!raw) return "agora";
-  const normalized = raw.includes("T") ? raw : raw.replace(" ", "T");
-  const date = new Date(normalized + (/[zZ]|[+-]\d{2}:?\d{2}$/.test(normalized) ? "" : "Z"));
-  if (Number.isNaN(date.getTime())) return "agora";
-  const diffMinutes = Math.max(0, Math.floor((Date.now() - date.getTime()) / 60000));
-  if (diffMinutes < 60) return `há ${diffMinutes || 1} min`;
-  if (diffMinutes < 1440) return `há ${Math.floor(diffMinutes / 60)} h`;
-  return `há ${Math.floor(diffMinutes / 1440)} d`;
 }
 
 function realtimeCursor(date = new Date()) {
@@ -728,35 +671,6 @@ function CardProcessLine({ flow }: { flow: ProcessFlowSummary }) {
 }
 
 /**
- * A mesma obrigação, uma linha só, com a contagem de empresas.
- *
- * A consulta devolve **uma linha por empresa**: doze filiais com o mesmo
- * eSocial S-1299 ocupavam as seis vagas do painel com o mesmo prazo repetido,
- * e a sétima obrigação — de outro tipo, talvez mais urgente — não aparecia. A
- * especificação pede o formato agregado ("Empresas: 12"), e ele é o que deixa a
- * lista responder "o que vence", em vez de "onde vence".
- *
- * Agrupa por obrigação + competência + vencimento: mesma obrigação com prazos
- * diferentes são dois compromissos distintos, e juntá-los esconderia o mais
- * apertado atrás do mais folgado. Mantém o menor `daysRemaining` do grupo pelo
- * mesmo motivo.
- *
- * Sem consulta nova — é agregação do que o snapshot já traz.
- */
-function groupObligations(items: readonly WorkspaceSnapshot["upcomingObligations"][number][]) {
-  const grupos = new Map<string, WorkspaceSnapshot["upcomingObligations"][number]
-    & { companies: number }>();
-  for (const item of items) {
-    const chave = `${item.title}|${item.competence}|${item.dueDate}`;
-    const atual = grupos.get(chave);
-    if (!atual) { grupos.set(chave, { ...item, companies: 1 }); continue; }
-    atual.companies += 1;
-    if (item.daysRemaining < atual.daysRemaining) atual.daysRemaining = item.daysRemaining;
-  }
-  return [...grupos.values()];
-}
-
-/**
  * O prazo em distância, e não em data.
  *
  * "12 set" obriga quem lê a fazer a conta contra o dia de hoje, cartão por
@@ -793,46 +707,6 @@ function dueValue(card: Card) {
 
 /** Ordem de urgência, do mais para o menos. */
 const priorityRank: Record<Card["priority"], number> = { urgent: 0, high: 1, normal: 2, low: 3 };
-
-function slaLabel(card: Card) {
-  if (card.slaStatus === "overdue") return `Atrasada • ${formatDue(card.dueAt)}`;
-  if (card.slaStatus === "warning") return card.dueAt ? `Atenção • ${formatDue(card.dueAt)}` : "Atenção no SLA";
-  if (card.slaStatus === "paused") return "SLA pausado";
-  if (card.slaStatus === "completed") return "Concluída";
-  return card.dueAt ? formatDue(card.dueAt) : "Sem prazo";
-}
-
-/**
- * Origem e destino são parte do processo operacional, não uma etiqueta livre.
- * O cartão recebe somente os IDs; os nomes configuráveis são resolvidos pelo
- * catálogo do workspace para que renomear uma área não deixe snapshots textuais
- * espalhados pelas demandas.
- */
-function DemandAreaFlow({ card, areas }: { card: Card; areas: WorkspaceSnapshot["areas"] }) {
-  if (!card.requesterAreaId && !card.responsibleAreaId) return null;
-  const requester = areas.find((area) => area.id === card.requesterAreaId)?.name ?? "Área não informada";
-  const responsible = areas.find((area) => area.id === card.responsibleAreaId)?.name ?? "Área não informada";
-  return <span className="demand-area-flow" aria-label={`Fluxo entre áreas: ${requester} para ${responsible}`}>
-    <span>{requester}</span><ArrowRight aria-hidden="true" /><span>{responsible}</span>
-  </span>;
-}
-
-function compactSlaLabel(status: string, dueAt: string | null) {
-  if (status === "overdue") return "Atrasada";
-  if (status === "warning") return "Vence hoje";
-  if (status === "paused") return "Pausada";
-  if (status === "completed") return "Concluída";
-  return dueAt ? formatDate(dueAt) : "Sem prazo";
-}
-
-function formatMoment(value: string) {
-  const raw = String(value ?? "").trim();
-  if (!raw) return "agora";
-  const normalized = raw.includes("T") ? raw : raw.replace(" ", "T") + "Z";
-  const date = new Date(normalized);
-  if (Number.isNaN(date.getTime())) return "agora";
-  return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(date);
-}
 
 function formatFileSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -884,87 +758,6 @@ function SolidesAttachmentSyncPanel({ card, busy, canAuthorize, onAuthorize }: {
       {sync.state === "FAILED" ? "Autorizar novamente" : "Autorizar anexos da Sólides"}
     </button>}
   </section>;
-}
-
-function activityLabel(activity: ActivityEvent) {
-  const labels: Record<string, string> = {
-    "card.created": "criou a demanda",
-    "card.updated": "atualizou os dados",
-    "card.moved": "moveu a demanda de coluna",
-    "card.archived": "arquivou a demanda",
-    "card.commented": "adicionou um comentário",
-    "checklist.item_added": "adicionou uma etapa ao checklist",
-    "checklist.item_toggled": activity.payload.completed ? "concluiu uma etapa" : "reabriu uma etapa",
-    "inbox.item_converted": "converteu a solicitação da Inbox",
-    "attachment.uploaded": "enviou um anexo",
-    "attachment.deleted": "removeu um anexo",
-    "tangerino.attachments.authorized": "autorizou os anexos da Sólides",
-    "tangerino.attachments.completed": "trouxe os anexos da Sólides",
-    "admission.sheet.built": "leu a ficha de contratação",
-    "admission.sheet.purged": "apagou a ficha de contratação",
-    "card.restored": "restaurou a demanda",
-    "automation.executed": "executou uma automação",
-    /* Processo e automação na mesma linha do tempo (§45). Sem estas entradas, o
-       histórico dizia "atualizou a demanda" justamente nos eventos que
-       explicam por que ela mudou de etapa. */
-    "process.instance_started": "abriu a demanda a partir de um processo",
-    "process.step_advanced": "avançou a etapa do processo",
-    "integration.demand_created": "abriu a demanda a partir de uma leitura automática",
-    "teams.movement_confirmed": "confirmou uma movimentação vinda do Teams",
-    "sla.paused": "pausou o SLA",
-    "sla.resumed": "retomou o SLA",
-    /* A troca de responsável tem linha própria (§16, §41). Enquanto ela passava
-       pelo `PATCH` genérico, o histórico dizia "atualizou os dados" no evento
-       que a operação mais precisa reconstituir — "quem me passou isso, e
-       quando?". */
-    "card.assigned": activity.payload.to ? `atribuiu a demanda a ${String(activity.payload.to)}` : "devolveu a demanda para a fila comum",
-    "card.bulk_updated": "alterou a demanda junto com outras",
-  };
-  return labels[activity.eventType] ?? "atualizou a demanda";
-}
-
-function activityDetails(activity: ActivityEvent) {
-  const payload = activity.payload && typeof activity.payload === "object" && !Array.isArray(activity.payload) ? activity.payload : {};
-  if (activity.eventType === "card.moved") {
-    return [`De ${String(payload.fromListName ?? "coluna anterior")} para ${String(payload.toListName ?? "nova coluna")}.`];
-  }
-  if (activity.eventType === "card.assigned") {
-    const de = String(payload.from ?? "");
-    return [de ? `Antes com ${de}.` : "Estava sem responsável."];
-  }
-  if (activity.eventType === "card.bulk_updated") {
-    const total = Number(payload.selectionSize ?? 0);
-    return [`${String(payload.summary ?? "alteração em massa")}${total > 1 ? ` (${total} demandas na mesma ação).` : "."}`];
-  }
-  if (activity.eventType === "checklist.item_toggled") {
-    const state = payload.completed ? "concluída" : "reaberta";
-    return [payload.title ? `Etapa: ${String(payload.title)} (${state}).` : `Etapa ${state}.`];
-  }
-  if (activity.eventType === "attachment.uploaded" || activity.eventType === "attachment.deleted") {
-    return payload.filename ? [`Arquivo: ${String(payload.filename)}.`] : [];
-  }
-  if (activity.eventType === "process.step_advanced") {
-    const destino = String(payload.toStepLabel ?? payload.toStepId ?? "próxima etapa");
-    const agente = payload.agentKey ? ` Proposta do agente ${String(payload.agentKey)}, confirmada por uma pessoa.` : "";
-    return [`Para ${destino}.${agente}`];
-  }
-  if (activity.eventType === "process.instance_started") {
-    return [`Processo ${String(payload.processName ?? payload.processDefinitionId ?? "")} ${String(payload.versionNumber ?? "")}`.trim()];
-  }
-  if (activity.eventType === "integration.demand_created") {
-    return [`Origem: ${String(payload.source ?? "integração")}.`];
-  }
-  const changes = payload.changes;
-  if (!changes || typeof changes !== "object" || Array.isArray(changes)) return [];
-  const labels: Record<string, string> = { title: "Título", description: "Descrição", company: "Empresa", processType: "Processo", priority: "Prioridade", assigneeName: "Responsável", dueAt: "Prazo", name: "Nome", slaBehavior: "Comportamento do SLA" };
-  return Object.entries(changes).flatMap(([field, value]) => {
-    if (!value || typeof value !== "object" || Array.isArray(value)) return [];
-    const change = value as { from?: unknown; to?: unknown };
-    if (change.from === undefined && change.to === undefined) return [];
-    const from = String(change.from ?? "sem valor") || "sem valor";
-    const to = String(change.to ?? "sem valor") || "sem valor";
-    return [`${labels[field] ?? field}: ${from} → ${to}.`];
-  });
 }
 
 function canPreviewAttachment(attachment: CardAttachment) {
@@ -1034,6 +827,11 @@ export function WorkspaceApp({
   const [error, setError] = useState("");
   const [startupFailure, setStartupFailure] = useState<unknown>(null);
   const [toast, setToast] = useState("");
+  /* "Desfazer" do aviso: mover e atribuir são as ações mais repetidas do
+     quadro, e um arrasto errado não deveria custar reabrir a demanda. */
+  const [undo, setUndo] = useState<{ message: string; run: () => void } | null>(null);
+  /* Só vale para o aviso de que ele nasceu: outro aviso logo depois não herda o botão. */
+  const undoAtual = undo && undo.message === toast ? undo : null;
   const [draggedCardId, setDraggedCardId] = useState<string | null>(null);
   const [cardModalOpen, setCardModalOpen] = useState(false);
   /* Os processos publicados que podem originar uma demanda (§10).
@@ -1044,6 +842,10 @@ export function WorkspaceApp({
   const [employeeStartOptions, setEmployeeStartOptions] = useState<EmployeeStartOption[] | null>(null);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [cardForm, setCardForm] = useState<CardForm>(emptyCardForm);
+  /* Rascunho da demanda nova (sessão do navegador). Fechar a gaveta por
+     engano — Esc, clique fora, troca de tela — apagava tudo o que foi digitado. */
+  const [draftRestored, setDraftRestored] = useState(false);
+  const draftKey = snapshot ? `vinculato:rascunho-demanda:${snapshot.workspace.id}:${snapshot.board.id}` : "";
   const [newChecklistItem, setNewChecklistItem] = useState("");
   const [newComment, setNewComment] = useState("");
   const [commentAttachment, setCommentAttachment] = useState<File | null>(null);
@@ -1260,8 +1062,6 @@ export function WorkspaceApp({
     waitingListIds: new Set((snapshot?.lists ?? []).filter((list) => list.slaBehavior === "paused").map((list) => list.id)),
     currentMemberName,
   }), [snapshot?.areas, snapshot?.lists, currentMemberName]);
-
-
 
   /* O que o navegador responde de `prefers-color-scheme`, e o que ele responde
      quando a pessoa muda no sistema operacional com o painel aberto.
@@ -1674,11 +1474,21 @@ export function WorkspaceApp({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [loading]);
 
+  // Guarda o rascunho enquanto a demanda nova está sendo escrita.
+  useEffect(() => {
+    if (!cardModalOpen || selectedCardId || !draftKey) return;
+    const temConteudo = Boolean(cardForm.title.trim() || cardForm.description.trim() || cardForm.nextStep.trim());
+    try {
+      if (temConteudo) window.sessionStorage.setItem(draftKey, JSON.stringify(cardForm));
+    } catch { /* navegador sem armazenamento: o formulário segue funcionando */ }
+  }, [cardForm, cardModalOpen, selectedCardId, draftKey]);
+
   useEffect(() => {
     if (!toast) return;
-    const timeout = window.setTimeout(() => setToast(""), 3500);
+    // Com "Desfazer", o aviso fica o dobro do tempo: dá para ler e decidir.
+    const timeout = window.setTimeout(() => setToast(""), undoAtual ? 7000 : 3500);
     return () => window.clearTimeout(timeout);
-  }, [toast]);
+  }, [toast, undoAtual]);
 
   useEffect(() => {
     if (!cardModalOpen && !inboxModalOpen && !searchOpen && !notificationsOpen && !archiveOpen && !confirmation && !attachmentPreview) return;
@@ -2181,10 +1991,33 @@ export function WorkspaceApp({
     }
   }
 
+  function readDraft(): CardForm | null {
+    if (!draftKey) return null;
+    try {
+      const raw = window.sessionStorage.getItem(draftKey);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as Partial<CardForm>;
+      return { ...emptyCardForm, ...parsed, boardId: snapshot?.board.id ?? "" };
+    } catch { return null; }
+  }
+
+  function clearDraft() {
+    setDraftRestored(false);
+    if (!draftKey) return;
+    try { window.sessionStorage.removeItem(draftKey); } catch { /* sem armazenamento: nada a apagar */ }
+  }
+
+  function discardDraft() {
+    clearDraft();
+    setCardForm({ ...emptyCardForm, boardId: snapshot?.board.id ?? "" });
+  }
+
   function openNewCard() {
     if (!canEdit) return;
     setSelectedCardId(null);
-    setCardForm({ ...emptyCardForm, boardId: snapshot?.board.id ?? "" });
+    const draft = readDraft();
+    setDraftRestored(Boolean(draft));
+    setCardForm(draft ?? { ...emptyCardForm, boardId: snapshot?.board.id ?? "" });
     setNewChecklistItem("");
     setCardTab("details");
     setCardModalOpen(true);
@@ -2275,6 +2108,7 @@ export function WorkspaceApp({
           const corpo = await resposta.json() as { error?: string };
           if (!resposta.ok) throw new Error(corpo.error || "Não foi possível iniciar o processo.");
           applySnapshot(await requestSnapshot("/api/workspace"), "Demanda criada a partir do processo.");
+          clearDraft();
           setCardModalOpen(false);
         } catch (causa) {
           setError(causa instanceof Error ? causa.message : "Não foi possível iniciar o processo.");
@@ -2284,7 +2118,7 @@ export function WorkspaceApp({
         return;
       }
       const next = await mutate("/api/cards", { method: "POST", body: JSON.stringify(cardForm) }, "Demanda criada com checklist padrão.");
-      if (next) setCardModalOpen(false);
+      if (next) { clearDraft(); setCardModalOpen(false); }
       return;
     }
 
@@ -2331,7 +2165,15 @@ export function WorkspaceApp({
         method: "POST",
         body: JSON.stringify({ assigneeIds: userId ? [userId] : [] }),
       });
-      applySnapshot(next, name ? `Demanda atribuída a ${name}.` : "Demanda devolvida para a fila comum.");
+      const mensagem = name ? `Demanda atribuída a ${name}.` : "Demanda devolvida para a fila comum.";
+      applySnapshot(next, mensagem);
+      // Todos os responsáveis de antes, não só o primeiro: a demanda pode ter vários.
+      const anteriores = card.assignees.map((assignee) => assignee.userId).filter(Boolean);
+      // Mesmo motivo do desfazer de mover: direto no servidor, sem o retrato antigo.
+      setUndo({
+        message: mensagem,
+        run: () => void mutate(`/api/cards/${cardId}/assignee`, { method: "POST", body: JSON.stringify({ assigneeIds: anteriores }) }, "Atribuição desfeita."),
+      });
     } catch (cause) {
       setSnapshot(anterior);
       setError(cause instanceof Error
@@ -2406,7 +2248,16 @@ export function WorkspaceApp({
   async function moveCard(cardId: string, toListId: string) {
     const card = allCards.find((item) => item.id === cardId);
     if (!card || card.listId === toListId) return;
-    await mutate(`/api/cards/${cardId}/move`, { method: "POST", body: JSON.stringify({ toListId }) }, "Demanda movida. Regras de SLA recalculadas.");
+    const origem = card.listId;
+    const mensagem = "Demanda movida. Regras de SLA recalculadas.";
+    const next = await mutate(`/api/cards/${cardId}/move`, { method: "POST", body: JSON.stringify({ toListId }) }, mensagem);
+    /* O desfazer chama o servidor direto. Passar por `moveCard` de novo usaria
+       o retrato do quadro guardado neste fechamento — com a demanda ainda na
+       coluna de origem — e a função concluiria que não há nada a mover. */
+    if (next) setUndo({
+      message: mensagem,
+      run: () => void mutate(`/api/cards/${cardId}/move`, { method: "POST", body: JSON.stringify({ toListId: origem }) }, "Movimentação desfeita."),
+    });
   }
 
   function moveCardByDirection(cardId: string, direction: -1 | 1) {
@@ -3245,6 +3096,9 @@ export function WorkspaceApp({
         key={card.id}
         draggable={canEdit}
         tabIndex={0}
+        /* O atalho existe só aqui, no quadro por situação: Equipe e Minha
+           fila usam outro cartão, sem colunas para onde mover. */
+        aria-keyshortcuts={canEdit ? "Alt+ArrowLeft Alt+ArrowRight" : undefined}
         role="button"
         aria-label={`Abrir demanda ${card.title}`}
         onDragStart={() => setDraggedCardId(card.id)}
@@ -3752,7 +3606,8 @@ export function WorkspaceApp({
 
       {/* Avisos no centro da tela, em vidro (CenterToast), iguais em todas as telas. */}
       <CenterToast message={error} tone="error" onClose={() => setError("")} />
-      <CenterToast message={toast} />
+      <CenterToast message={toast}
+        action={undoAtual ? { label: "Desfazer", onClick: () => { const pendente = undoAtual; setUndo(null); setToast(""); pendente.run(); } } : undefined} />
       {/* O teto de favoritos precisa ser dito: sem o recado, marcar o nono
           simplesmente não faria nada, e a pessoa concluiria que o botão está
           quebrado. */}
@@ -3881,6 +3736,10 @@ export function WorkspaceApp({
               })()}
               {(!selectedCard || cardTab === "details") &&
               <form className={`card-form ${!canEdit ? "read-only" : ""}`} onSubmit={saveCard}>
+                {!selectedCard && draftRestored && <p className="demand-draft-note full" role="status">
+                  Rascunho recuperado: é o que estava sendo escrito antes de a janela fechar.
+                  <button type="button" className="secondary-button" onClick={discardDraft}>Descartar rascunho</button>
+                </p>}
                 {/* PRÓXIMO PASSO — o primeiro bloco da gaveta, e não um campo
                     perdido no meio do formulário (§14).
                     A pergunta que alguém faz ao abrir uma demanda é "o que eu
@@ -3890,7 +3749,10 @@ export function WorkspaceApp({
                     quando a demanda é de outra pessoa.
                     O campo fica primeiro porque é o que muda entre uma abertura
                     e a seguinte: título, empresa e processo não mudam. */}
-                <section className="demand-next-step full">
+                {/* Na demanda nova o campo desce para depois da descrição: ainda
+                    não há "o que mudou desde a última vez", e pedir o próximo
+                    passo antes do título invertia a ordem de quem está criando. */}
+                {selectedCard && <section className="demand-next-step full">
                   <header><span>Próximo passo</span></header>
                   <textarea
                     id="card-next-step"
@@ -3902,7 +3764,7 @@ export function WorkspaceApp({
                     aria-label="Próximo passo da demanda"
                     onChange={(event) => setCardForm({ ...cardForm, nextStep: event.target.value })}
                   />
-                </section>
+                </section>}
                 {/* A leitura de SLA por extenso. O cartão mostra "1d de atraso";
                     aqui ficam a data exata, o que resta e o estado — as três
                     coisas que alguém confere antes de prometer um prazo ao
@@ -3949,6 +3811,9 @@ export function WorkspaceApp({
                 {!selectedCard && <label className="full">Processo operacional<select value={cardForm.boardId} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, boardId: event.target.value, listId: "" })}>{snapshot.boards.map((board) => <option value={board.id} key={board.id}>{board.boardType === "process" ? `Processo: ${board.name}` : `Quadro geral: ${board.name}`}</option>)}</select><small className="card-process-helper">A demanda será criada e movimentada somente nas colunas deste processo.</small></label>}
                 <label className="full">Título da demanda<input autoFocus value={cardForm.title} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, title: event.target.value })} placeholder="Ex.: Conciliar colaborador com o ERP" required /></label>
                 <label className="full">Descrição<textarea value={cardForm.description} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, description: event.target.value })} placeholder="Contexto e orientações para execução" rows={4} /></label>
+                {!selectedCard && <label className="full">Próximo passo<textarea id="card-next-step" rows={2} maxLength={280} value={cardForm.nextStep} disabled={!canEdit}
+                  placeholder="O que precisa acontecer agora? Ex.: receber o comprovante pendente e conferir o cadastro."
+                  onChange={(event) => setCardForm({ ...cardForm, nextStep: event.target.value })} /></label>}
                 {/* O tipo vigente entra na lista quando não estiver nela.
                     Demanda criada a partir de um processo publicado recebe o
                     CÓDIGO do processo como tipo — `EPI_ENTREGA`, e não um dos
@@ -4123,7 +3988,6 @@ export function WorkspaceApp({
         </div>
       )}
 
-
       {confirmation && (
         <div className="workspace-modal-backdrop confirmation-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setConfirmation(null); }}>
           <section className="workspace-modal confirmation-modal" role="alertdialog" aria-modal="true" aria-labelledby="confirmation-title" aria-describedby="confirmation-description">
@@ -4145,95 +4009,6 @@ export function WorkspaceApp({
   );
 }
 
-
-/**
- * O fluxo da competência (Modelo 2, "Flow").
- *
- * No lugar da faixa marinho que dizia "N demanda(s) em andamento" — texto que
- * o indicador logo abaixo repetia, e cuja concordância "(s)" era ruído de
- * gerador. O fechamento é o fato mais estruturante do DP: a operação é cíclica
- * e fecha todo mês, e a interface não dizia isso em lugar nenhum.
- *
- * As cinco etapas são os estados que o servidor aceita (`cycleStatuses` em
- * lib/operations.ts), não uma sequência decorativa: avançar entre elas passa
- * pelos bloqueios de `describeClosingBlockers`.
- *
- * O estado é marcado por forma além de cor — ícone de concluído, anel na
- * etapa atual, contorno vazio no que falta — para funcionar também para quem
- * não distingue verde de azul.
- */
-function ConnectionMap({ integrations, onNavigate }: {
-  integrations: WorkspaceSnapshot["integrations"];
-  onNavigate: (target: ActionTarget) => void;
-}) {
-  // The overview summarizes connection state; configuration stays in Integrations.
-  if (!integrations.length) {
-    return <section className="connection-summary connection-summary-empty" aria-label="Conexões">
-      <h3>Conexões</h3>
-      <p>Nenhum conector configurado neste grupo. As integrações disponíveis aparecem em Estado das integrações.</p>
-      <button type="button" className="secondary-button" onClick={() => onNavigate("integrations")}>Ver integrações</button>
-    </section>;
-  }
-
-  /* O título é o total — o mesmo número de linhas da lista abaixo — e a
-     situação vem quebrada por estado. Antes o título dizia "1 sistema
-     conectado" em cima de uma lista com quatro sistemas e de um texto "de 5
-     configurados": três números que pareciam se contradizer. */
-  const porEstado = new Map<string, number>();
-  for (const item of integrations) porEstado.set(item.status, (porEstado.get(item.status) ?? 0) + 1);
-  const ordem = ["error", "needs_credentials", "connected", "paused"];
-  const posicao = (status: string) => (ordem.includes(status) ? ordem.indexOf(status) : ordem.length);
-  // Só "Conectada" e "Pausada" flexionam; "com erro" e "sem credencial" não.
-  const rotulo = (status: string, total: number) => {
-    const texto = connectionStatusLabel(status).toLowerCase();
-    return total > 1 && texto.endsWith("a") ? `${texto}s` : texto;
-  };
-  const situacao = [...porEstado.entries()]
-    .sort(([a], [b]) => posicao(a) - posicao(b))
-    .map(([status, total]) => `${total} ${rotulo(status, total)}`)
-    .join(" · ");
-
-  return <section className="connection-summary" aria-label="Conexões">
-    <header>
-      <div>
-        <span>Conexões</span>
-        <strong>{plural(integrations.length, "conector neste grupo", "conectores neste grupo")}</strong>
-        <p>{situacao}</p>
-      </div>
-      <button type="button" className="secondary-button" onClick={() => onNavigate("integrations")}>Ver integrações</button>
-    </header>
-
-    <div className="connection-summary-list">
-      <ul>
-        {integrations.map((item) => {
-          const tom = connectionTone(item.status);
-          return <li key={item.id} data-tone={tom}>
-            {/* Os dois lados desta linha resolveram problemas diferentes no
-                mesmo elemento, e os dois ficam:
-
-                - o item virou botão, para que o conector leve ao próprio
-                  detalhe em vez de só se anunciar;
-                - a última sincronização passa a ser dita em QUALQUER estado, e
-                  não só no conectado. Era justamente no conector com erro que
-                  ela faltava — e é ali que ela responde a pergunta que importa:
-                  há quanto tempo este sistema parou de trazer dado. Ausência
-                  não vira data inventada: `lastSyncLabel(null)` diz "nunca
-                  sincronizou". */}
-            <button type="button" onClick={() => onNavigate("integrations")}
-              aria-label={`Ver integração ${item.displayName}`}>
-              <span>
-                <strong>{item.displayName}</strong>
-                <small>{connectionStatusLabel(item.status)} · {lastSyncLabel(item.lastSyncAt)}
-                  {item.status === "error" ? " · Abra para consultar o diagnóstico" : ""}</small>
-              </span>
-            </button>
-          </li>;
-        })}
-      </ul>
-    </div>
-  </section>;
-}
-
 /**
  * Os sete tipos do catálogo padrão do DP.
  *
@@ -4247,536 +4022,6 @@ function ConnectionMap({ integrations, onNavigate }: {
    DP Operacional: são os tipos que as regras de corte e as rotinas usam. */
 const processTypeOptions = ["CONCILIAÇÃO CADASTRAL", "RESCISÃO", "FÉRIAS", "PONTO", "VARIÁVEIS", "ALTERAÇÃO SALARIAL", "AFASTAMENTO", "BENEFÍCIOS", "FOLHA", "CADASTRO", "ROTINA DP", "OUTROS"];
 
-const plural = (n: number, um: string, muitos: string) => `${n} ${n === 1 ? um : muitos}`;
-
-function OverviewView({ onNavigate, cards, lists, activities, stats, onOpen, onOpenBoard, scopeLabel, integrations, flows, obligations, periodLabel, onOpenCard, onFocus }: {
-  onNavigate: (target: ActionTarget) => void;
-  /** Demandas em execução, já sob os filtros do topo (§15). */
-  flows: WorkspaceSnapshot["processFlows"];
-  /** Obrigações em aberto, já sob os filtros do topo (§16). */
-  obligations: WorkspaceSnapshot["upcomingObligations"];
-  /** Rótulo do período escolhido, para os estados vazios dizerem o porquê. */
-  periodLabel: string;
-  onOpenCard: (cardId: string) => void;
-  /**
-   * Navega para o módulo já com o recorte de SLA aplicado (§14).
-   *
-   * Tipo próprio em vez de `ActionTarget`: aquele é a lista de destinos que
-   * *resolvem uma pendência* da central de ação, e alargá-lo para caber um
-   * indicador apagaria a razão de ele existir.
-   */
-  onFocus: (target: OverviewFocusTarget, sla: "all" | Card["slaStatus"]) => void;
-  cards: Card[];
-  lists: WorkspaceSnapshot["lists"];
-  activities: ActivityEvent[];
-  integrations: WorkspaceSnapshot["integrations"];
-  stats: { active: number; attention: number; waiting: number; onTime: number | null; completed: number; documentsPending: number; activeCompanies: number };
-  onOpen: (card: Card) => void;
-  onOpenBoard: () => void;
-  scopeLabel: string;
-}) {
-  /* Demanda por id, para a linha do histórico dizer a que ela se refere.
-     `activities` e `cards` já vêm do mesmo snapshot e do mesmo recorte, então
-     não há consulta nova; o evento cuja demanda o recorte não alcança fica sem
-     a coluna, e não com o título de outra. */
-  const cardById = new Map(cards.map((card) => [card.id, card]));
-
-  /* A aba escolhida do bloco de status. Vazia = ainda não escolheram, e aí o
-     padrão é a primeira coluna com demanda: abrir numa aba vazia faria a tela
-     parecer sem dados quando há. */
-  const [statusTab, setStatusTab] = useState("");
-  const statusList = lists.find((list) => list.id === statusTab)
-    ?? lists.find((list) => list.cards.length > 0)
-    ?? lists[0]
-    ?? null;
-  const integrationsFailing = integrations.filter((item) => item.status === "error").length;
-
-  /* Os números dos três contextos (§7.2).
-     Todos derivam das mesmas demandas, fluxos e integrações que o snapshot já
-     traz — nenhuma consulta nova, nenhum valor fixo. Onde não há dado, o texto
-     diz que não há, em vez de mostrar zero como se fosse medição. */
-  /* "Vence hoje" é `slaStatus === "warning"`, e não uma comparação de data
-     feita aqui. A primeira versão deste bloco calculava pelo calendário e
-     mostrava "Vencendo hoje: 0" logo acima de uma lista com três demandas
-     etiquetadas "Vence hoje" — dois cálculos para a mesma pergunta, discordando
-     na mesma tela. Quem decide o que é hoje é o SLA, que conhece expediente e
-     feriado; o calendário do navegador não. `compactSlaLabel` já traduz esse
-     status com estas mesmas palavras no cartão. */
-  const venceHoje = cards.filter((card) => card.slaStatus === "warning").length;
-  const atrasadas = cards.filter((card) => card.slaStatus === "overdue").length;
-  const hojeExigeAcao = venceHoje + atrasadas > 0;
-  /* Duas contagens diferentes, e o indicador usa as duas:
-
-     - `flows.length` é a ocorrência real — cada linha é uma demanda em execução
-       vinculada à versão que a instanciou. É o que "Fluxos em andamento" conta,
-       e é o que o valor do indicador mostra.
-     - `processosEmExecucao` são os modelos DISTINTOS por trás dessas
-       ocorrências. Doze admissões correndo são um processo com doze demandas, e
-       chamá-las de doze processos diria que a operação roda doze fluxos
-       diferentes — a confusão entre modelo e execução que o §4 separa.
-
-     Por isso a frase de apoio do indicador diz "N processos distintos": ela
-     qualifica o número de cima em vez de repeti-lo. */
-  const processosEmExecucao = new Set(flows.map((flow) => flow.definitionId)).size;
-  const integracoesConectadas = integrations.filter((item) => item.status === "connected").length;
-  const obrigacoesVencidas = obligations.filter((item) => item.daysRemaining < 0).length;
-  const ultimaSincronizacao = (() => {
-    const marcas = integrations.map((item) => item.lastSyncAt).filter((value): value is string => Boolean(value));
-    if (marcas.length === 0) return null;
-    const recente = marcas.reduce((maior, atual) => (atual > maior ? atual : maior));
-    return new Date(recente).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
-  })();
-
-  /* Os cinco indicadores da maquete.
-     Cada um traz um número e a frase que o qualifica. A maquete desenha uma
-     variação percentual ao lado do número — "+12% vs. mês anterior" — e ela
-     não entra: o snapshot não carrega nenhuma série histórica, então o
-     percentual teria de ser inventado, que é o que a §13 proíbe em primeiro
-     lugar. No lugar dele vai um segundo fato medido: o número que explica o
-     primeiro. É a mesma linha de texto e diz algo verdadeiro.
-
-     Nada foi perdido dos três contextos que estavam aqui: os sete valores que
-     eles mostravam continuam na tela, seis deles como a frase de apoio de um
-     indicador. */
-  const kpis: Array<{
-    key: string;
-    icon: LucideIcon;
-    label: string;
-    value: string;
-    support: string;
-    target: OverviewFocusTarget;
-    sla: "all" | "overdue";
-    /** Pinta o cartão de alerta — sempre derivado de um número, nunca fixo. */
-    alert: boolean;
-    /** Só o SLA tem barra: é o único indicador que é uma proporção. */
-    bar?: number | null;
-  }> = [
-    {
-      key: "demands-open", icon: ClipboardList, label: "Demandas em aberto",
-      value: String(stats.active),
-      support: `${contagem(stats.completed, "concluída", "concluídas")} no período · ${stats.waiting} aguardando terceiros`,
-      target: "board", sla: "all", alert: false,
-    },
-    {
-      key: "flows-running", icon: GitBranch, label: "Fluxos em andamento",
-      value: String(flows.length),
-      /* Processos DISTINTOS, não fluxos: doze admissões correndo são um
-         processo com doze demandas, e contá-las como doze processos diria que
-         a operação roda doze fluxos diferentes (§4). */
-      support: `${plural(processosEmExecucao, "processo distinto", "processos distintos")} · ${contagem(stats.documentsPending, "tarefa pendente", "tarefas pendentes")}`,
-      target: "processManagement", sla: "all", alert: false,
-    },
-    {
-      key: "obligations-due", icon: CalendarClock, label: "Obrigações próximas",
-      value: String(obligations.length),
-      support: obrigacoesVencidas
-        ? `${obrigacoesVencidas} já vencida(s)`
-        : "Nenhuma vencida até agora",
-      target: "processes", sla: "all", alert: obrigacoesVencidas > 0,
-    },
-    {
-      key: "integrations-failing", icon: Cable, label: "Integrações com erro",
-      value: String(integrationsFailing),
-      /* Sem sincronização registrada o certo é dizer isso, e não uma data de
-         mentira nem um traço que parece dado que faltou carregar. */
-      support: `${contagem(integracoesConectadas, "conectada", "conectadas")} · última sincronização ${ultimaSincronizacao ?? "Nunca"}`,
-      target: "integrations", sla: "all", alert: integrationsFailing > 0,
-    },
-    {
-      key: "sla-on-time", icon: Timer, label: "SLA no prazo",
-      /* Sem demanda no recorte não há percentual: o número mais tranquilizador
-         da tela não pode aparecer justamente quando não há evidência nenhuma
-         para tranquilizar ninguém. */
-      value: stats.onTime === null ? "—" : `${stats.onTime}%`,
-      /* O percentual mede as demandas EM ABERTO que não estouraram o prazo, e
-         não as concluídas — populações diferentes. A frase de apoio abre o
-         número em atraso e vencimento de hoje, que é o que faz alguém agir. */
-      support: stats.onTime === null
-        ? "Sem demandas em aberto neste recorte"
-        : `das demandas em aberto · ${contagem(atrasadas, "atrasada", "atrasadas")} · ${venceHoje} vencendo hoje`,
-      target: "board", sla: "overdue", alert: hojeExigeAcao,
-      bar: stats.onTime,
-    },
-  ];
-
-  return <div className="overview-layout">
-
-    {/* A ordem desta tela é a §93: “a Visão Geral deve parecer uma central de
-       operação; evitar dashboard genérico de cards”.
-
-       Medido antes de mexer, com 15 demandas reais no banco: a página tinha
-       2738px e o indicador "Demandas em aberto" ficava em y=1610 — quase duas
-       telas abaixo do topo. Para saber quantas demandas estavam abertas era
-       preciso rolar duas vezes. Os 1610px anteriores eram a competência, três
-       blocos que quase sempre estão vazios e 480px de cartões de módulo que
-       repetem, um a um, o menu que já está na barra lateral.
-
-       A correção é de ordem, não de estética. Uma sala de controle abre com o
-       estado da operação; o menu não é o estado da operação. A sequência agora
-       responde, de cima para baixo: quanto há, o que está travado, em que mês
-       estamos, o que está correndo e o que vence, como andam os sistemas, e só
-       então consulta e navegação. */}
-
-    {/* Faixa de indicadores (§14).
-        Cada número que tem onde ser resolvido virou botão: ler "3 integrações
-        com erro" e não ter caminho para elas é o indicador cobrando uma ação
-        que ele mesmo não deixa tomar. Os que não têm destino próprio seguem
-        como texto — link que leva ao lugar errado é pior que nenhum.
-
-        "SLA no prazo" não entra aqui: ele tem a faixa logo abaixo, inteira,
-        com barra e contagem. Repeti-lo como sexto cartão seria o mesmo número
-        duas vezes na mesma dobra. */}
-    {/* Cinco indicadores, como a maquete pede.
-        O recorte vigente fica escrito ao lado do título: um número sem o
-        conjunto que ele mede é um número sobre nada, e a Visão geral tem dois
-        filtros no topo que mudam os cinco de uma vez.
-
-        `data-metric` é o ponto de ancoragem do ensaio de navegador. Ele mirava
-        `.overview-metrics article strong` e `.first()`; quando os indicadores
-        viraram botão, `.first()` passou a devolver "Documentos pendentes" — que
-        é 0 tanto no grupo quanto numa filial vazia, então a conferência do
-        recorte por empresa comparava 0 com 0 e reprovava. Ancorar no que o
-        indicador *é* faz a mudança de elemento, de grupo ou de ordem não
-        quebrar o ensaio — foi o que permitiu esta reorganização.
-
-        Cada indicador é botão porque cada um tem onde ser resolvido: ler "3
-        integrações com erro" e não ter caminho para elas é o indicador cobrando
-        uma ação que ele mesmo não deixa tomar. */}
-    <section className="overview-kpis" aria-label={`Indicadores da operação — ${scopeLabel}`}>
-      {kpis.map((kpi) => {
-        return <button type="button" key={kpi.key} data-metric={kpi.key}
-          className={`overview-kpi${kpi.alert ? " requires-attention" : ""}`}
-          onClick={() => onFocus(kpi.target, kpi.sla)}>
-          <span className="overview-kpi-top">
-            <span className="overview-kpi-label">{kpi.label}</span>
-          </span>
-          <strong className="overview-kpi-value">{kpi.value}</strong>
-          {/* Barra sem número para representar não deve ser desenhada. */}
-          {typeof kpi.bar === "number" && <span className="overview-kpi-bar" aria-hidden="true">
-            <i style={{ width: `${Math.max(0, Math.min(100, kpi.bar))}%` }} />
-          </span>}
-          <small className="overview-kpi-support">{kpi.support}</small>
-        </button>;
-      })}
-    </section>
-
-
-    {/* Fluxos em andamento (§15) e próximos vencimentos (§16).
-        As duas perguntas que o quadro não responde: ele mostra demandas soltas
-        por coluna, não o processo que as gerou nem a data legal que não espera
-        ninguém.
-
-        Os dois viraram tabela, como a maquete pede. Cartão e tabela servem a
-        leituras diferentes: o cartão é bom para ler um, a tabela é boa para
-        comparar seis. Quem abre a Visão geral está escolhendo o que abrir, e
-        para isso compara — a coluna alinhada deixa "etapa" embaixo de "etapa" e
-        "responsável" embaixo de "responsável", que é o que o cartão não fazia.
-
-        Lado a lado, como a maquete põe. Eles já estiveram assim, viraram
-        largura inteira quando cinco colunas num painel de meia largura cortavam
-        a última — "SITU…" no lugar de "SITUAÇÃO" —, e voltam agora com a
-        largura das colunas resolvida no lugar certo: as células apertam o recuo
-        e o título da demanda cede espaço, porque ele já tem reticências
-        previstas e a etiqueta de prazo não tem. */}
-    <div className="overview-pair">
-        <section className="overview-panel flows-panel" aria-labelledby="overview-flows-title">
-        <header>
-          <div><h2 id="overview-flows-title">Fluxos em andamento</h2></div>
-          <button type="button" onClick={() => onFocus("processManagement", "all")}>Ver processos <ArrowRight aria-hidden="true" /></button>
-        </header>
-        <div className="overview-flow-list">
-          {flows.length === 0 && <div className="overview-empty">
-            <GitBranch aria-hidden="true" />
-            <strong>Nenhum processo em execução.</strong>
-            {/* O vazio diz qual dos dois casos é: não há demanda instanciada, ou
-                o recorte escolhido é que não alcança nenhuma. */}
-            <p>{periodLabel === "Todo o período"
-              ? "Demandas criadas a partir de um processo publicado aparecem aqui com a etapa atual."
-              : `Nenhuma demanda de processo com prazo em ${periodLabel.toLowerCase()}.`}</p>
-          </div>}
-          {flows.length > 0 && <div className="overview-table-scroll">
-            <table className="overview-table overview-flow-table">
-              <thead><tr>
-                <th scope="col">Processo</th>
-                <th scope="col">Etapa atual</th>
-                <th scope="col">Progresso</th>
-                <th scope="col">Responsável</th>
-                <th scope="col">Situação</th>
-              </tr></thead>
-              <tbody>
-                {flows.slice(0, 6).map((flow) => <tr key={flow.cardId} className={`sla-${flow.slaStatus}`}>
-                  <td>
-                    {/* A linha inteira não vira clicável: `<tr onClick>` não
-                        recebe foco nem é anunciado como destino. O caminho para
-                        a demanda é este botão, que é um elemento de verdade. */}
-                    <button type="button" className="overview-table-link" onClick={() => onOpenCard(flow.cardId)}>
-                      <strong>{flow.definitionName}</strong>
-                      <small>{flow.cardTitle}</small>
-                    </button>
-                    {flow.versionNumber && <em className="overview-version-tag"
-                      title={`Versão instanciada nesta demanda: ${flow.versionNumber}`}>v{flow.versionNumber}</em>}
-                  </td>
-                  <td>{flow.stepLabel || "Não iniciada"}</td>
-                  {/* A barra e o "7 de 18" dizem a mesma coisa de duas formas
-                      porque percentual sozinho não diz o tamanho do processo:
-                      50% de duas tarefas e 50% de quarenta pedem decisões
-                      diferentes. */}
-                  <td className="overview-progress-cell">
-                    {/* Barra sem número para representar não é desenhada: com
-                        `tasksTotal` em zero ela ficava vazia na tela, e barra
-                        vazia se lê como "0% concluído" — que é afirmar um
-                        progresso onde não há nem denominador. */}
-                    {flow.tasksTotal > 0 && <span className="overview-flow-progress" role="img"
-                      aria-label={`${flow.progress}% concluído, ${flow.tasksDone} de ${flow.tasksTotal} tarefas`}>
-                      <i style={{ width: `${Math.max(0, Math.min(100, flow.progress))}%` }} />
-                    </span>}
-                    <small>{flow.tasksTotal ? `${flow.tasksDone} de ${flow.tasksTotal} tarefas · ${flow.progress}%` : "Sem tarefas instanciadas"}</small>
-                  </td>
-                  <td>{flow.responsibleName || "Sem responsável"}</td>
-                  {/* Cor sozinha não carrega o dado: o estado do prazo continua
-                      escrito, com as mesmas palavras do cartão do quadro. */}
-                  <td><span className={`overview-sla-tag sla-${flow.slaStatus}`}>{compactSlaLabel(flow.slaStatus, flow.dueAt)}</span></td>
-                </tr>)}
-              </tbody>
-            </table>
-          </div>}
-        </div>
-      </section>
-
-      <section className="overview-panel obligations-panel" aria-labelledby="overview-obligations-title">
-        <header>
-          <div><h2 id="overview-obligations-title">Próximos vencimentos</h2></div>
-          <button type="button" onClick={() => onFocus("processes", "all")}>Ver calendário <ArrowRight aria-hidden="true" /></button>
-        </header>
-        <div className="overview-obligation-list">
-          {obligations.length === 0 && <div className="overview-empty">
-            <CheckCircle2 aria-hidden="true" />
-            <strong>Nenhuma obrigação em aberto.</strong>
-            <p>{periodLabel === "Todo o período"
-              ? "eSocial, FGTS Digital, DCTFWeb e demais obrigações aparecem aqui conforme o vencimento."
-              : `Nenhum vencimento em ${periodLabel.toLowerCase()}.`}</p>
-          </div>}
-          {obligations.length > 0 && <div className="overview-table-scroll">
-            <table className="overview-table overview-obligation-table">
-              <thead><tr>
-                <th scope="col">Obrigação</th>
-                <th scope="col">Empresa</th>
-                <th scope="col">Competência</th>
-                <th scope="col">Vencimento</th>
-                <th scope="col">Situação</th>
-              </tr></thead>
-              <tbody>
-                {groupObligations(obligations).slice(0, 6).map((item) => <tr key={item.id}
-                  className={`overview-obligation ${item.daysRemaining < 0 ? "overdue" : item.daysRemaining <= 3 ? "warning" : "safe"}`}>
-                  <td><strong>{item.title}</strong></td>
-                  {/* A consulta devolve uma linha por empresa; doze filiais com o
-                      mesmo eSocial ocupariam as seis vagas com o mesmo prazo. */}
-                  <td>{item.companies > 1 ? `${item.companies} empresas` : item.company || "Sem empresa"}</td>
-                  <td>{item.competence || "—"}</td>
-                  <td>{formatDate(item.dueDate)}</td>
-                  {/* "Vence em -2 dias" é o tipo de frase que só um sistema
-                      escreve. O atraso é dito como atraso. */}
-                  <td><span className="overview-obligation-due">{item.daysRemaining < 0
-                    ? `${contagem(Math.abs(item.daysRemaining), "dia", "dias")} em atraso`
-                    : item.daysRemaining === 0 ? "Vence hoje" : `Em ${contagem(item.daysRemaining, "dia", "dias")}`}</span></td>
-                </tr>)}
-              </tbody>
-            </table>
-          </div>}
-        </div>
-      </section>
-    </div>
-
-    {/* Demandas por status e saúde das integrações lado a lado, como a
-        maquete põe. "Atenção hoje" saiu daqui: ele repetia, em cartões, as
-        mesmas demandas que a tabela de status mostra em linha — e a maquete
-        não o tem. Quem precisa do recorte de atraso chega por ele pelo
-        indicador de SLA, que leva ao quadro já filtrado. */}
-    <div className="overview-grid">
-      {/* Demandas por status: uma aba por coluna, tabela embaixo.
-          O bloco era um gráfico de barras — respondia "quantas em cada coluna" e
-          parava aí. A pergunta seguinte, "quais são", exigia sair da tela. As
-          abas guardam a primeira resposta (a contagem está no próprio rótulo) e
-          destravam a segunda sem trocar de página.
-
-          As colunas são as do quadro deste grupo, não uma lista escrita aqui:
-          quem renomeia "Em execução" para "Na fila" lê "Na fila" nesta aba. */}
-      <section className="overview-panel status-panel" aria-labelledby="overview-status-title">
-        <header>
-          <div><h2 id="overview-status-title">Demandas na operação</h2></div>
-          <button onClick={onOpenBoard}>Abrir demandas <ArrowRight aria-hidden="true" /></button>
-        </header>
-        {lists.length === 0
-          ? <div className="overview-empty">
-              <ClipboardList aria-hidden="true" />
-              <strong>Nenhuma coluna configurada.</strong>
-              <p>As colunas do quadro definem os status que aparecem aqui.</p>
-            </div>
-          : <>
-              <div className="overview-status-tabs" role="tablist" aria-label="Status das demandas">
-                {lists.map((list) => <button type="button" key={list.id} role="tab"
-                  id={`overview-status-tab-${list.id}`}
-                  aria-selected={statusList?.id === list.id}
-                  aria-controls={statusList?.id === list.id ? `overview-status-panel-${list.id}` : undefined}
-                  onClick={() => setStatusTab(list.id)}>
-                  {list.name}<b>{list.cards.length}</b>
-                </button>)}
-              </div>
-              {statusList && <div className="overview-status-body" role="tabpanel"
-                id={`overview-status-panel-${statusList.id}`}
-                aria-labelledby={`overview-status-tab-${statusList.id}`}>
-                {statusList.cards.length === 0
-                  ? <p className="overview-status-vazio">Nenhuma demanda em {statusList.name} neste recorte.</p>
-                  : <div className="overview-table-scroll">
-                      <table className="overview-table overview-status-table">
-                        <thead><tr>
-                          <th scope="col">Demanda</th>
-                          <th scope="col">Empresa</th>
-                          <th scope="col">Responsável</th>
-                          <th scope="col">Prazo</th>
-                        </tr></thead>
-                        <tbody>
-                          {statusList.cards.slice(0, 6).map((card) => <tr key={card.id} className={`sla-${card.slaStatus}`}>
-                            <td>
-                              <button type="button" className="overview-table-link" onClick={() => onOpen(card)}>
-                                <strong>{card.title}</strong>
-                                <small>{card.processType}</small>
-                              </button>
-                            </td>
-                            <td>{card.company || "Sem empresa"}</td>
-                            <td>{card.assigneeName || "Sem responsável"}</td>
-                            <td><span className={`overview-sla-tag sla-${card.slaStatus}`}>{compactSlaLabel(card.slaStatus, card.dueAt)}</span></td>
-                          </tr>)}
-                        </tbody>
-                      </table>
-                    </div>}
-                {/* A tabela mostra seis. Dizer o total impede que a aba pareça a
-                    lista inteira — uma janela sem aviso vira "o sistema perdeu
-                    minhas demandas". */}
-                {statusList.cards.length > 6 && <p className="overview-status-vazio">
-                  Mostrando 6 de {statusList.cards.length} em {statusList.name}.
-                </p>}
-              </div>}
-            </>}
-      </section>
-
-      <ConnectionMap integrations={integrations} onNavigate={onNavigate} />
-    </div>
-
-    {/* Últimas movimentações (§19), em largura inteira.
-        O botão entrou junto com a tela de histórico. Ele tinha ficado de fora
-        de propósito enquanto não havia destino: link que leva ao lugar errado é
-        pior que nenhum, e o teste que guardava isso cobrava as duas metades —
-        que o botão não existisse sem a tela, e que entrasse quando ela entrasse.
-
-        A lista de avatares virou tabela, como a maquete pede. O que ela ganha é
-        a coluna "Relacionado a": antes o evento dizia "moveu a demanda de
-        coluna" sem dizer QUAL demanda, e descobrir exigia abrir o histórico
-        inteiro. Cinco colunas não cabem na coluna estreita da grade, então o
-        bloco passa a ocupar a largura toda. */}
-    <section className="overview-panel activity-panel"><header><div><h2>Histórico da operação</h2></div><button type="button" onClick={() => onFocus("history", "all")}>Ver histórico completo <ArrowRight aria-hidden="true" /></button></header><div className="recent-activity-list">
-      {activities.length === 0 && <div className="overview-empty"><Clock3 aria-hidden="true" /><strong>O histórico aparecerá aqui.</strong><p>As movimentações de demandas e documentos serão registradas automaticamente.</p></div>}
-      {activities.length > 0 && <div className="overview-table-scroll">
-        <table className="overview-table overview-activity-table">
-          <thead><tr>
-            <th scope="col">Data e hora</th>
-            <th scope="col">Evento</th>
-            <th scope="col">Relacionado a</th>
-            <th scope="col">Responsável</th>
-            <th scope="col">Empresa</th>
-          </tr></thead>
-          <tbody>
-            {activities.slice(0, 6).map((activity) => {
-              const demanda = activity.cardId ? cardById.get(activity.cardId) : undefined;
-              const detalhe = activityDetails(activity)[0];
-              return <tr key={activity.id}>
-                <td className="overview-quando">{formatMoment(activity.createdAt)}</td>
-                <td>
-                  <strong>{activityLabel(activity)}</strong>
-                  {detalhe && <small>{detalhe}</small>}
-                </td>
-                {/* Sem a demanda carregada no recorte, a célula diz que não
-                    sabe — o título de outra demanda seria pior que o traço. */}
-                <td>{demanda
-                  ? <button type="button" className="overview-table-link" onClick={() => onOpen(demanda)}>
-                      <strong>{demanda.title}</strong>
-                    </button>
-                  : <span className="overview-ausente">—</span>}</td>
-                <td>{activity.actorName || "Equipe DP"}</td>
-                <td>{demanda?.company || <span className="overview-ausente">—</span>}</td>
-              </tr>;
-            })}
-          </tbody>
-        </table>
-      </div>}
-    </div></section>
-  </div>;
-}
-
-function MemberCompanyAccess({ member, companies, busy, onSave }: { member: WorkspaceSnapshot["members"][number]; companies: WorkspaceSnapshot["companies"]; busy: boolean; onSave: (userId: string, companyIds: string[]) => Promise<void> }) {
-  const [selectedIds, setSelectedIds] = useState<string[]>(member.companyIds);
-  if (member.role === "admin") return <span className="member-company-summary">Todas as empresas</span>;
-  return <details className="member-company-access"><summary>{selectedIds.length ? `${contagem(selectedIds.length, "empresa liberada", "empresas liberadas")}` : "Nenhuma empresa liberada"}</summary><div>{companies.map((company) => <label key={company.id}><input type="checkbox" checked={selectedIds.includes(company.id)} disabled={busy} onChange={(event) => setSelectedIds((current) => event.target.checked ? [...current, company.id] : current.filter((id) => id !== company.id))} />{company.tradeName || company.legalName}{company.isPrincipal && <em>Matriz</em>}</label>)}</div><button type="button" disabled={busy} onClick={() => void onSave(member.userId, selectedIds)}>Salvar empresas</button></details>;
-}
-
-/**
- * Portal do Gestor, passo 1 (§4.20): qual colaborador esta conta representa —
- * a ponte entre login e "de quem sou gestor" (`fdp_employees.manager_employee_id`,
- * já existente, mas sem ligação com nenhuma conta até este vínculo existir).
- * Busca por nome/matrícula em vez de uma lista só, porque o cadastro de
- * colaboradores pode ter milhares de linhas — o mesmo motivo por que a
- * própria ficha de colaboradores (RegistrationsView) pagina e busca, nunca
- * lista tudo de uma vez.
- */
-function MemberEmployeeLink({ member, busy, onSave }: { member: WorkspaceSnapshot["members"][number]; busy: boolean; onSave: (userId: string, employeeId: string) => Promise<void> }) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<Array<{ id: string; fullName: string; companyName: string; registrationNumber: string }>>([]);
-  const [searching, setSearching] = useState(false);
-  const [linkedName, setLinkedName] = useState("");
-  // O snapshot não junta `fdp_employees` (mantém essa consulta livre da
-  // tabela de colaboradores — tests/registrations-phase3.test.mts); o nome
-  // de quem já está vinculado é buscado à parte, só quando existe vínculo.
-  useEffect(() => {
-    let active = true;
-    const frame = window.requestAnimationFrame(() => {
-      if (!member.employeeId) { setLinkedName(""); return; }
-      void fetch(`/api/employees/${member.employeeId}`)
-        .then((response) => response.ok ? response.json() as Promise<{ employee?: Record<string, unknown> }> : null)
-        .then((payload) => { if (active && payload?.employee) setLinkedName(String(payload.employee.fullName ?? payload.employee.full_name ?? "")); })
-        .catch(() => { if (active) setLinkedName(""); });
-    });
-    return () => { active = false; window.cancelAnimationFrame(frame); };
-  }, [member.employeeId]);
-  useEffect(() => {
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => {
-      const trimmed = query.trim();
-      if (!open || trimmed.length < 2) { setResults([]); return; }
-      setSearching(true);
-      void fetch(`/api/employees?search=${encodeURIComponent(trimmed)}&status=active&limit=8`, { signal: controller.signal })
-        .then((response) => response.ok ? response.json() as Promise<{ employees?: Array<Record<string, unknown>> }> : { employees: [] })
-        .then((payload) => setResults((payload.employees ?? []).map((row) => ({
-          id: String(row.id), fullName: String(row.full_name ?? ""),
-          companyName: String(row.company_name ?? ""), registrationNumber: String(row.registration_number ?? ""),
-        }))))
-        .catch(() => setResults([]))
-        .finally(() => setSearching(false));
-    }, 300);
-    return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [open, query]);
-  return <details className="member-employee-link" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
-    <summary>{member.employeeId ? `Colaborador: ${linkedName || "vinculado"}` : "Sem colaborador vinculado"}</summary>
-    <div>
-      <input type="search" placeholder="Buscar por nome ou matrícula" value={query} disabled={busy} onChange={(event) => setQuery(event.target.value)} />
-      {searching && <small>Buscando…</small>}
-      {!searching && query.trim().length >= 2 && results.length === 0 && <small>Nenhum colaborador encontrado.</small>}
-      <ul>{results.map((result) => <li key={result.id}><button type="button" disabled={busy} onClick={() => { void onSave(member.userId, result.id); setQuery(""); setResults([]); }}>{result.fullName} · {result.registrationNumber || "sem matrícula"} · {result.companyName}</button></li>)}</ul>
-      {member.employeeId && <button type="button" className="member-employee-unlink" disabled={busy} onClick={() => void onSave(member.userId, "")}>Remover vínculo</button>}
-    </div>
-  </details>;
-}
-
 function ProcessTablesView({ cards, lists, areas, onOpen }: { cards: Card[]; lists: WorkspaceSnapshot["lists"]; areas: WorkspaceSnapshot["areas"]; onOpen: (card: Card) => void }) {
   const grouped = cards.reduce<Record<string, Card[]>>((accumulator, card) => {
     (accumulator[card.processType] ??= []).push(card);
@@ -4784,423 +4029,6 @@ function ProcessTablesView({ cards, lists, areas, onOpen }: { cards: Card[]; lis
   }, {});
   const processNames = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
   return <div className="process-tables-view">{processNames.length === 0 && <div className="empty-view"><span>▤</span><strong>Nenhuma demanda encontrada</strong><p>Crie uma demanda para iniciar uma tabela de processo.</p></div>}{processNames.map((process) => <section key={process}><header><div><span>Fluxo específico</span><strong>{process}</strong></div><b>{contagem(grouped[process].length, "demanda", "demandas")}</b></header><DemandTableView cards={grouped[process]} lists={lists} areas={areas} onOpen={onOpen} /></section>)}</div>;
-}
-
-function CompanySettings({ companies, members, busy, onCreateCompany, onUpdateCompany, onDeleteCompany, onOpenAccess }: { companies: WorkspaceSnapshot["companies"]; members: WorkspaceSnapshot["members"]; busy: boolean; onCreateCompany: (payload: Record<string, unknown>) => Promise<WorkspaceSnapshot | null>; onUpdateCompany: (id: string, payload: Record<string, unknown>) => Promise<WorkspaceSnapshot | null>; onDeleteCompany: (id: string, name: string) => void; onOpenAccess: () => void }) {
-  /* `null` = formulário fechado, `""` = cadastrando, um id = editando aquela
-     empresa. Um estado só, porque cadastrar e editar são o mesmo formulário:
-     manter dois formulários lado a lado é como o cadastro de campos acaba
-     divergindo do de edição sem ninguém perceber. */
-  const [editing, setEditing] = useState<string | null>(null);
-  const companyName = new Map(companies.map((company) => [company.id, company.tradeName || company.legalName]));
-  const principalCompanies = companies.filter((company) => company.isPrincipal);
-  const orderedCompanies = [...companies].sort((a, b) => Number(b.isPrincipal) - Number(a.isPrincipal) || (companyName.get(a.parentCompanyId ?? "") ?? "").localeCompare(companyName.get(b.parentCompanyId ?? "") ?? "") || (a.tradeName || a.legalName).localeCompare(b.tradeName || b.legalName));
-  const current = editing ? companies.find((company) => company.id === editing) ?? null : null;
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    const payload = {
-      legalName: data.get("legalName"), tradeName: data.get("tradeName"), taxId: data.get("taxId"),
-      externalCode: data.get("externalCode"), email: data.get("email"), phone: data.get("phone"),
-      companyType: data.get("companyType"), parentCompanyId: data.get("parentCompanyId"),
-    };
-    const result = current
-      // Ao editar, a situação também é editável: desativar um CNPJ é o caminho
-      // de quem não pode excluí-lo por causa do histórico.
-      ? await onUpdateCompany(current.id, { ...payload, status: data.get("status") })
-      : await onCreateCompany(payload);
-    if (result) { form.reset(); setEditing(null); }
-  }
-
-  return <div className="company-settings-view">
-    <section className="company-settings-intro">
-      <span><Building2 aria-hidden="true" /></span><div><strong>Empresas do grupo</strong><p>Cadastre a empresa principal e os CNPJs vinculados. Esses cadastros ficam disponíveis para demandas, folha, permissões e integrações.</p></div><b>{contagem(companies.length, "empresa", "empresas")}</b>
-    </section>
-    <section className="company-settings-access"><div><strong>Controle de acesso por empresa</strong><p>Após cadastrar um CNPJ, escolha quais usuários poderão consultar ou operar demandas daquela empresa.</p></div><button className="secondary-button" onClick={onOpenAccess}><Users aria-hidden="true" /> Gerenciar usuários e acessos</button></section>
-    <section className="company-settings-catalog">
-      <header><div><strong>Cadastros do grupo</strong><span>CNPJ, estrutura societária, contato e código externo para Sankhya.</span></div><button className="primary-button" disabled={busy} onClick={() => setEditing((value) => value === null ? "" : null)}><Plus aria-hidden="true" /> {editing === null ? "Cadastrar empresa" : "Fechar formulário"}</button></header>
-      {editing !== null && <form className="company-settings-form" key={editing || "new"} onSubmit={submit}>
-        <label>Tipo<select name="companyType" defaultValue={current ? (current.isPrincipal ? "principal" : "subsidiary") : companies.some((company) => company.isPrincipal) ? "subsidiary" : "principal"} disabled={busy}><option value="principal">Empresa principal do grupo</option><option value="subsidiary">Empresa / CNPJ do grupo</option></select></label>
-        <label>Empresa principal<select name="parentCompanyId" defaultValue={current?.parentCompanyId ?? ""} disabled={busy}><option value="">Vincular à principal automaticamente</option>{principalCompanies.filter((company) => company.id !== current?.id).map((company) => <option key={company.id} value={company.id}>{company.tradeName || company.legalName}</option>)}</select></label>
-        <label>Razão social<input name="legalName" defaultValue={current?.legalName ?? ""} placeholder="Empresa Exemplo Ltda." maxLength={160} required disabled={busy} /></label>
-        <label>Nome fantasia<input name="tradeName" defaultValue={current?.tradeName ?? ""} placeholder="Empresa Exemplo" maxLength={160} disabled={busy} /></label>
-        <label>CNPJ<input name="taxId" defaultValue={current?.taxId ?? ""} placeholder="00.000.000/0001-00" maxLength={30} disabled={busy} /></label>
-        <label>Código Sankhya<input name="externalCode" defaultValue={current?.externalCode ?? ""} placeholder="COD_EMPRESA" maxLength={80} disabled={busy} /></label>
-        <label>E-mail<input type="email" name="email" defaultValue={current?.email ?? ""} maxLength={160} disabled={busy} /></label>
-        <label>Telefone<input name="phone" defaultValue={current?.phone ?? ""} maxLength={40} disabled={busy} /></label>
-        {current && <label>Situação<select name="status" defaultValue={current.status} disabled={busy}><option value="active">Ativa</option><option value="inactive">Inativa</option></select></label>}
-        <div className="company-settings-form-actions">
-          {current && <button type="button" className="secondary-button" disabled={busy} onClick={() => setEditing(null)}>Cancelar</button>}
-          <button className="primary-button" disabled={busy}>{current ? "Salvar alterações" : "Salvar empresa"}</button>
-        </div>
-      </form>}
-      <div className="company-settings-list">
-        {orderedCompanies.length === 0 && <div className="empty-view"><span><Building2 aria-hidden="true" /></span><strong>Nenhuma empresa cadastrada</strong><p>Cadastre a empresa principal para estruturar o grupo e liberar acessos.</p></div>}
-        {orderedCompanies.map((company) => {
-          const allowedMembers = members.filter((member) => member.role === "admin" || member.companyIds.includes(company.id)).length;
-          return <article className={company.isPrincipal ? "principal" : "subsidiary"} key={company.id}><i>{company.isPrincipal ? "P" : "↳"}</i><div><strong>{company.tradeName || company.legalName}{company.isPrincipal && <em>Principal</em>}{company.status === "inactive" && <em className="inactive">Inativa</em>}</strong><small>{company.isPrincipal ? "Empresa raiz do grupo" : `Grupo: ${companyName.get(company.parentCompanyId ?? "") ?? "Principal"}`} · {company.taxId || "CNPJ não informado"}</small></div><span><small>Usuários com acesso</small><b>{allowedMembers}</b></span><span><small>Sankhya</small><b>{company.externalCode || "Não vinculado"}</b></span><button className="secondary-button" type="button" disabled={busy} onClick={() => setEditing(editing === company.id ? null : company.id)} aria-label={`Editar ${company.tradeName || company.legalName}`}>{editing === company.id ? "Editando" : "Editar"}</button><button className="danger-link" type="button" disabled={busy} onClick={() => onDeleteCompany(company.id, company.legalName)}>Excluir</button></article>;
-        })}
-      </div>
-    </section>
-  </div>;
-}
-
-function PayrollView({ companies, metrics, busy, canEdit, onSaveMetric, onImportPayroll }: { companies: WorkspaceSnapshot["companies"]; metrics: WorkspaceSnapshot["hrMetrics"]; busy: boolean; canEdit: boolean; onSaveMetric: (payload: Record<string, unknown>) => Promise<WorkspaceSnapshot | null>; onImportPayroll: (body: FormData) => Promise<WorkspaceSnapshot | null> }) {
-  const currentPeriod = new Date().toISOString().slice(0, 7);
-  const [selectedPeriod, setSelectedPeriod] = useState(currentPeriod);
-  const [importOpen, setImportOpen] = useState(false);
-  const [form, setForm] = useState({
-    companyId: companies.find((company) => company.status === "active")?.id ?? "", period: currentPeriod,
-    headcountStart: "0", headcountEnd: "0", leavesCount: "0", admissions: "0", voluntaryTerminations: "0", involuntaryTerminations: "0",
-    baseSalary: "0", variablePay: "0", overtimePay: "0", additionalPay: "0", vacationPay: "0", thirteenthPay: "0", terminationPay: "0",
-    employeeInss: "0", employeeIrrf: "0", employeeOtherDeductions: "0",
-    employerInss: "0", ratContribution: "0", thirdPartyContributions: "0", fgts: "0", fgtsPenalty: "0",
-    benefitsCost: "0", provisionsCost: "0", otherCosts: "0", notes: "",
-  });
-  const companyName = new Map(companies.map((company) => [company.id, company.tradeName || company.legalName]));
-  const periods = [...new Set([currentPeriod, ...metrics.map((metric) => metric.period)])].sort((a, b) => b.localeCompare(a));
-  const selectedMetrics = metrics.filter((metric) => metric.period === selectedPeriod);
-  const toNumber = (value: string | number) => Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
-  const totalCost = selectedMetrics.reduce((total, metric) => total + metric.payrollCost, 0);
-  const totalHeadcount = selectedMetrics.reduce((total, metric) => total + metric.headcount, 0);
-  const totalAdmissions = selectedMetrics.reduce((total, metric) => total + metric.admissions, 0);
-  const totalTerminations = selectedMetrics.reduce((total, metric) => total + metric.terminations, 0);
-  const turnover = totalHeadcount ? ((totalAdmissions + totalTerminations) / 2 / totalHeadcount) * 100 : 0;
-  const costPerEmployee = totalHeadcount ? totalCost / totalHeadcount : 0;
-  const componentTotals = [
-    { label: "Remuneração bruta", value: selectedMetrics.reduce((total, metric) => total + metric.grossPayroll, 0), color: "#62D5B2" },
-    { label: "Encargos", value: selectedMetrics.reduce((total, metric) => total + metric.employerCharges, 0), color: "#73b8ff" },
-    { label: "Benefícios", value: selectedMetrics.reduce((total, metric) => total + metric.benefitsCost, 0), color: "#b99cff" },
-    { label: "Provisões e outros", value: selectedMetrics.reduce((total, metric) => total + metric.provisionsCost + metric.otherCosts, 0), color: "#F4A261" },
-  ];
-  const formHeadcount = (toNumber(form.headcountStart) + toNumber(form.headcountEnd)) / 2;
-  const formTerminations = toNumber(form.voluntaryTerminations) + toNumber(form.involuntaryTerminations);
-  const formGrossPayroll = toNumber(form.baseSalary) + toNumber(form.variablePay) + toNumber(form.overtimePay) + toNumber(form.additionalPay) + toNumber(form.vacationPay) + toNumber(form.thirteenthPay) + toNumber(form.terminationPay);
-  const formDeductions = toNumber(form.employeeInss) + toNumber(form.employeeIrrf) + toNumber(form.employeeOtherDeductions);
-  const formNetPay = Math.max(0, formGrossPayroll - formDeductions);
-  const formEmployerCharges = toNumber(form.employerInss) + toNumber(form.ratContribution) + toNumber(form.thirdPartyContributions) + toNumber(form.fgts) + toNumber(form.fgtsPenalty);
-  const formTotal = formGrossPayroll + formEmployerCharges + toNumber(form.benefitsCost) + toNumber(form.provisionsCost) + toNumber(form.otherCosts);
-  const expectedHeadcount = Math.max(0, toNumber(form.headcountStart) + toNumber(form.admissions) - formTerminations);
-  const money = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-  type NumericFormKey = Exclude<keyof typeof form, "companyId" | "period" | "notes">;
-  const numericField = (label: string, key: NumericFormKey, step = "1") => <label key={key}>{label}<input type="number" min="0" step={step} value={form[key]} disabled={busy} onChange={(event) => setForm({ ...form, [key]: event.target.value })} /></label>;
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const result = await onSaveMetric({ ...form, headcount: formHeadcount, terminations: formTerminations, grossPayroll: formGrossPayroll, employerCharges: formEmployerCharges, netPay: formNetPay, payrollCost: formTotal, source: "manual" });
-    if (result) setForm((current) => ({ ...current, headcountStart: "0", headcountEnd: "0", leavesCount: "0", admissions: "0", voluntaryTerminations: "0", involuntaryTerminations: "0", baseSalary: "0", variablePay: "0", overtimePay: "0", additionalPay: "0", vacationPay: "0", thirteenthPay: "0", terminationPay: "0", employeeInss: "0", employeeIrrf: "0", employeeOtherDeductions: "0", employerInss: "0", ratContribution: "0", thirdPartyContributions: "0", fgts: "0", fgtsPenalty: "0", benefitsCost: "0", provisionsCost: "0", otherCosts: "0", notes: "" }));
-  }
-
-  return <div className="payroll-view">
-    <section className="payroll-toolbar"><div><span>Competência</span><h2>Painel consolidado da folha</h2><p>Os indicadores são recalculados automaticamente a cada lançamento, importação ou sincronização.</p></div><div className="payroll-toolbar-actions">{canEdit && <button className="secondary-button" onClick={() => setImportOpen(true)}><Upload aria-hidden="true" /> Importar extrato PDF</button>}<label>Período<select value={selectedPeriod} onChange={(event) => setSelectedPeriod(event.target.value)}>{periods.map((period) => <option key={period}>{period}</option>)}</select></label></div></section>
-    <section className="payroll-kpi-grid"><article><span>Custo total da folha</span><strong>{money(totalCost)}</strong><small>{contagem(selectedMetrics.length, "empresa", "empresas")} com competência</small></article><article><span>Headcount médio</span><strong>{totalHeadcount}</strong><small>{totalAdmissions} admissões · {totalTerminations} desligamentos</small></article><article><span>Turnover</span><strong>{turnover.toFixed(2)}%</strong><small>Movimentação ÷ headcount médio</small></article><article><span>Custo por colaborador</span><strong>{money(costPerEmployee)}</strong><small>Baseado no headcount médio</small></article></section>
-    <div className="payroll-layout">
-      <section className="payroll-composition"><header><div><strong>Composição do custo</strong><span>Distribuição da competência selecionada</span></div><b>{money(totalCost)}</b></header><div className="payroll-bars">{componentTotals.map((item) => <div key={item.label}><span><strong>{item.label}</strong><small>{money(item.value)}</small></span><i><b style={{ width: `${totalCost ? Math.min(100, (item.value / totalCost) * 100) : 0}%`, backgroundColor: item.color }} /></i></div>)}</div></section>
-      <section className="payroll-company-breakdown"><header><div><strong>Folha por empresa</strong><span>{contagem(selectedMetrics.length, "lançamento", "lançamentos")} em {selectedPeriod}</span></div></header>{selectedMetrics.length === 0 && <div className="empty-view"><span><WalletCards aria-hidden="true" /></span><strong>Sem lançamentos nesta competência</strong><p>Registre os dados da folha para gerar os indicadores automaticamente.</p></div>}{selectedMetrics.map((metric) => <article key={metric.id}><div><strong>{companyName.get(metric.companyId) ?? "Empresa removida"}</strong><small>{metric.headcount} colaboradores · {metric.admissions} admissões · {metric.terminations} desligamentos · líquido {money(metric.netPay)}</small></div><span>{money(metric.payrollCost)}</span><b>{metric.source === "sankhya" ? "Sankhya" : metric.source === "pdf_import" ? "PDF" : "Manual"}</b></article>)}</section>
-    </div>
-    {importOpen && <PayrollImportDialog companies={companies} importing={busy} onClose={() => setImportOpen(false)} onImport={onImportPayroll} onImported={(period) => { setImportOpen(false); setSelectedPeriod(period); }} />}
-    {/* Movimentos para o Sankhya: lança os eventos variáveis por colaborador e
-        gera a planilha do Importador de Movimentos (docs/movimentos-para-o-sankhya.md). */}
-    <PayrollMovementsPanel companies={companies} canEdit={canEdit} />
-    {canEdit && <section className="payroll-entry-panel"><header><div><span>Novo lançamento</span><h2>Registrar dados da folha</h2><p>Informe os valores já apurados na folha ou no ERP.</p></div><b>Total calculado: {money(formTotal)}</b></header><form onSubmit={(event) => void submit(event)}>
-      <label>Empresa<select value={form.companyId} required disabled={busy} onChange={(event) => setForm({ ...form, companyId: event.target.value })}><option value="" disabled>Selecione</option>{companies.filter((company) => company.status === "active").map((company) => <option value={company.id} key={company.id}>{company.tradeName || company.legalName}</option>)}</select></label>
-      <label>Competência<input type="month" value={form.period} required disabled={busy} onChange={(event) => setForm({ ...form, period: event.target.value })} /></label>
-      <fieldset className="payroll-form-section"><legend>Pessoas e movimentação</legend>{numericField("Headcount no início", "headcountStart")}{numericField("Headcount no fim", "headcountEnd")}{numericField("Afastados no período", "leavesCount")}{numericField("Admissões", "admissions")}{numericField("Desligamentos voluntários", "voluntaryTerminations")}{numericField("Desligamentos involuntários", "involuntaryTerminations")}<p>Headcount médio: <strong>{formHeadcount.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</strong> · encerramento esperado: <strong>{expectedHeadcount.toLocaleString("pt-BR")}</strong></p></fieldset>
-      <fieldset className="payroll-form-section"><legend>Proventos da competência</legend>{numericField("Salário-base", "baseSalary", "0.01")}{numericField("Variáveis / comissões", "variablePay", "0.01")}{numericField("Horas extras", "overtimePay", "0.01")}{numericField("Adicionais", "additionalPay", "0.01")}{numericField("Férias + 1/3", "vacationPay", "0.01")}{numericField("13º salário", "thirteenthPay", "0.01")}{numericField("Verbas rescisórias", "terminationPay", "0.01")}<p>Remuneração bruta calculada: <strong>{money(formGrossPayroll)}</strong></p></fieldset>
-      <fieldset className="payroll-form-section"><legend>Descontos do colaborador</legend>{numericField("INSS do colaborador", "employeeInss", "0.01")}{numericField("IRRF", "employeeIrrf", "0.01")}{numericField("Outros descontos", "employeeOtherDeductions", "0.01")}<p>Descontos: <strong>{money(formDeductions)}</strong> · líquido calculado: <strong>{money(formNetPay)}</strong></p></fieldset>
-      <fieldset className="payroll-form-section"><legend>Encargos do empregador</legend>{numericField("INSS patronal", "employerInss", "0.01")}{numericField("RAT", "ratContribution", "0.01")}{numericField("Terceiros", "thirdPartyContributions", "0.01")}{numericField("FGTS", "fgts", "0.01")}{numericField("Multa de FGTS", "fgtsPenalty", "0.01")}<p>Encargos patronais calculados: <strong>{money(formEmployerCharges)}</strong></p></fieldset>
-      <fieldset className="payroll-form-section"><legend>Custos complementares</legend>{numericField("Benefícios", "benefitsCost", "0.01")}{numericField("Provisões", "provisionsCost", "0.01")}{numericField("Outros custos", "otherCosts", "0.01")}<p>Use provisões para férias, 13º e demais ajustes que sua operação acompanhar separadamente.</p></fieldset>
-      <div className="payroll-live-totals" aria-live="polite"><span>Bruto<strong>{money(formGrossPayroll)}</strong></span><span>Descontos<strong>{money(formDeductions)}</strong></span><span>Líquido<strong>{money(formNetPay)}</strong></span><span>Encargos<strong>{money(formEmployerCharges)}</strong></span><span>Custo total<strong>{money(formTotal)}</strong></span></div>
-      <label className="wide">Observações<textarea rows={3} maxLength={500} value={form.notes} disabled={busy} onChange={(event) => setForm({ ...form, notes: event.target.value })} placeholder="Ex.: ajuste de competência, acordo coletivo ou variação relevante" /></label><button className="primary-button" disabled={busy || !form.companyId}><WalletCards aria-hidden="true" /> Salvar e atualizar painel</button>
-    </form></section>}
-  </div>;
-}
-
-export function LegacyCompaniesView({ companies, metrics, cards, busy, canEdit, onCreateCompany, onDeleteCompany, onSaveMetric, onOpenCard }: { companies: WorkspaceSnapshot["companies"]; metrics: WorkspaceSnapshot["hrMetrics"]; cards: Card[]; busy: boolean; canEdit: boolean; onCreateCompany: (payload: Record<string, unknown>) => Promise<WorkspaceSnapshot | null>; onDeleteCompany: (id: string, name: string) => void; onSaveMetric: (payload: Record<string, unknown>) => Promise<WorkspaceSnapshot | null>; onOpenCard: (card: Card) => void }) {
-  const [showCompanyForm, setShowCompanyForm] = useState(false);
-  const [showMetricForm, setShowMetricForm] = useState(false);
-  const [selectedCompanyId, setSelectedCompanyId] = useState("");
-  async function submitCompany(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const data = new FormData(event.currentTarget);
-    const result = await onCreateCompany({ legalName: data.get("legalName"), tradeName: data.get("tradeName"), taxId: data.get("taxId"), externalCode: data.get("externalCode"), email: data.get("email"), phone: data.get("phone"), companyType: data.get("companyType"), parentCompanyId: data.get("parentCompanyId") });
-    if (result) { event.currentTarget.reset(); setShowCompanyForm(false); }
-  }
-  async function submitMetric(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const data = new FormData(event.currentTarget);
-    const result = await onSaveMetric({ companyId: data.get("companyId"), period: data.get("period"), headcount: data.get("headcount"), admissions: data.get("admissions"), terminations: data.get("terminations"), payrollCost: data.get("payrollCost"), source: "manual" });
-    if (result) { event.currentTarget.reset(); setShowMetricForm(false); }
-  }
-  const companyName = new Map(companies.map((company) => [company.id, company.tradeName || company.legalName]));
-  const principalCompanies = companies.filter((company) => company.isPrincipal);
-  const subsidiaryCompanies = companies.filter((company) => !company.isPrincipal).sort((a, b) => (companyName.get(a.parentCompanyId ?? "") ?? "").localeCompare(companyName.get(b.parentCompanyId ?? "") ?? "") || (a.tradeName || a.legalName).localeCompare(b.tradeName || b.legalName));
-  const orderedCompanies = [...principalCompanies, ...subsidiaryCompanies];
-  const latest = metrics.slice(0, 12);
-  const activeCompanies = companies.filter((company) => company.status === "active").length;
-  const payrollTotal = latest.reduce((total, metric) => total + metric.payrollCost, 0);
-  const selectedCompany = companies.find((company) => company.id === selectedCompanyId) ?? companies[0] ?? null;
-  const companyCards = selectedCompany ? cards.filter((card) => card.companyId === selectedCompany.id) : [];
-  const companyDocumentPending = companyCards.reduce((total, card) => total + card.checklist.filter((item) => !item.completed).length, 0);
-  const companyMetrics = selectedCompany ? metrics.filter((metric) => metric.companyId === selectedCompany.id).sort((a, b) => b.period.localeCompare(a.period)) : [];
-  return <div className="companies-view">
-    <div className="companies-toolbar"><div><strong>Grupo empresarial</strong><span>Defina a empresa principal e cadastre os CNPJs do grupo para demandas, folha e indicadores.</span></div><div className="companies-actions">{canEdit && <><button className="primary-button" onClick={() => setShowCompanyForm((value) => !value)}><Plus aria-hidden="true" /> Cadastrar empresa</button><button className="secondary-button" onClick={() => setShowMetricForm((value) => !value)}><WalletCards aria-hidden="true" /> Registrar folha</button></>}</div></div>
-    <div className="companies-overview"><article><div><strong>{activeCompanies}</strong><span>Empresas ativas</span></div></article><article><div><strong>{metrics.length}</strong><span>Competências registradas</span></div></article><article><div><strong>{payrollTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong><span>Folha nos registros recentes</span></div></article></div>
-    {selectedCompany && <section className="company-profile-card"><header><div><span>{selectedCompany.isPrincipal ? "EMPRESA PRINCIPAL DO GRUPO" : "EMPRESA DO GRUPO"}</span><h2>{selectedCompany.tradeName || selectedCompany.legalName}</h2><p>{selectedCompany.legalName}</p></div><em className={selectedCompany.status}>{selectedCompany.status === "active" ? "Ativa" : "Inativa"}</em></header><div className="company-profile-data"><div><span>Estrutura</span><strong>{selectedCompany.isPrincipal ? "Empresa principal" : companyName.get(selectedCompany.parentCompanyId ?? "") || "Grupo principal"}</strong></div><div><span>CNPJ</span><strong>{selectedCompany.taxId || "Não informado"}</strong></div><div><span>Contato</span><strong>{selectedCompany.email || selectedCompany.phone || "Não informado"}</strong></div><div><span>Código Sankhya</span><strong>{selectedCompany.externalCode || "Não vinculado"}</strong></div><div><span>Demandas abertas</span><strong>{companyCards.filter((card) => card.slaStatus !== "completed").length}</strong></div><div><span>Documentos pendentes</span><strong>{companyDocumentPending}</strong></div><div><span>Última folha</span><strong>{companyMetrics[0] ? companyMetrics[0].payrollCost.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "Sem registro"}</strong></div></div><div className="company-profile-demands"><strong>Demandas relacionadas</strong>{companyCards.slice(0, 4).map((card) => <button key={card.id} onClick={() => onOpenCard(card)}><i className={card.slaStatus} /><span>{card.title}<small>{card.processType} • {slaLabel(card)}</small></span><ArrowRight aria-hidden="true" /></button>)}{companyCards.length === 0 && <p>Não há demandas vinculadas a esta empresa.</p>}</div></section>}
-    {showCompanyForm && <form className="company-form catalog-card" onSubmit={submitCompany}><header><div><strong>Cadastro no grupo empresarial</strong><span>A primeira empresa será definida como principal. As demais podem ser vinculadas a ela.</span></div></header><div className="catalog-form"><label>Tipo<select name="companyType" defaultValue={companies.some((company) => company.isPrincipal) ? "subsidiary" : "principal"}><option value="principal">Empresa principal do grupo</option><option value="subsidiary">Empresa / CNPJ do grupo</option></select></label><label>Empresa principal<select name="parentCompanyId" defaultValue=""><option value="">Vincular à principal automaticamente</option>{principalCompanies.map((company) => <option key={company.id} value={company.id}>{company.tradeName || company.legalName}</option>)}</select></label><label>Razão social<input name="legalName" required placeholder="Empresa Exemplo Ltda." /></label><label>Nome fantasia<input name="tradeName" placeholder="Empresa Exemplo" /></label><label>CNPJ<input name="taxId" placeholder="00.000.000/0001-00" /></label><label>Código Sankhya<input name="externalCode" placeholder="COD_EMPRESA" /></label><label>E-mail<input type="email" name="email" /></label><label>Telefone<input name="phone" /></label><button className="primary-button" disabled={busy}>Salvar empresa</button></div></form>}
-    {showMetricForm && <form className="metric-form catalog-card" onSubmit={submitMetric}><header><div><strong>Registrar custo e movimentação da folha</strong><span>Turnover = (admissões + desligamentos) ÷ 2 ÷ headcount médio.</span></div></header><div className="catalog-form"><label>Empresa<select name="companyId" required defaultValue=""><option value="" disabled>Selecione</option>{companies.filter((company) => company.status === "active").map((company) => <option key={company.id} value={company.id}>{company.tradeName || company.legalName}</option>)}</select></label><label>Competência<input type="month" name="period" required defaultValue={new Date().toISOString().slice(0, 7)} /></label><label>Headcount<input type="number" name="headcount" min="0" defaultValue="0" /></label><label>Admissões<input type="number" name="admissions" min="0" defaultValue="0" /></label><label>Desligamentos<input type="number" name="terminations" min="0" defaultValue="0" /></label><label>Custo da folha<input type="number" name="payrollCost" min="0" step="0.01" defaultValue="0" /></label><button className="primary-button" disabled={busy || companies.length === 0}>Salvar competência</button></div></form>}
-    <section className="companies-list catalog-card"><header><div><strong>Empresas do grupo</strong><span>{contagem(companies.length, "empresa", "empresas")} • vínculo para demandas e indicadores</span></div></header>{companies.length === 0 && <div className="empty-view"><span><Building2 aria-hidden="true" /></span><strong>Nenhuma empresa cadastrada</strong><p>Cadastre a empresa principal do grupo para começar.</p></div>}{orderedCompanies.map((company) => <article className={`${selectedCompany?.id === company.id ? "selected" : ""}${company.isPrincipal ? " principal" : " subsidiary"}`} key={company.id} tabIndex={0} role="button" onClick={() => setSelectedCompanyId(company.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setSelectedCompanyId(company.id); }}><i aria-hidden="true">{company.isPrincipal ? "P" : "↳"}</i><div><strong>{company.tradeName || company.legalName}{company.isPrincipal && <em>Principal</em>}</strong><small>{company.isPrincipal ? "Empresa raiz do grupo" : `Grupo: ${companyName.get(company.parentCompanyId ?? "") ?? "Principal"}`} • {company.taxId || "CNPJ não informado"}</small></div><span>{company.email || company.phone || "Sem contato"}</span>{canEdit && <button disabled={busy} onClick={(event) => { event.stopPropagation(); void onDeleteCompany(company.id, company.legalName); }} aria-label={`Excluir ${company.tradeName || company.legalName}`}><Trash2 aria-hidden="true" /><span>Excluir</span></button>}</article>)}</section>
-    <section className="metrics-list catalog-card"><header><div><strong>Histórico de folha</strong><span>{contagem(metrics.length, "competência registrada", "competências registradas")}</span></div></header>{latest.length === 0 && <div className="empty-view"><span><WalletCards aria-hidden="true" /></span><strong>Nenhum indicador de folha</strong><p>Registre uma competência ou conecte o Sankhya.</p></div>}{latest.map((metric) => <article key={metric.id}><div><strong>{companyName.get(metric.companyId) ?? "Empresa removida"}</strong><small>{metric.period} • origem {metric.source}</small></div><span>{metric.headcount} colaboradores</span><span>{metric.admissions} admissões / {metric.terminations} desligamentos</span><b>{metric.payrollCost.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</b></article>)}</section>
-  </div>;
-}
-
-function DemandTableView({ cards, lists, areas, onOpen }: { cards: Card[]; lists: WorkspaceSnapshot["lists"]; areas: WorkspaceSnapshot["areas"]; onOpen: (card: Card) => void }) {
-  const listNames = new Map(lists.map((list) => [list.id, list.name]));
-  return (
-    <section className="demand-table-view">
-      <header><div><strong>Visão gerencial</strong><span>{contagem(cards.length, "demanda", "demandas")} nos filtros atuais</span></div><span>Selecione uma linha para abrir os detalhes.</span></header>
-      <div className="demand-table-scroll">
-        <table>
-          <thead><tr><th>Demanda</th><th>Fluxo entre áreas</th><th>Processo</th><th>Status</th><th>Responsáveis</th><th>Prazo / SLA</th><th>Checklist</th></tr></thead>
-          <tbody>{cards.map((card) => {
-            const complete = card.checklist.filter((item) => item.completed).length;
-            return <tr key={card.id} tabIndex={0} onClick={() => onOpen(card)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") onOpen(card); }}><td><strong>{card.title}</strong><small>{card.company || "Sem empresa"}</small></td><td><DemandAreaFlow card={card} areas={areas} /></td><td><span className={`table-process ${processColors[card.processType] ?? "gray"}`}>{card.processType}</span></td><td>{listNames.get(card.listId) ?? "—"}</td><td>{card.assignees.map((item) => item.name).join(", ") || card.assigneeName || "Não atribuído"}</td><td><em className={card.slaStatus}>{slaLabel(card)}</em></td><td>{complete}/{card.checklist.length}</td></tr>;
-          })}</tbody>
-        </table>
-        {cards.length === 0 && <div className="empty-view"><span>▤</span><strong>Nenhuma demanda encontrada</strong><p>Ajuste os filtros para ampliar a visão.</p></div>}
-      </div>
-    </section>
-  );
-}
-
-/**
- * A faixa de indicadores da Administração (maquete 3).
- *
- * Os cinco números que dizem o tamanho do que está sendo administrado, antes
- * dos formulários que o alteram. Todos saem do snapshot que a modal já tem em
- * mãos — nenhuma consulta nova, e nenhum valor escrito no código.
- *
- * A maquete traz também "Plano e utilização" com barras de consumo. Ele não
- * entra: a tela de plano foi tirada do painel de propósito (§44), e há teste
- * guardando essa retirada. Ressuscitá-la de lado, como faixa de progresso sem
- * a tela por trás, seria mostrar consumo sem lugar nenhum para agir sobre ele.
- */
-function AdminIndicators({ snapshot }: { snapshot: WorkspaceSnapshot }) {
-  const ativas = snapshot.companies.filter((company) => company.status === "active").length;
-  const comErro = snapshot.integrations.filter((item) => item.status === "error").length;
-  const conectadas = snapshot.integrations.filter((item) => item.status === "connected").length;
-  const semAtivar = snapshot.members.filter((member) => !member.isActivated).length;
-  const etapas = snapshot.boards.reduce((total, board) => total + board.stages.length, 0);
-
-  const indicadores = [
-    {
-      key: "members", icon: Users, label: "Usuários com acesso",
-      value: String(snapshot.members.length),
-      support: semAtivar ? `${semAtivar} ainda sem ativar o acesso` : "Todos com acesso ativado",
-      alert: semAtivar > 0,
-    },
-    {
-      key: "companies", icon: Building2, label: "Empresas do grupo",
-      value: String(snapshot.companies.length),
-      support: `${ativas} em operação`,
-      alert: false,
-    },
-    {
-      key: "boards", icon: ClipboardList, label: "Quadros da operação",
-      value: String(snapshot.boards.length),
-      support: plural(etapas, "etapa configurada", "etapas configuradas"),
-      alert: false,
-    },
-    {
-      key: "integrations", icon: Cable, label: "Integrações com erro",
-      value: String(comErro),
-      support: `${contagem(conectadas, "conectada", "conectadas")} de ${contagem(snapshot.integrations.length, "configurada", "configuradas")}`,
-      alert: comErro > 0,
-    },
-  ];
-
-  return <section className="admin-indicators" aria-label={`Indicadores da administração — ${snapshot.workspace.name}`}>
-    {indicadores.map((item) => {
-      return <article key={item.key} className={`admin-indicator${item.alert ? " requires-attention" : ""}`}>
-        <span className="admin-indicator-top"><span>{item.label}</span></span>
-        <strong>{item.value}</strong>
-        <small>{item.support}</small>
-      </article>;
-    })}
-  </section>;
-}
-
-/**
- * A matriz de permissões (maquete 3).
- *
- * O modelo já existia inteiro e nunca chegou a uma tela: `capabilitiesForRole`
- * nasceu com o comentário "a tela de usuários precisa mostrar o que cada papel
- * concede — sem isso o administrador escolhe 'Membro' ou 'Observador' no
- * escuro", e nenhum componente jamais o chamou. O seletor de papel logo acima
- * desta matriz é exatamente essa escolha no escuro.
- *
- * As linhas são as capacidades reais, agrupadas pelas áreas do catálogo e
- * escritas na linguagem dele — `competences.transition` não diz nada a quem
- * administra; "Avançar a competência entre as etapas do fechamento" diz.
- *
- * A maquete desenha três estados por célula: concedido, parcial e negado. O
- * "parcial" não existe no modelo — uma capacidade é do papel ou não é — então
- * ele não é desenhado. Inventar um meio-termo numa matriz de permissão é o
- * tipo de enfeite que faz alguém conceder acesso achando que concedeu menos.
- */
-function PermissionMatrix() {
-  const [aberta, setAberta] = useState<CapabilityArea | "">("");
-  const papeis = workspaceRoles;
-  const concedidas = new Map(papeis.map((papel) => [papel, new Set<string>(capabilitiesForRole(papel))]));
-
-  return <section className="permission-matrix" aria-labelledby="permission-matrix-title">
-    <header>
-      <div>
-        <strong id="permission-matrix-title">O que cada papel permite</strong>
-        <span>Permissões de cada papel.</span>
-      </div>
-    </header>
-    {capabilityAreas.map((area) => {
-      const itens = capabilitiesOfArea(area.key);
-      if (itens.length === 0) return null;
-      const expandida = aberta === area.key;
-      return <div className="permission-area" key={area.key}>
-        <button type="button" aria-expanded={expandida}
-          onClick={() => setAberta(expandida ? "" : area.key)}>
-          <span>{area.label}</span>
-          <b>{plural(itens.length, "permissão", "permissões")}</b>
-          <ChevronDown aria-hidden="true" data-open={expandida ? "true" : "false"} />
-        </button>
-        {expandida && <div className="overview-table-scroll">
-          <table className="overview-table permission-table">
-            <thead><tr>
-              <th scope="col">Permissão</th>
-              {papeis.map((papel) => <th scope="col" key={papel}>{roleLabels[papel]}</th>)}
-            </tr></thead>
-            <tbody>
-              {itens.map((capability) => <tr key={capability}>
-                <th scope="row">{capabilityCatalog[capability].label}</th>
-                {papeis.map((papel) => {
-                  const tem = concedidas.get(papel)?.has(capability) ?? false;
-                  /* O símbolo sozinho não basta: quem usa leitor de tela ouve
-                     "check" sem saber de quê, e quem não distingue verde de
-                     cinza vê duas marcas parecidas. O texto acessível diz o
-                     par inteiro — papel e permissão. */
-                  return <td key={papel} className={tem ? "concedida" : "negada"}>
-                    <span aria-hidden="true">{tem ? "\u2713" : "\u2014"}</span>
-                    <span className="sr-only">
-                      {roleLabels[papel]}: {tem ? "permitido" : "não permitido"}
-                    </span>
-                  </td>;
-                })}
-              </tr>)}
-            </tbody>
-          </table>
-        </div>}
-      </div>;
-    })}
-  </section>;
-}
-
-function ListsSettings({ snapshot, busy, isAdmin, onMutate, onConfirm }: { snapshot: WorkspaceSnapshot; busy: boolean; isAdmin: boolean; onMutate: SnapshotMutation; onConfirm: ConfirmHandler }) {
-  const [deleteTargets, setDeleteTargets] = useState<Record<string, string>>({});
-  const lists = [...snapshot.lists].sort((a, b) => a.position - b.position);
-  const behaviorLabel: Record<string, string> = { running: "SLA em andamento", paused: "SLA pausado", completed: "SLA concluído" };
-
-  async function createList(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    const next = await onMutate("/api/lists", { method: "POST", body: JSON.stringify({ boardId: snapshot.board.id, name: data.get("name"), slaBehavior: data.get("slaBehavior") }) }, "Coluna criada no quadro.");
-    if (next) form.reset();
-  }
-
-  async function saveList(event: FormEvent<HTMLFormElement>, id: string) {
-    event.preventDefault();
-    const data = new FormData(event.currentTarget);
-    await onMutate(`/api/lists/${id}`, { method: "PATCH", body: JSON.stringify({ name: data.get("name"), slaBehavior: data.get("slaBehavior") }) }, "Coluna atualizada.");
-  }
-
-  async function reorder(listId: string, direction: -1 | 1) {
-    const index = lists.findIndex((list) => list.id === listId);
-    const neighbour = lists[index + direction];
-    const current = lists[index];
-    if (!current || !neighbour) return;
-    const first = await onMutate(`/api/lists/${current.id}`, { method: "PATCH", body: JSON.stringify({ position: neighbour.position }) }, "Ordem da coluna atualizada.");
-    if (first) await onMutate(`/api/lists/${neighbour.id}`, { method: "PATCH", body: JSON.stringify({ position: current.position }) });
-  }
-
-  function removeList(listId: string, listName: string, cards: number) {
-    const moveToListId = deleteTargets[listId] ?? "";
-    if (cards > 0 && !moveToListId) return;
-    onConfirm({
-      title: "Excluir coluna?",
-      description: cards > 0 ? `${contagem(cards, "demanda será transferida", "demandas serão transferidas")} para a coluna selecionada antes da exclusão.` : `A coluna “${listName}” será removida do quadro.`,
-      confirmLabel: "Excluir coluna",
-      action: () => onMutate(`/api/lists/${listId}`, { method: "DELETE", body: cards > 0 ? JSON.stringify({ moveToListId }) : undefined }, "Coluna excluída com segurança."),
-    });
-  }
-
-  return <div className="settings-stack"><section className="catalog-section list-manager"><header><div><strong>Colunas do quadro</strong><span>Renomeie, ordene, controle o SLA e mova demandas com segurança antes de excluir.</span></div><b>{lists.length}</b></header><div className="list-manager-items">{lists.map((list, index) => <form key={list.id} onSubmit={(event) => void saveList(event, list.id)}><div className="list-order-controls"><button type="button" disabled={!isAdmin || busy || index === 0} onClick={() => void reorder(list.id, -1)} aria-label={`Mover ${list.name} para a esquerda`}>↑</button><button type="button" disabled={!isAdmin || busy || index === lists.length - 1} onClick={() => void reorder(list.id, 1)} aria-label={`Mover ${list.name} para a direita`}>↓</button></div><label>Nome<input name="name" defaultValue={list.name} maxLength={80} disabled={!isAdmin || busy} required /></label><label>SLA<select name="slaBehavior" defaultValue={list.slaBehavior} disabled={!isAdmin || busy}><option value="running">Em andamento</option><option value="paused">Pausado</option><option value="completed">Concluído</option></select></label><small>{contagem(list.cards.length, "demanda", "demandas")} · {behaviorLabel[list.slaBehavior]}</small>{isAdmin && <><button className="secondary-button" disabled={busy}>Salvar</button>{list.cards.length > 0 && <label className="list-transfer">Mover para<select value={deleteTargets[list.id] ?? ""} disabled={busy} onChange={(event) => setDeleteTargets((current) => ({ ...current, [list.id]: event.target.value }))}><option value="">Escolha antes de excluir</option>{lists.filter((target) => target.id !== list.id).map((target) => <option value={target.id} key={target.id}>{target.name}</option>)}</select></label>}<button type="button" className="danger-link list-delete" disabled={busy || (list.cards.length > 0 && !deleteTargets[list.id])} onClick={() => removeList(list.id, list.name, list.cards.length)}>Excluir</button></>}</form>)}</div></section>{isAdmin && <section className="catalog-section"><header><div><strong>Nova coluna</strong><span>Use uma coluna com SLA pausado apenas quando houver uma justificativa operacional.</span></div></header><form className="catalog-form list-create-form" onSubmit={createList}><label>Nome da coluna<input name="name" placeholder="Ex.: Aguardando aprovação" maxLength={80} required /></label><label>Comportamento do SLA<select name="slaBehavior" defaultValue="running"><option value="running">Em andamento</option><option value="paused">Pausado</option><option value="completed">Concluído</option></select></label><button className="primary-button" disabled={busy}>Criar coluna</button></form></section>}<section className="catalog-section card-archive-settings"><header><div><strong>Arquivo automático</strong><span>Demanda concluída ou cancelada sai do quadro depois de alguns dias e fica no Arquivo, de onde pode ser restaurada.</span></div></header><form onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); void onMutate("/api/catalog", { method: "POST", body: JSON.stringify({ resource: "card-archive", completedArchiveDays: Number(data.get("completedArchiveDays")) }) }, "Regra de arquivo atualizada."); }}><label>Arquivar concluídas após<select name="completedArchiveDays" defaultValue={String(snapshot.settings.completedArchiveDays ?? 7)} disabled={!isAdmin || busy}><option value="1">1 dia</option><option value="3">3 dias</option><option value="7">7 dias</option><option value="15">15 dias</option><option value="30">30 dias</option><option value="0">Nunca</option></select></label>{isAdmin && <button className="primary-button" disabled={busy}>Salvar</button>}</form></section></div>;
-}
-
-function FieldsSettings({ snapshot, busy, isAdmin, onCatalog, onConfirm }: { snapshot: WorkspaceSnapshot; busy: boolean; isAdmin: boolean; onCatalog: CatalogHandler; onConfirm: ConfirmHandler }) {
-  async function createLabel(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    const next = await onCatalog({ resource: "label", name: data.get("name"), color: data.get("color") }, "Etiqueta criada.");
-    if (next) form.reset();
-  }
-  async function createField(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    const next = await onCatalog({ resource: "field", name: data.get("name"), fieldKey: data.get("fieldKey"), fieldType: data.get("fieldType"), required: data.get("required") === "on", options: String(data.get("options") ?? "").split(",").map((item) => item.trim()).filter(Boolean) }, "Campo personalizado criado.");
-    if (next) form.reset();
-  }
-  return (
-    <div className="settings-stack">
-      <section className="catalog-section">
-        <header><div><strong>Etiquetas operacionais</strong><span>Cores para urgência, área ou classificação complementar.</span></div><b>{snapshot.labels.length}</b></header>
-        <div className="label-catalog">
-          {snapshot.labels.map((label) => <article key={label.id}><i style={{ backgroundColor: label.color }} /><strong>{label.name}</strong>{isAdmin && <button disabled={busy} onClick={() => onConfirm({ title: "Excluir etiqueta?", description: `A etiqueta “${label.name}” será removida da operação.`, confirmLabel: "Excluir etiqueta", action: () => onCatalog({ resource: "label", operation: "delete", id: label.id }, "Etiqueta excluída.") })} aria-label={`Excluir ${label.name}`}>×</button>}</article>)}
-        </div>
-        {isAdmin && <form className="catalog-form compact" onSubmit={createLabel}><label>Nome<input name="name" maxLength={40} placeholder="Ex.: Urgente" required /></label><label>Cor<select name="color" defaultValue="#dc2626"><option value="#dc2626">Vermelho</option><option value="#ea580c">Laranja</option><option value="#d97706">Amarelo</option><option value="#16a34a">Verde</option><option value="#0891b2">Ciano</option><option value="#2563eb">Azul</option><option value="#7c3aed">Roxo</option><option value="#64748b">Cinza</option></select></label><button className="primary-button" disabled={busy}>Adicionar</button></form>}
-      </section>
-      <section className="catalog-section">
-        <header><div><strong>Campos personalizados</strong><span>Dados estruturados visíveis nos cartões de DP.</span></div><b>{snapshot.customFields.length}</b></header>
-        <div className="field-catalog">
-          {snapshot.customFields.map((field) => <article key={field.id}><div><strong>{field.name}{field.required && <em>Obrigatório</em>}</strong><small>{field.fieldKey} • {field.fieldType}{field.options.length ? ` • ${field.options.join(", ")}` : ""}</small></div>{isAdmin && <button disabled={busy} onClick={() => onConfirm({ title: "Excluir campo?", description: `O campo “${field.name}” deixará de estar disponível nas demandas.`, confirmLabel: "Excluir campo", action: () => onCatalog({ resource: "field", operation: "delete", id: field.id }, "Campo excluído.") })} aria-label={`Excluir ${field.name}`}>×</button>}</article>)}
-        </div>
-        {isAdmin && <form className="catalog-form fields-form" onSubmit={createField}><label>Nome<input name="name" placeholder="Ex.: Matrícula" maxLength={60} required /></label><label>Identificador<input name="fieldKey" placeholder="matricula" pattern="[A-Za-z0-9_]+" required /></label><label>Tipo<select name="fieldType" defaultValue="text"><option value="text">Texto</option><option value="number">Número</option><option value="date">Data</option><option value="select">Lista</option></select></label><label className="wide">Opções da lista<input name="options" placeholder="Opção 1, Opção 2" /></label><label className="catalog-check"><input type="checkbox" name="required" /> Obrigatório</label><button className="primary-button" disabled={busy}>Criar campo</button></form>}
-      </section>
-    </div>
-  );
-}
-
-function TemplatesSettings({ snapshot, busy, isAdmin, onCatalog, onConfirm, onUseTemplate }: { snapshot: WorkspaceSnapshot; busy: boolean; isAdmin: boolean; onCatalog: CatalogHandler; onConfirm: ConfirmHandler; onUseTemplate: (id: string) => void }) {
-  async function createTemplate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    const checklist = String(data.get("checklist") ?? "").split("\n").map((item) => item.trim()).filter(Boolean);
-    const next = await onCatalog({ resource: "template", name: data.get("name"), processType: data.get("processType"), description: data.get("description"), checklist, defaultSlaDays: Number(data.get("defaultSlaDays")) }, "Template criado.");
-    if (next) form.reset();
-  }
-  return (
-    <div className="settings-stack">
-      <section className="catalog-section">
-        <header><div><strong>Templates de processos</strong><span>Checklists e SLA prontos para iniciar uma demanda sem esquecer etapas.</span></div><b>{snapshot.templates.length}</b></header>
-        <div className="template-catalog">
-          {snapshot.templates.map((template) => <article key={template.id}><div><span>{template.processType}</span><strong>{template.name}</strong><small>{contagem(template.checklist.length, "etapa", "etapas")} • SLA de {contagem(template.defaultSlaDays, "dia", "dias")} útil(eis)</small></div><button onClick={() => onUseTemplate(template.id)}>Usar</button>{isAdmin && <button className="danger" disabled={busy} onClick={() => onConfirm({ title: "Excluir template?", description: `O template “${template.name}” e seu checklist padrão serão removidos.`, confirmLabel: "Excluir template", action: () => onCatalog({ resource: "template", operation: "delete", id: template.id }, "Template excluído.") })}>Excluir</button>}</article>)}
-        </div>
-      </section>
-      {isAdmin && <section className="catalog-section"><header><div><strong>Novo template</strong><span>Uma etapa por linha no checklist.</span></div></header><form className="catalog-form template-form" onSubmit={createTemplate}><label>Nome<input name="name" placeholder="Ex.: Conciliação cadastral" required /></label><label>Processo<select name="processType" defaultValue="CONCILIAÇÃO CADASTRAL"><option>Conciliação cadastral</option><option>Férias</option><option>Rescisão</option><option>Benefícios</option><option>Folha</option><option>Cadastro</option><option>Outros</option></select></label><label>SLA (dias úteis)<input type="number" min="1" max="60" name="defaultSlaDays" defaultValue="3" required /></label><label className="wide">Descrição<textarea name="description" rows={2} placeholder="Orientações para o processo" /></label><label className="wide">Etapas<textarea name="checklist" rows={7} placeholder={'Importar dados concluídos\nVincular registros\nTratar divergências'} required /></label><button className="primary-button" disabled={busy}>Salvar template</button></form></section>}
-    </div>
-  );
 }
 
 function SlaSettings({ snapshot, busy, isAdmin, onCatalog }: { snapshot: WorkspaceSnapshot; busy: boolean; isAdmin: boolean; onCatalog: CatalogHandler }) {
@@ -5220,152 +4048,6 @@ function SlaSettings({ snapshot, busy, isAdmin, onCatalog }: { snapshot: Workspa
   return <div className="settings-stack"><section className="catalog-section"><header><div><strong>Calendário operacional</strong><span>O prazo ignora dias não úteis e feriados cadastrados.</span></div></header><form className="calendar-settings-form" onSubmit={saveCalendar}><fieldset disabled={!isAdmin || busy}><legend>Dias úteis</legend><div>{weekdays.map((day, index) => <label key={day}><input type="checkbox" name="businessDays" value={index} defaultChecked={snapshot.settings.businessDays.includes(index)} />{day}</label>)}</div></fieldset><label>Início do expediente<input type="time" name="dayStart" defaultValue={snapshot.settings.dayStart} disabled={!isAdmin || busy} /></label><label>Fim do expediente<input type="time" name="dayEnd" defaultValue={snapshot.settings.dayEnd} disabled={!isAdmin || busy} /></label><label>Atualização da tela<select name="realtimeSeconds" defaultValue={snapshot.settings.realtimeSeconds} disabled={!isAdmin || busy}><option value="5">5 segundos</option><option value="15">15 segundos</option><option value="30">30 segundos</option><option value="60">1 minuto</option><option value="120">2 minutos</option></select></label>{isAdmin && <button className="primary-button" disabled={busy}>Salvar calendário</button>}</form></section>
     <section className="catalog-section"><header><div><strong>Políticas por processo</strong><span>Meta e janela de atenção em dias úteis.</span></div></header><div className="sla-policy-list">{snapshot.slaPolicies.map((policy) => <form key={policy.id} onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); void onCatalog({ resource: "sla", processType: policy.processType, targetBusinessDays: Number(data.get("target")), warningBusinessDays: Number(data.get("warning")), active: data.get("active") === "on" }, `SLA de ${policy.processType} atualizado.`); }}><strong>{policy.processType}</strong><label>Meta<input type="number" name="target" min="1" max="60" defaultValue={policy.targetBusinessDays} disabled={!isAdmin || busy} /></label><label>Alertar antes<input type="number" name="warning" min="0" max="60" defaultValue={policy.warningBusinessDays} disabled={!isAdmin || busy} /></label><label className="catalog-check"><input type="checkbox" name="active" defaultChecked={policy.active} disabled={!isAdmin || busy} /> Ativa</label>{isAdmin && <button disabled={busy}>Salvar</button>}</form>)}</div></section>
     <section className="catalog-section"><header><div><strong>Feriados e exceções</strong><span>{contagem(snapshot.holidays.length, "data", "datas")} fora do expediente.</span></div></header><div className="holiday-list">{snapshot.holidays.map((holiday) => <article key={holiday.date}><time>{formatDate(holiday.date, true)}</time><strong>{holiday.name}</strong>{isAdmin && <button onClick={() => void onCatalog({ resource: "holiday", operation: "delete", date: holiday.date }, "Feriado removido.")} disabled={busy}>×</button>}</article>)}</div>{isAdmin && <form className="catalog-form compact" onSubmit={addHoliday}><label>Data<input type="date" name="date" required /></label><label>Nome<input name="name" placeholder="Ex.: Feriado municipal" required /></label><button className="primary-button" disabled={busy}>Adicionar</button></form>}</section></div>;
-}
-
-function RulesSettings({ snapshot, busy, isAdmin, onCatalog, onConfirm }: { snapshot: WorkspaceSnapshot; busy: boolean; isAdmin: boolean; onCatalog: CatalogHandler; onConfirm: ConfirmHandler }) {
-  type ConditionType = "always" | "processType" | "priority" | "toList";
-  type ActionType = "moveTo" | "slaStatus" | "labelId" | "notify";
-  /* Rótulos e gatilhos vêm de `lib/automation-rules` (§27): a tela que
-     oferecesse um gatilho a mais entregaria uma regra que o servidor recusa, e
-     um a menos esconderia automação que o motor executa. */
-  const triggerLabels = RULE_TRIGGER_LABELS as Record<string, string>;
-  const [editorOpen, setEditorOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [name, setName] = useState("");
-  const [trigger, setTrigger] = useState("card.created");
-  const [conditionType, setConditionType] = useState<ConditionType>("always");
-  const [conditionValue, setConditionValue] = useState("");
-  const [actionType, setActionType] = useState<ActionType>("moveTo");
-  const [actionValue, setActionValue] = useState("");
-  const [editorError, setEditorError] = useState("");
-
-  const actionLabel = (action: Record<string, unknown>) => {
-    if (typeof action.moveTo === "string") return `mover para ${snapshot.lists.find((list) => list.kind === action.moveTo)?.name ?? action.moveTo}`;
-    if (typeof action.slaStatus === "string") return action.slaStatus === "overdue" ? "marcar SLA como atrasado" : action.slaStatus === "completed" ? "marcar como concluída" : action.slaStatus === "paused" ? "pausar o SLA" : "recalcular o SLA";
-    if (typeof action.labelId === "string") return `aplicar etiqueta ${snapshot.labels.find((label) => label.id === action.labelId)?.name ?? "selecionada"}`;
-    if (typeof action.notify === "string") return `notificar o responsável: “${action.notify}”`;
-    return "executar ação configurada";
-  };
-  const conditionLabel = (condition: Record<string, unknown>) => {
-    if (condition.processType) return `processo é ${condition.processType}`;
-    if (condition.priority) return `prioridade é ${condition.priority}`;
-    if (condition.listKind) return `coluna é ${snapshot.lists.find((list) => list.kind === condition.listKind)?.name ?? condition.listKind}`;
-    if (condition.assignee === "present") return "há responsável atribuído";
-    if (condition.allItems === true) return "checklist completo";
-    if (condition.dueAt === "past") return "prazo vencido";
-    return "sem condição adicional";
-  };
-  const defaultActionFor = (nextTrigger: string): { type: ActionType; value: string } => {
-    if (nextTrigger === "sla.tick") return { type: "slaStatus", value: "overdue" };
-    if (nextTrigger === "checklist.completed") return { type: "moveTo", value: snapshot.lists.find((list) => list.kind === "done")?.kind ?? "" };
-    if (nextTrigger === "assignee.added") return { type: "moveTo", value: snapshot.lists.find((list) => list.kind === "analysis")?.kind ?? "" };
-    return { type: "moveTo", value: snapshot.lists[0]?.kind ?? "" };
-  };
-  function changeTrigger(nextTrigger: string) {
-    setTrigger(nextTrigger);
-    setConditionType("always");
-    setConditionValue("");
-    const nextAction = defaultActionFor(nextTrigger);
-    setActionType(nextAction.type);
-    setActionValue(nextAction.value);
-  }
-  function edit(rule?: WorkspaceSnapshot["rules"][number]) {
-    setEditorOpen(true);
-    setEditingId(rule?.id ?? null);
-    setName(rule?.name ?? "");
-    const nextTrigger = rule?.trigger ?? "card.created";
-    setTrigger(nextTrigger);
-    const condition = rule?.condition ?? {};
-    if (typeof condition.processType === "string") { setConditionType("processType"); setConditionValue(condition.processType); }
-    else if (typeof condition.priority === "string") { setConditionType("priority"); setConditionValue(condition.priority); }
-    else if (typeof condition.listKind === "string") { setConditionType("toList"); setConditionValue(condition.listKind); }
-    else { setConditionType("always"); setConditionValue(""); }
-    const action = rule?.action ?? {};
-    if (typeof action.slaStatus === "string") { setActionType("slaStatus"); setActionValue(action.slaStatus); }
-    else if (typeof action.labelId === "string") { setActionType("labelId"); setActionValue(action.labelId); }
-    else if (typeof action.moveTo === "string") { setActionType("moveTo"); setActionValue(action.moveTo); }
-    else if (typeof action.notify === "string") { setActionType("notify"); setActionValue(action.notify); }
-    else { const nextAction = defaultActionFor(nextTrigger); setActionType(nextAction.type); setActionValue(nextAction.value); }
-    setEditorError("");
-  }
-  async function save(event: FormEvent) {
-    event.preventDefault();
-    if (!name.trim()) return;
-    if (!actionValue) { setEditorError("Escolha a ação que a automação deverá executar."); return; }
-    const fixedCondition = trigger === "assignee.added" ? { assignee: "present" } : trigger === "checklist.completed" ? { allItems: true } : trigger === "sla.tick" ? { dueAt: "past" } : {};
-    const condition = conditionType === "processType" ? { processType: conditionValue } : conditionType === "priority" ? { priority: conditionValue } : conditionType === "toList" ? { listKind: conditionValue } : fixedCondition;
-    const action = actionType === "moveTo" ? { moveTo: actionValue } : actionType === "slaStatus" ? { slaStatus: actionValue } : actionType === "notify" ? { notify: actionValue } : { labelId: actionValue };
-    const result = await onCatalog({ resource: "rule", operation: editingId ? "update" : "create", id: editingId ?? "", name, trigger, condition, action, enabled: true }, editingId ? "Automação atualizada." : "Automação criada.");
-    if (result) setEditorOpen(false);
-  }
-  const showConditionSelector = trigger === "card.created" || trigger === "card.moved";
-  const fixedConditionText = trigger === "assignee.added" ? "Só continua se houver um responsável atribuído." : trigger === "checklist.completed" ? "Só continua quando todas as etapas estiverem concluídas." : trigger === "sla.tick" ? "Só continua quando o prazo estiver vencido." : "Sem condição adicional.";
-
-  return <div className="settings-stack"><section className="catalog-section rules-editor"><header><div><strong>Editor No-Code</strong><span>Regras ativas que executam tarefas automaticamente no fluxo do DP.</span></div>{isAdmin && <button className="secondary-button" onClick={() => edit()}><Plus aria-hidden="true" /> Nova regra</button>}</header><div className="rule-catalog no-code-rule-catalog">{snapshot.rules.length === 0 && <div className="empty-view"><span><ListChecks aria-hidden="true" /></span><strong>Nenhuma automação criada</strong><p>Crie uma regra para padronizar o fluxo da sua operação.</p></div>}{snapshot.rules.map((rule) => <article key={rule.id}><div><strong>{rule.name}</strong><div className="rule-flow"><span>Quando {triggerLabels[rule.trigger] ?? rule.trigger}</span><ArrowRight aria-hidden="true" /><span>Se {conditionLabel(rule.condition)}</span><ArrowRight aria-hidden="true" /><span>Então {actionLabel(rule.action)}</span></div></div>{isAdmin && <><button onClick={() => edit(rule)}>Editar</button><button className="danger" disabled={busy} onClick={() => onConfirm({ title: "Excluir automação?", description: `A regra “${rule.name}” deixará de ser executada na operação.`, confirmLabel: "Excluir automação", action: () => onCatalog({ resource: "rule", operation: "delete", id: rule.id }, "Automação excluída.") })}>Excluir</button></>}</article>)}</div></section>{isAdmin && editorOpen && <form className="catalog-section rule-editor-form no-code-editor" onSubmit={save}><header><div><strong>{editingId ? "Editar automação" : "Nova automação"}</strong><span>Escolha o evento, a condição e o resultado desejado. O sistema traduz isso para uma regra auditável.</span></div><button type="button" className="danger-link" onClick={() => setEditorOpen(false)}>Cancelar</button></header><div className="no-code-editor-body"><label className="wide">Nome da automação<input value={name} onChange={(event) => setName(event.target.value)} placeholder="Ex.: Ao concluir checklist, finalizar demanda" required /></label><section><span>1. Quando</span><label>Gatilho<select value={trigger} onChange={(event) => changeTrigger(event.target.value)}>{RULE_TRIGGERS.map((item) => <option key={item} value={item}>Quando {RULE_TRIGGER_LABELS[item]}</option>)}</select></label></section><ArrowRight className="flow-arrow" aria-hidden="true" /><section><span>2. Se</span>{showConditionSelector ? <><label>Condição<select value={conditionType} onChange={(event) => { setConditionType(event.target.value as ConditionType); setConditionValue(""); }}><option value="always">Sem condição adicional</option>{trigger === "card.created" && <><option value="processType">O processo for</option><option value="priority">A prioridade for</option></>}{trigger === "card.moved" && <option value="toList">A coluna de destino for</option>}</select></label>{conditionType === "processType" && <label>Processo<select value={conditionValue} onChange={(event) => setConditionValue(event.target.value)} required><option value="">Selecione</option>{["ADMISSÃO", "FÉRIAS", "RESCISÃO", "BENEFÍCIOS", "FOLHA", "CADASTRO", "OUTROS"].map((item) => <option key={item}>{item}</option>)}</select></label>}{conditionType === "priority" && <label>Prioridade<select value={conditionValue} onChange={(event) => setConditionValue(event.target.value)} required><option value="">Selecione</option>{["low", "normal", "high", "urgent"].map((nivel) => <option key={nivel} value={nivel}>{PRIORITY_LABELS[nivel]}</option>)}</select></label>}{conditionType === "toList" && <label>Coluna<select value={conditionValue} onChange={(event) => setConditionValue(event.target.value)} required><option value="">Selecione</option>{snapshot.lists.map((list) => <option value={list.kind} key={list.id}>{list.name}</option>)}</select></label>}</> : <div className="fixed-rule-condition"><CheckCircle2 aria-hidden="true" />{fixedConditionText}</div>}</section><ArrowRight className="flow-arrow" aria-hidden="true" /><section><span>3. Então</span><label>Ação<select value={actionType} onChange={(event) => { setActionType(event.target.value as ActionType); setActionValue(""); }}><option value="moveTo">Mover a demanda</option><option value="slaStatus">Atualizar o SLA</option><option value="labelId">Aplicar uma etiqueta</option><option value="notify">Notificar o responsável</option></select></label>{actionType === "moveTo" && <label>Coluna de destino<select value={actionValue} onChange={(event) => setActionValue(event.target.value)} required><option value="">Selecione</option>{snapshot.lists.map((list) => <option value={list.kind} key={list.id}>{list.name}</option>)}</select></label>}{actionType === "slaStatus" && <label>Novo status<select value={actionValue} onChange={(event) => setActionValue(event.target.value)} required><option value="">Selecione</option><option value="safe">Dentro do prazo</option><option value="overdue">Atrasado</option><option value="paused">Pausado</option><option value="completed">Concluído</option></select></label>}{actionType === "labelId" && <label>Etiqueta<select value={actionValue} onChange={(event) => setActionValue(event.target.value)} required><option value="">Selecione</option>{snapshot.labels.map((label) => <option value={label.id} key={label.id}>{label.name}</option>)}</select></label>}{actionType === "notify" && <label>Aviso<input value={actionValue} onChange={(event) => setActionValue(event.target.value)} maxLength={160} placeholder="Ex.: Documentação vencida — conferir a demanda" required /></label>}</section></div>{editorError && <p className="no-code-editor-error" role="alert"><CircleAlert aria-hidden="true" />{editorError}</p>}<footer><span>Prévia: Quando {triggerLabels[trigger] ?? trigger}, se {conditionType === "always" ? fixedConditionText.toLowerCase() : "a condição selecionada for atendida"}, então {actionType === "moveTo" ? "a demanda será movida" : actionType === "slaStatus" ? "o SLA será atualizado" : actionType === "notify" ? "quem responde pela demanda será avisado" : "uma etiqueta será aplicada"}.</span><button className="primary-button" disabled={busy}>Salvar automação</button></footer></form>}</div>;
-}
-
-function InboxView({ items, busy, canEdit, onConvert, onNew }: { items: InboxItem[]; busy: boolean; canEdit: boolean; onConvert: (item: InboxItem) => Promise<void>; onNew: () => void }) {
-  const pending = items.filter((item) => item.status === "new");
-  const converted = items.filter((item) => item.status === "converted");
-  const channelLabels: Record<string, string> = { whatsapp: "WhatsApp", email: "E-mail", teams: "Teams", manual: "Registro manual" };
-  return (
-    <div className="inbox-layout">
-      <section className="inbox-list-panel">
-        {/* O botão de criar fica só no cabeçalho da tela ("Nova solicitação"):
-            o segundo, aqui dentro, fazia a mesma coisa com outro nome. */}
-        <header><div><strong>Aguardando triagem</strong><span>{contagem(pending.length, "nova", "novas")} • {contagem(converted.length, "convertida", "convertidas")}</span></div></header>
-        {pending.length === 0
-          ? <div className="inbox-items"><div className="empty-view"><span><CheckCircle2 aria-hidden="true" /></span><strong>Nada aguardando triagem</strong><p>Solicitações recebidas por e-mail, Teams ou registro manual aparecem aqui.</p>{canEdit && <button className="secondary-button" onClick={onNew}><Plus aria-hidden="true" /> Registrar solicitação</button>}</div></div>
-          : <div className="inbox-table-wrap"><table className="inbox-table">
-            <thead><tr><th scope="col">Recebida</th><th scope="col">Canal</th><th scope="col">Remetente</th><th scope="col">Assunto</th>{canEdit && <th scope="col"><span className="sr-only">Ação</span></th>}</tr></thead>
-            <tbody>{pending.map((item) => <tr key={item.id}>
-              <td className="numeric">{formatReceived(item.receivedAt)}</td>
-              <td>{channelLabels[item.channel] ?? item.channel}</td>
-              <td>{item.senderName}</td>
-              <td className="inbox-subject"><strong>{item.subject}</strong>{item.body && <span>{item.body}</span>}</td>
-              {canEdit && <td><button className="secondary-button" disabled={busy} onClick={() => void onConvert(item)}>Transformar em demanda</button></td>}
-            </tr>)}</tbody>
-          </table></div>}
-      </section>
-    </div>
-  );
-}
-
-function PlannerView({ cards, blocks, connections, onOpen, onCreateBlock, onDeleteBlock, onSaveConnection }: { cards: Card[]; blocks: WorkspaceSnapshot["plannerBlocks"]; connections: WorkspaceSnapshot["calendarConnections"]; onOpen: (card: Card) => void; onCreateBlock: (payload: Record<string, unknown>) => Promise<WorkspaceSnapshot | null>; onDeleteBlock: (id: string) => Promise<WorkspaceSnapshot | null>; onSaveConnection: (payload: Record<string, unknown>) => Promise<WorkspaceSnapshot | null> }) {
-  const scheduled = cards.filter((card) => card.dueAt && card.slaStatus !== "completed").sort((a, b) => String(a.dueAt).localeCompare(String(b.dueAt)));
-  const grouped = scheduled.reduce<Record<string, Card[]>>((accumulator, card) => { const key = card.dueAt!.slice(0, 10); (accumulator[key] ??= []).push(card); return accumulator; }, {});
-  const [showBlockForm, setShowBlockForm] = useState(false);
-  const [blockTitle, setBlockTitle] = useState("");
-  const [blockStart, setBlockStart] = useState("");
-  const [blockEnd, setBlockEnd] = useState("");
-  const [blockCardId, setBlockCardId] = useState("");
-  const [blockError, setBlockError] = useState("");
-  const [showConnectionForm, setShowConnectionForm] = useState(false);
-  const [calendarProvider, setCalendarProvider] = useState("google");
-  const [calendarId, setCalendarId] = useState("");
-  async function createBlock(event: FormEvent) {
-    event.preventDefault();
-    const start = new Date(blockStart);
-    const end = new Date(blockEnd);
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
-      setBlockError("O término precisa ser posterior ao início do bloco.");
-      return;
-    }
-    setBlockError("");
-    const next = await onCreateBlock({ title: blockTitle, startAt: start.toISOString(), endAt: end.toISOString(), cardId: blockCardId || null, blockType: "focus" });
-    if (next) { setBlockTitle(""); setBlockStart(""); setBlockEnd(""); setBlockCardId(""); setShowBlockForm(false); }
-  }
-  async function saveConnection(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const next = await onSaveConnection({ provider: calendarProvider, externalCalendarId: calendarId, config: { calendarLabel: calendarId || "Calendário principal" } });
-    if (next) { setCalendarId(""); setShowConnectionForm(false); }
-  }
-  return (
-    <div className="planner-layout">
-      <section className="planner-calendar"><header><div><strong>Agenda por prazo</strong><span>{contagem(scheduled.length, "atividade programada", "atividades programadas")} • {contagem(blocks.length, "bloco", "blocos")} de foco</span></div><button className="secondary-button" onClick={() => { setShowBlockForm((value) => !value); setBlockError(""); }}><Plus aria-hidden="true" /> Bloco de tempo</button></header>{showBlockForm && <form className="planner-block-form" onSubmit={createBlock}><label>Título<input value={blockTitle} onChange={(event) => setBlockTitle(event.target.value)} placeholder="Ex.: Conferir admissões" required /></label><label>Início<input type="datetime-local" value={blockStart} onChange={(event) => setBlockStart(event.target.value)} required /></label><label>Fim<input type="datetime-local" value={blockEnd} onChange={(event) => setBlockEnd(event.target.value)} required /></label><label>Demanda<select value={blockCardId} onChange={(event) => setBlockCardId(event.target.value)}><option value="">Bloco geral</option>{cards.map((card) => <option key={card.id} value={card.id}>{card.title}</option>)}</select></label><button className="primary-button">Salvar bloco</button>{blockError && <p className="planner-form-error" role="alert">{blockError}</p>}</form>}{blocks.length > 0 && <div className="planner-block-list">{blocks.map((block) => <article key={block.id}><CalendarClock aria-hidden="true" /><div><strong>{block.title}</strong><small>{new Date(block.startAt).toLocaleString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })} – {new Date(block.endAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</small></div><button onClick={() => void onDeleteBlock(block.id)} aria-label={`Excluir ${block.title}`}><Trash2 aria-hidden="true" /></button></article>)}</div>}{Object.keys(grouped).length === 0 && <div className="empty-view"><span><CalendarClock aria-hidden="true" /></span><strong>Nenhum prazo agendado</strong><p>Defina uma data nas demandas para montar o planner.</p></div>}{Object.entries(grouped).map(([date, dateCards]) => <div className="planner-day" key={date}><div><strong>{formatDate(date, true)}</strong><span>{contagem(dateCards.length, "demanda", "demandas")}</span></div><div>{dateCards.map((card) => <button key={card.id} onClick={() => onOpen(card)}><i className={processColors[card.processType] ?? "gray"} /><span><strong>{card.title}</strong><small>{card.assigneeName || "Sem responsável"} • {card.company || card.processType}</small></span><em className={card.slaStatus}><Clock3 aria-hidden="true" />{slaLabel(card)}</em></button>)}</div></div>)}</section>
-      <aside className="planner-focus"><span>Foco do dia</span><h2>{scheduled.filter((card) => card.slaStatus === "warning" || card.slaStatus === "overdue").length}</h2><p>demanda(s) precisam de atenção imediata.</p><div><i /><span><strong>Priorize atrasos</strong><small>Comece pelos SLAs vencidos antes de assumir novas atividades.</small></span></div><section className="planner-connections"><header><strong>Calendários externos</strong><button onClick={() => setShowConnectionForm((value) => !value)}>{showConnectionForm ? "Cancelar" : "Configurar"}</button></header>{connections.length === 0 && <p>Conecte Google ou Microsoft Calendar para preparar a sincronização da agenda.</p>}{connections.map((connection) => <article key={connection.id}><CalendarDays aria-hidden="true" /><span><strong>{connection.provider === "microsoft" ? "Microsoft Calendar" : "Google Calendar"}</strong><small>{connection.externalCalendarId || "Calendário principal"} · {connection.status === "connected" ? "conectado" : "aguardando OAuth"}</small></span></article>)}{showConnectionForm && <form onSubmit={saveConnection}><select value={calendarProvider} onChange={(event) => setCalendarProvider(event.target.value)}><option value="google">Google Calendar</option><option value="microsoft">Microsoft Calendar</option></select><input value={calendarId} onChange={(event) => setCalendarId(event.target.value)} placeholder="ID ou nome do calendário (opcional)" /><button className="secondary-button">Salvar configuração</button></form>}</section></aside>
-    </div>
-  );
 }
 
 function IndicatorsView({ cards, companyId, scopeLabel, rules, busy, canManageRules, canExportWorkspace, onToggleRule, onExport, hrMetrics, companies }: { cards: Card[]; companyId: string; scopeLabel: string; canExportWorkspace: boolean; rules: WorkspaceSnapshot["rules"]; busy: boolean; canManageRules: boolean; onToggleRule: (id: string, enabled: boolean) => Promise<void>; onExport: () => void; hrMetrics: WorkspaceSnapshot["hrMetrics"]; companies: WorkspaceSnapshot["companies"] }) {
