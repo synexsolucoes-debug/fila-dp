@@ -173,9 +173,9 @@ export function WorkCenterView({ onOpenCompanyFilter, onNavigate, companyId, out
 
   if (loading && !payload) return <LoadingState title="Reunindo o seu trabalho…" />;
 
-  /* No painel ao lado do quadro (§4.44) o título já é o do painel, e a
-     central de ação — o resumo por módulo com "Ver item a item" — levaria a
-     pessoa para a lista que está logo abaixo. Fica só a lista. */
+  /* No painel ao lado do quadro (§4.44) o título já é o do painel. A central
+     de ação continua — é o resumo por módulo —, sem o "Ver item a item", que
+     levaria para a lista logo abaixo. */
   return <section className={styles.workspace} aria-busy={refreshing}>
     {!outsideBoard && <PanelHeader
       eyebrow="CENTRAL DE TRABALHO"
@@ -193,7 +193,7 @@ export function WorkCenterView({ onOpenCompanyFilter, onNavigate, companyId, out
         ela. Aqui é o lugar certo: "o que está comigo hoje" e "o que precisa ser
         feito agora" são a mesma pergunta, e mantê-las em telas diferentes
         obrigava a pessoa a conferir as duas para saber se tinha acabado. */}
-    {onNavigate && !outsideBoard ? <ActionCenter onNavigate={onNavigate} companyId={companyId ?? ""} /> : null}
+    {onNavigate ? <ActionCenter onNavigate={onNavigate} companyId={companyId ?? ""} showOpenWork={!outsideBoard} /> : null}
 
     {counts ? <div className={styles.counters} role="group" aria-label="Resumo do seu trabalho">
       <Counter label="Comigo" value={counts.total} active={!filters.due && !filters.source} onClick={() => setFilters({ ...filters, due: "", source: "" })} />

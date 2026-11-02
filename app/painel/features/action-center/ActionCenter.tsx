@@ -32,8 +32,10 @@ function dueLabel(value: string | null) {
  * decorativo. Indicadores zerados são mantidos fora da lista para que a tela
  * responda de fato "o que precisa ser feito agora?".
  */
-export function ActionCenter({ onNavigate, companyId = "" }: {
+export function ActionCenter({ onNavigate, companyId = "", showOpenWork = true }: {
   onNavigate: (target: ActionTarget) => void;
+  /** O link para a lista item a item; some quando a lista já está logo abaixo. */
+  showOpenWork?: boolean;
   /** Empresa escolhida na barra superior. Vazio = todas as autorizadas. */
   companyId?: string;
 }) {
@@ -92,9 +94,9 @@ export function ActionCenter({ onNavigate, companyId = "" }: {
               "quanta coisa há" por módulo; a Central de Trabalho responde "o
               que exatamente está comigo", item a item. Uma leva à outra em vez
               de as duas competirem pelo mesmo lugar. */}
-          <Link className={styles.openWork} href="/painel/demandas?responsavel=me&painel=comigo">
+          {showOpenWork && <Link className={styles.openWork} href="/painel/demandas?responsavel=me&painel=comigo">
             Ver item a item<ArrowRight aria-hidden="true" />
-          </Link>
+          </Link>}
           <button className={styles.refresh} type="button" onClick={() => void load(true)} disabled={refreshing || loading}>
             <RefreshCw aria-hidden="true" className={refreshing ? styles.spin : undefined} />
             {refreshing ? "Atualizando…" : "Atualizar"}
