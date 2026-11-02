@@ -682,6 +682,35 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
   .filterFields { width: min(420px, 92vw); }
 }
 
+/* Celular: cada faixa de controles numa linha só, rolando para o lado.
+   Antes, os seis indicadores viravam duas linhas de três, os seis modos de
+   visão quebravam em duas e os atalhos em outras duas: eram ~600px de
+   controles antes da primeira demanda numa tela de 844px. */
+@media (max-width: 640px) {
+  /* Faixa com rolagem dentro de grade/flex: sem `min-width: 0`, o item cresce
+     até a largura do conteúdo e empurra a busca e os filtros para fora da tela. */
+  .toolbar, .toolbar > *, .indicators, .modes, .presets { min-width: 0; max-width: 100%; }
+  .toolbarTop > .modes, .toolbarBottom > .presets { flex: 1 1 100%; }
+  .indicators {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  .indicators::-webkit-scrollbar { display: none; }
+  .indicator { flex: 0 0 auto; min-width: 104px; padding: 8px 10px; scroll-snap-align: start; }
+  .modes { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .modes::-webkit-scrollbar { display: none; }
+  .mode { flex: 0 0 auto; white-space: nowrap; }
+  .presets { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; white-space: nowrap; }
+  .presets::-webkit-scrollbar { display: none; }
+  .preset { flex: 0 0 auto; }
+  /* Modo foco esconde barra lateral e cabeçalho para dar largura às colunas;
+     no celular a coluna já ocupa a tela inteira. */
+  .focusToggle { display: none; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .card, .indicator, .quickActions, .loadBar i { transition: none; }
   .indicator:hover { transform: none; }

@@ -952,3 +952,9 @@
   background: var(--ui-surface-muted, var(--ui-surface)); color: var(--ui-text);
   font-size: .85rem;
 }
+
+/* O quadro é uma grade de uma coluna; sem limite, a coluna cresce até a
+   largura da faixa de indicadores (que no celular rola para o lado) e leva a
+   busca e os filtros para fora da tela. */
+.board-shell { grid-template-columns: minmax(0, 1fr); }
+.board-shell > * { min-width: 0; }
