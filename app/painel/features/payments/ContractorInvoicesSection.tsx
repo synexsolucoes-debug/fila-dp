@@ -14,7 +14,7 @@ import {
   matchesQuickFilter,
   type InvoiceQuickFilter,
 } from "@/lib/contractor-invoices";
-import { ConfirmDialog, EmptyState, ErrorBanner, PageSkeleton } from "../shared";
+import { ConfirmDialog, EmptyState, ErrorBanner, PageSkeleton, CenterToast } from "../shared";
 import { ContractorPortalLinks } from "./ContractorPortalLinks";
 import { InvoiceReviewDrawer } from "./InvoiceReviewDrawer";
 import { InvoiceUploadDialog } from "./InvoiceUploadDialog";
@@ -560,7 +560,7 @@ export function ContractorInvoicesSection({ companyId, competence, competenceLab
         </footer>
       )}
 
-      {toast && <p className={styles.toast} role="status">{toast}</p>}
+      <CenterToast message={toast} />
 
       <InvoiceUploadDialog
         open={Boolean(uploadRow)}

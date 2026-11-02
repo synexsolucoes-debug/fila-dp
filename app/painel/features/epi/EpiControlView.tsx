@@ -1,11 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  AlertTriangle, ArrowLeftRight, BadgeCheck, Boxes, Building2, Check, ClipboardList, Download,
-  FileSignature, HardHat, Info, LayoutDashboard, Link2, PackageCheck, RefreshCw, Scale, ShieldAlert,
-  ShieldCheck, Sparkles, Trash2, Undo2, Users,
-} from "lucide-react";
+import { AlertTriangle, ArrowLeftRight, BadgeCheck, Boxes, Building2, ClipboardList, Download, FileSignature, HardHat, Info, LayoutDashboard, Link2, PackageCheck, RefreshCw, Scale, ShieldAlert, ShieldCheck, Sparkles, Trash2, Undo2, Users } from "lucide-react";
 import type { WorkspaceRole } from "@/lib/fila-dp-types";
 import {
   caExpiryTone, epiDamageDecisionLabels, epiDamageReasonLabels, epiDeliveryStatusLabels,
@@ -17,7 +13,7 @@ import { epiComplianceStatusLabels } from "@/lib/epi-compliance";
 import {
   AnimatedTabs, EmptyState, ErrorBanner, LoadingState, PageSkeleton, PanelHeader,
   ProcessTabsSlot, StatusPill, useProcessTabsTarget, type AnimatedTab,
-} from "../shared";
+ CenterToast } from "../shared";
 import { EpiDialog } from "./EpiDialogs";
 import { EpiDashboardPanel, EpiPeoplePanel, EpiRequirementsPanel } from "./EpiCompliancePanels";
 import {
@@ -491,7 +487,7 @@ export function EpiControlView({ role }: { role: WorkspaceRole }) {
     {editor && <EpiDialog editor={editor} products={productOptions} employees={employees} deliveries={deliveryOptions} companyId={companyId}
       busy={busy} error={dialogError} onClose={() => { setEditor(null); setDialogError(""); }} onSubmit={submitDialog} />}
 
-    {toast && <div className={styles.toast} role="status"><Check aria-hidden="true" />{toast}</div>}
+    <CenterToast message={toast} />
 
     {company?.status === "inactive" && <p className={styles.fieldHint}>
       Esta empresa está inativa: os registros continuam disponíveis para consulta e auditoria, mas novos cadastros são recusados.

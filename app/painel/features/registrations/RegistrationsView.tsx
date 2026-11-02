@@ -29,7 +29,7 @@ import {
 import { hasCapability } from "@/lib/authorization";
 import type { EmployeeRecordTab } from "@/lib/panel-routes";
 import type { WorkspaceRole } from "@/lib/fila-dp-types";
-import { EmptyState, ErrorBanner, LoadingState, PageSkeleton, StatusPill } from "../shared";
+import { EmptyState, ErrorBanner, LoadingState, PageSkeleton, StatusPill, CenterToast } from "../shared";
 import { ContractorsPanel } from "./ContractorsPanel";
 import { EmployeeEpiPanel } from "../epi";
 import { EmployeeExamsPanel } from "./EmployeeExamsPanel";
@@ -440,7 +440,7 @@ export function RegistrationsView({ role, initialEmployeeId = "", initialEmploye
       {catalogImportOpen && <CatalogImportDialog resource={catalogResource} label={catalogMeta[catalogResource].label} companies={companies} initialCompanyId={selectedCompanyId} onClose={() => setCatalogImportOpen(false)} onImported={async (message) => { setCatalogImportOpen(false); setToast(message); await loadCatalog(catalogResource, selectedCompanyId); }} />}
 
       {confirmAction && <div className={styles.overlay} onMouseDown={(event) => { if (event.target === event.currentTarget) setConfirmAction(null); }}><section className={styles.confirm} role="alertdialog" aria-modal="true" aria-labelledby="confirm-title"><span className={styles.confirmIcon}><CircleAlert /></span><h2 id="confirm-title">{confirmAction.title}</h2><p>{confirmAction.description}</p><div><button className={styles.secondaryButton} onClick={() => setConfirmAction(null)}>Cancelar</button><button className={styles.dangerButton} disabled={busy} onClick={() => void confirmAction.run()}>{busy ? <LoaderCircle className={styles.spin} /> : null} {confirmAction.confirmLabel ?? "Inativar"}</button></div></section></div>}
-      {toast && <div className={styles.toast} role="status"><Check aria-hidden="true" /> {toast}</div>}
+      <CenterToast message={toast} />
     </section>
   );
 }

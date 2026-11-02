@@ -1,13 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  ArrowRight, BadgeCheck, Building2, CalendarClock, Check, ChevronRight, ClipboardCheck, Coins, FileClock,
-  FilePenLine, HeartHandshake, History, LockKeyhole, Plus, RefreshCw, RotateCcw, Send, ShieldCheck,
-  Stethoscope, UserCheck, UsersRound, WalletCards,
-} from "lucide-react";
+import { ArrowRight, BadgeCheck, Building2, CalendarClock, ChevronRight, ClipboardCheck, Coins, FileClock, FilePenLine, HeartHandshake, History, LockKeyhole, Plus, RefreshCw, RotateCcw, Send, ShieldCheck, Stethoscope, UserCheck, UsersRound, WalletCards } from "lucide-react";
 import type { WorkspaceRole } from "@/lib/fila-dp-types";
-import { EmptyState, ErrorBanner, PageSkeleton, PanelHeader, StatusPill } from "../shared";
+import { EmptyState, ErrorBanner, PageSkeleton, PanelHeader, StatusPill, CenterToast } from "../shared";
 import { AuxiliaryDialog } from "./AuxiliaryDialogs";
 import { normalizeCompany, normalizeDetail, normalizeOverview, requestJson, type Row } from "./auxiliary.api";
 import type {
@@ -221,7 +217,7 @@ export function AuxiliaryModulesView({ role }: { role: WorkspaceRole }) {
     </div>
 
     {editor && data && <AuxiliaryDialog editor={editor} module={module} providers={data.providers} approvers={data.approvers} busy={busy} onClose={() => setEditor(null)} onSubmit={handleDialogSubmit} />}
-    {toast && <div className={styles.toast} role="status"><Check aria-hidden="true" />{toast}</div>}
+    <CenterToast message={toast} />
   </section>;
 }
 

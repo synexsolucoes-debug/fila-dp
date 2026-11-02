@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   AlertTriangle, Bot, CircleSlash, Cable, History, Pause, Play, RefreshCw, RotateCcw, Timer,
 } from "lucide-react";
-import { ConfirmDialog, EmptyState, ErrorBanner, LoadingState, PanelHeader } from "../shared";
+import { ConfirmDialog, EmptyState, ErrorBanner, LoadingState, PanelHeader, CenterToast } from "../shared";
 import {
   formatDateTime, formatDuration, normalizeAgentLog, normalizeAgentRun,
   normalizeAgentsPayload, requestJson,
@@ -253,7 +253,7 @@ export function AgentsView({ initialRunId = "" }: { initialRunId?: string }) {
     />
 
     {error ? <ErrorBanner message={error} onDismiss={() => setError("")} /> : null}
-    {toast ? <p className={styles.agentDetail} role="status">{toast}</p> : null}
+    <CenterToast message={toast} />
 
     {payload ? <p className={styles.agentDetail}>
       <strong>Política de automação do grupo:</strong> {payload.automation.label}

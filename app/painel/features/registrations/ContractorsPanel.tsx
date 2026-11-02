@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Briefcase, CalendarClock, CircleDollarSign, History, LoaderCircle, Plus, RefreshCw, X,
 } from "lucide-react";
-import { EmptyState, ErrorBanner, LoadingState, StatusPill } from "../shared";
+import { EmptyState, ErrorBanner, LoadingState, StatusPill, CenterToast } from "../shared";
 import styles from "./registrations.module.css";
 import { contagem } from "../shared/plural";
 
@@ -517,7 +517,7 @@ export function ContractorsPanel({ canManage, createSignal, onOpenPayment }: {
         />
       )}
 
-      {toast && <p className={styles.toast} role="status">{toast}</p>}
+      <CenterToast message={toast} />
     </div>
   );
 }

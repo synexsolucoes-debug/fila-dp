@@ -12,7 +12,7 @@ import { ContractorPaymentDetail } from "./ContractorPaymentDetail";
 import { ContractorDocumentsDialog } from "./ContractorDocumentsDialog";
 import { ContractorSectionView, contractorActionsFor } from "./ContractorSections";
 import { ContractorEntryDialog, type EntrySubmission } from "./ContractorEntryDialog";
-import { AnimatedModal } from "../shared";
+import { AnimatedModal, CenterToast } from "../shared";
 import { contractorSection, type ContractorSectionId } from "./contractor-sections";
 import {
   normalizeCompany, normalizeContractorOverview, normalizeContractorPaymentDetail,
@@ -877,7 +877,7 @@ export function PaymentsView({ role, module, section = "contractorPayments", foc
         </>
       )}
 
-      {toast && <p className={styles.toast} role="status">{toast}</p>}
+      <CenterToast message={toast} />
       {paymentDetail ? (
         <ContractorPaymentDetail
           detail={paymentDetail}

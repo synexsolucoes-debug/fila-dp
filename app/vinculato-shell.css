@@ -787,3 +787,73 @@
   color: var(--ui-text-muted, var(--ui-text));
   font-size: .9rem;
 }
+
+/* ========================================================================== */
+/* 9. Aviso central em vidro (CenterToast)                                     */
+/* ========================================================================== */
+/* Recados de "salvo" e erros, no centro da tela e em vidro fosco. A camada não
+   recebe clique: só o próprio aviso, para a tela continuar usável por baixo. */
+.center-toast-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  pointer-events: none;
+}
+.center-toast {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(480px, 100%);
+  padding: 14px 18px;
+  border: 1px solid color-mix(in srgb, var(--ui-surface, #fff) 55%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--ui-surface, #fff) 84%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(170%);
+  backdrop-filter: blur(18px) saturate(170%);
+  box-shadow: 0 18px 48px rgb(15 23 42 / 18%), 0 2px 6px rgb(15 23 42 / 8%), inset 0 1px 0 rgb(255 255 255 / 45%);
+  color: var(--ui-text, #172235);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  transform-origin: center;
+  animation: center-toast-in 260ms cubic-bezier(.2, .9, .3, 1.2) both;
+}
+.center-toast[data-state="closing"] { animation: center-toast-out 200ms cubic-bezier(.4, 0, 1, 1) both; }
+.center-toast > svg { flex-shrink: 0; width: 20px; height: 20px; color: var(--ui-success, #137a4f); }
+.center-toast[data-tone="error"] > svg { color: var(--ui-danger, #b42318); }
+.center-toast[data-tone="error"] { border-color: color-mix(in srgb, var(--ui-danger, #b42318) 30%, transparent); }
+.center-toast > button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-left: 4px;
+  border: 0;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ui-text, #172235) 8%, transparent);
+  color: inherit;
+  cursor: pointer;
+}
+.center-toast > button svg { width: 15px; height: 15px; }
+/* Sem suporte a desfoque, o vidro vira superfície sólida para o texto não
+   ficar sobre o conteúdo embaralhado. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .center-toast { background: var(--ui-surface-elevated, #fff); }
+}
+@keyframes center-toast-in {
+  from { opacity: 0; transform: translateY(8px) scale(.94); filter: blur(4px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+@keyframes center-toast-out {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(-6px) scale(.97); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .center-toast { animation-name: center-toast-fade; animation-duration: 160ms; }
+  .center-toast[data-state="closing"] { animation-name: center-toast-fade; animation-direction: reverse; }
+}
+@keyframes center-toast-fade { from { opacity: 0; } to { opacity: 1; } }

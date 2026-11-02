@@ -6,6 +6,7 @@ export {
 } from "./competence-cycle";
 export { connectionStatusLabel, connectionStatusLabels, connectionTone, lastSyncLabel, runStatusLabel } from "./connection-status";
 export { MemberModules } from "./MemberModules";
+export { CenterToast } from "./CenterToast";
 export {
   AnimatedDrawer, AnimatedModal, AnimatedTabs, FadeIn, MotionCard, PageTransition,
   StaggerContainer, StaggerItem, useDialogFocus, useExitTransition, usePrefersReducedMotion,
