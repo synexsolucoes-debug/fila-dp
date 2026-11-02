@@ -20,6 +20,7 @@ export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "erp.access");
     requireCapability(workspace, "payroll.read");
     const scope = await companyScopeClause(d1, workspace.id, user.id, workspace.role, url.searchParams.get("companyId") ?? "", "r.company_id");
     if (!scope) return Response.json({ competence: null, competences: [], costs: [], byCostCenter: [], byDepartment: [], totals: null, evolution: [] });

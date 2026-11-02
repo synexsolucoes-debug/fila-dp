@@ -12,6 +12,7 @@ export async function POST(request: Request, context: RouteContext) {
   try {
     const { id } = await context.params;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "erp.access");
     requireCapability(workspace, "payroll.manage");
     const run = await d1.prepare("SELECT company_id FROM fdp_payroll_runs WHERE workspace_id = ? AND id = ?").bind(workspace.id, id).first<{ company_id: string }>();
     if (!run) throw ApiError.notFound("Folha não encontrada.", "PAYROLL_RUN_NOT_FOUND");

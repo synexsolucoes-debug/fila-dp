@@ -152,7 +152,12 @@ export function MemberModules({ memberId, memberName, canManage }: {
                   <span className={item.allowed ? undefined : styles.matrixDenied}>
                     {item.allowed ? "Tem acesso" : "Sem acesso"}
                   </span>
-                  {!item.allowed && item.message && <small>{item.message}</small>}
+                  {/* Módulo em construção (migration 0121): fecha para todos e só o
+                      administrador libera. "Seu perfil não tem permissão" aqui
+                      daria a entender que é o papel que decide. */}
+                  {!item.allowed && (item.description.startsWith("Em construção")
+                    ? <small>Em construção: fechado até você liberar.</small>
+                    : item.message && <small>{item.message}</small>)}
                 </td>
                 {canManage && (
                   <td className={styles.rowActions}>

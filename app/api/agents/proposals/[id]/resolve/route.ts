@@ -2,7 +2,7 @@ import { apiError, getApiUser, text } from "@/lib/fila-dp-api";
 import {
   getWorkspaceContext, prepareActivity, prepareAuditEvent, requireCompanyAccess,
 } from "@/lib/fila-dp-db";
-import { hasCapability, requireNamedCapability } from "@/lib/authorization";
+import { hasCapability, requireNamedCapability, requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { isSensitiveAction } from "@/lib/agent-proposals";
 import { prepareDomainEventEnvelope } from "@/lib/outbox";
@@ -39,6 +39,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     const { id } = await params;
     const body = await request.json().catch(() => ({})) as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "agents.access");
     requireNamedCapability(workspace, "integrations.reconcile", "resolver uma proposta de agente");
 
     const action = text(body.action, 20);

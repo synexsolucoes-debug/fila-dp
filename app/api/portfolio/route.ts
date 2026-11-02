@@ -1,6 +1,6 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getCompanyAccessScope, getWorkspaceContext, prepareAuditEvent, requireCompanyAccess } from "@/lib/fila-dp-db";
-import { requireNamedCapability } from "@/lib/authorization";
+import { requireNamedCapability, requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { cleanText } from "@/lib/clean-text";
 import { todayInBrazil } from "@/lib/employee-history";
@@ -23,6 +23,7 @@ export async function GET() {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "portfolio.access");
     requireNamedCapability(workspace, "portfolio.read", "consultar a carteira do DP");
     const access = await getCompanyAccessScope(d1, workspace.id, user.id, workspace.role);
     // SQL estático (verificável por `verify:sql`): o recorte por empresa é a
@@ -106,6 +107,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "portfolio.access");
     requireNamedCapability(workspace, "portfolio.manage", "trocar a carteira do DP");
     const companyId = cleanText(body.companyId, 120);
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, companyId || null);
@@ -127,6 +129,7 @@ export async function PATCH(request: Request) {
   try {
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "portfolio.access");
     requireNamedCapability(workspace, "portfolio.manage", "alterar a situação da empresa no DP");
     const companyId = cleanText(body.companyId, 120);
     if (!isDpStatus(body.dpStatus)) throw ApiError.badRequest("Situação inválida.", "PORTFOLIO_DP_STATUS_INVALID");

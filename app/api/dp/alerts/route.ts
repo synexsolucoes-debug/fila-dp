@@ -1,6 +1,6 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getCompanyAccessScope, getWorkspaceContext } from "@/lib/fila-dp-db";
-import { requireNamedCapability } from "@/lib/authorization";
+import { requireNamedCapability, requireCapability } from "@/lib/authorization";
 import { alertTypeLabels, severityLabels, summarizeAlerts, type AlertSeverity, type AlertType } from "@/lib/dp-alerts";
 
 /**
@@ -11,6 +11,7 @@ export async function GET(request: Request) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "dp_operations.access");
     requireNamedCapability(workspace, "portfolio.read", "consultar os alertas do DP");
     const status = new URL(request.url).searchParams.get("situacao") === "respondidos" ? "answered" : "open";
     const access = await getCompanyAccessScope(d1, workspace.id, user.id, workspace.role);

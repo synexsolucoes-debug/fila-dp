@@ -1,6 +1,6 @@
 import { apiError, getApiUser, text } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, prepareAuditEvent } from "@/lib/fila-dp-db";
-import { hasCapability, requireNamedCapability } from "@/lib/authorization";
+import { hasCapability, requireNamedCapability, requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { agentAutomationPolicies, type AgentAutomationPolicy } from "@/lib/agent-proposals";
 import { listAgentRuntime, readAgentAutomationPolicy, resolveAgentChannel } from "@/lib/agent-runtime";
@@ -44,6 +44,7 @@ export async function GET() {
   if (!auth.user) return auth.response;
   try {
     const { d1, workspace } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "agents.access");
     requireNamedCapability(workspace, "integrations.status.read", "consultar os agentes");
 
     const [agents, policy, workerHealth, scheduleHealth] = await Promise.all([
@@ -98,6 +99,7 @@ export async function PATCH(request: Request) {
   try {
     const body = await request.json().catch(() => ({})) as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "agents.access");
     requireNamedCapability(workspace, "integrations.manage", "pausar ou reativar um agente");
     const requestId = request.headers.get("x-fila-dp-request-id");
 

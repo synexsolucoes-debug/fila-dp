@@ -1,6 +1,6 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, prepareAuditEvent } from "@/lib/fila-dp-db";
-import { requireNamedCapability } from "@/lib/authorization";
+import { requireNamedCapability, requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { isCompetence, previousCompetence } from "@/lib/dp-calendar";
 import { loadMonthlyReportData } from "@/lib/dp-dashboard-service";
@@ -13,6 +13,7 @@ export async function GET(request: Request) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "dp_operations.access");
     requireNamedCapability(workspace, "portfolio.read", "baixar o relatório do DP");
     const today = todayInBrazil();
     const requested = new URL(request.url).searchParams.get("competencia");
@@ -38,6 +39,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({})) as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "dp_operations.access");
     requireNamedCapability(workspace, "portfolio.manage", "enviar o relatório do DP");
     const today = todayInBrazil();
     const period = isCompetence(body.competencia) ? body.competencia : previousCompetence(today.slice(0, 7));

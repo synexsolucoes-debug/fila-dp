@@ -213,7 +213,10 @@ test("o ERP DP abre pela janela de módulos e vira uma aba que não perde o esta
   assert.doesNotMatch(app, /className="erp-mode-toggle"/u, "os botões de troca de modo voltaram ao topo");
   // Aberto uma vez, o ERP continua montado enquanto a aba existir.
   assert.match(app, /\{erpAlive && <div className="view-pane view-transition" hidden=\{!erpMode\}><ErpDpView /u);
-  assert.match(app, /const canUseErp = snapshot \? hasCapability\(snapshot\.workspace\.role, "employees\.read"\)/u);
+  // O ERP DP é módulo em construção: abre pelo módulo `erp_dp` (rota `erpDp`),
+  // e não por ler cadastro — senão não haveria como tirar o acesso de alguém.
+  assert.match(app, /enabledModules\.has\("erpDp"\)/u);
+  assert.doesNotMatch(app, /const canUseErp = snapshot \? hasCapability\(snapshot\.workspace\.role, "employees\.read"\)/u);
   // Preferência local protegida: armazenamento indisponível não quebra o painel.
   assert.match(app, /try \{ window\.localStorage\.setItem\(APP_MODE_KEY, next\); \} catch/u);
 });

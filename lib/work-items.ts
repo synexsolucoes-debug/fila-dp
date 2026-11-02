@@ -239,7 +239,9 @@ export const workItemSources: readonly WorkItemSourceDefinition[] = [
   {
     key: "triage",
     label: "Triagem",
-    capability: "integrations.status.read",
+    // Triagem é do módulo Agentes e Triagem, em construção (migration 0121):
+    // só entra em Meu trabalho de quem o administrador liberou.
+    capability: "agents.access",
     /* A triagem chega antes de o sistema saber a empresa — é justamente o que
        falta identificar (§14). Recortá-la por empresa esconderia dela quem tem
        escopo, e o item ficaria invisível para todo mundo. */
@@ -390,7 +392,9 @@ export const workItemSources: readonly WorkItemSourceDefinition[] = [
        com o responsável da carteira — "está comigo" é ser esse responsável. */
     key: "dp_alert",
     label: "Alertas do DP",
-    capability: "portfolio.read",
+    // DP Operacional está em construção (migration 0121): o alerta só aparece
+    // para quem o administrador liberou.
+    capability: "dp_operations.access",
     companyColumn: "a.company_id",
     mineCondition: "a.assigned_user_id = ?",
     mineParameters: 1,

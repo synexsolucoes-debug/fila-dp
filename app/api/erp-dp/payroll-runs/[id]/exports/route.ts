@@ -24,6 +24,7 @@ export async function GET(request: Request, context: RouteContext) {
     const kind = kinds.find((item) => item === url.searchParams.get("kind"));
     if (!kind) throw ApiError.badRequest("Escolha o arquivo: cnab, s1200 ou accounting.", "EXPORT_KIND_INVALID");
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "erp.access");
     requireCapability(workspace, "payroll.manage");
     const { run, results, settings, company } = await runForObligations(d1, workspace, user.id, id);
     if (run.status !== "closed") throw ApiError.badRequest("Feche a folha antes de gerar os arquivos.", "PAYROLL_RUN_NOT_CLOSED");

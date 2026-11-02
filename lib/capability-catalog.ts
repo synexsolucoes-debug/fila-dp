@@ -43,6 +43,10 @@ export const capabilityCatalog: Record<Capability, CapabilityDescription> = {
   "attachments.write": { area: "demands", label: "Anexar e remover arquivos" },
   "admission.sheet.read": { area: "demands", label: "Ler a ficha de contratação transcrita da admissão" },
   "reports.read": { area: "demands", label: "Abrir relatórios e indicadores" },
+  "erp.access": { area: "operations", label: "Abrir o ERP DP (em construção; demais pessoas só com liberação individual)" },
+  "dp_operations.access": { area: "operations", label: "Abrir o DP Operacional (em construção; demais pessoas só com liberação individual)" },
+  "portfolio.access": { area: "operations", label: "Abrir a Carteira (em construção; demais pessoas só com liberação individual)" },
+  "agents.access": { area: "platform", label: "Abrir Agentes e Triagem (em construção; demais pessoas só com liberação individual)" },
 
   "companies.read": { area: "registrations", label: "Ver empresas do grupo" },
   "companies.manage": { area: "registrations", label: "Criar e editar empresas" },

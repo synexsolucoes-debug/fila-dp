@@ -1,6 +1,6 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, prepareAuditEvent } from "@/lib/fila-dp-db";
-import { requireNamedCapability } from "@/lib/authorization";
+import { requireNamedCapability, requireCapability } from "@/lib/authorization";
 import { isCompetence } from "@/lib/dp-calendar";
 import { periodsToEnsure } from "@/lib/dp-recurring";
 import { generateRecurringTasks } from "@/lib/dp-recurring-service";
@@ -15,6 +15,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({})) as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "dp_operations.access");
     requireNamedCapability(workspace, "portfolio.manage", "gerar as rotinas do DP");
     const today = todayInBrazil();
     const periods = isCompetence(body.competencia)

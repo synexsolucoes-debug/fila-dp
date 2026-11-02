@@ -1,6 +1,6 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, prepareAuditEvent } from "@/lib/fila-dp-db";
-import { requireNamedCapability } from "@/lib/authorization";
+import { requireNamedCapability, requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { cleanText } from "@/lib/clean-text";
 
@@ -9,6 +9,7 @@ export async function GET() {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
     const { d1, workspace } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "dp_operations.access");
     requireNamedCapability(workspace, "portfolio.read", "consultar a configuração do DP");
     const row = await d1.prepare("SELECT tenant_task_owner_user_id, report_recipients FROM fdp_dp_settings WHERE workspace_id = ?")
       .bind(workspace.id).first<{ tenant_task_owner_user_id: string | null; report_recipients: string }>();
@@ -21,6 +22,7 @@ export async function PATCH(request: Request) {
   try {
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "dp_operations.access");
     requireNamedCapability(workspace, "portfolio.manage", "alterar a configuração do DP");
     const owner = cleanText(body.tenantTaskOwnerUserId, 120) || null;
     if (owner) {

@@ -12,6 +12,7 @@ export async function GET(_request: Request, context: RouteContext) {
   try {
     const { id } = await context.params;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "erp.access");
     requireCapability(workspace, "payroll.read");
     const { run, results, settings } = await runForObligations(d1, workspace, user.id, id);
     const missingBank = (await d1.prepare(`SELECT COUNT(*) AS total FROM fdp_payroll_results r
