@@ -8,6 +8,7 @@ import type { WorkspaceRole, WorkspaceSnapshot } from "./fila-dp-types.ts";
 import { businessMinutesBetween, workingDayMinutes } from "./fila-dp-sla.ts";
 import { getTenantContext, setTenantContext } from "./tenant-context.ts";
 import { hasCapability } from "./authorization.ts";
+import { MEMBER_HAS_BOARD_ACCESS_SQL } from "./member-board-access.ts";
 import { deniedWriteCapabilities, mergeDepartmentAndMemberGrants, resolveModules, type ModuleCategory, type ModuleDefinition } from "./modules.ts";
 import { ApiError } from "./fila-dp-api.ts";
 import { safeIntegrationError } from "./integrations.ts";
@@ -462,7 +463,8 @@ export async function getWorkspaceSnapshot(user: SessionUser): Promise<Workspace
     d1.prepare(`SELECT u.id AS user_id, u.email, u.name, wm.role, wm.joined_at, wm.employee_id,
         CASE WHEN w.owner_user_id = u.id THEN 1 ELSE 0 END AS is_owner,
         CASE WHEN u.password_hash IS NULL THEN 0 ELSE 1 END AS is_activated,
-        primary_area.area_id AS department_id, primary_area.area_name AS department_name
+        primary_area.area_id AS department_id, primary_area.area_name AS department_name,
+        ${MEMBER_HAS_BOARD_ACCESS_SQL} AS board_access
       FROM fdp_workspace_members wm
       JOIN fdp_users u ON u.id = wm.user_id
       JOIN fdp_workspaces w ON w.id = wm.workspace_id
@@ -928,6 +930,9 @@ export async function getWorkspaceSnapshot(user: SessionUser): Promise<Workspace
       companyIds: canManageMembers ? (memberCompanyIds.get(String(row.user_id)) ?? []) : [],
       departmentId: row.department_id ? String(row.department_id) : null,
       departmentName: row.department_name ? String(row.department_name) : "",
+      // Quem não tem o módulo Demandas não vira coluna nem opção de responsável
+      // (lib/member-board-access.ts).
+      boardAccess: row.board_access === true || Number(row.board_access) === 1,
       // Portal do Gestor, passo 1 (§4.20): qual colaborador esta conta
       // representa — a ponte que falta entre login e "de quem sou gestor".
       // Não junta `fdp_employees` aqui: o snapshot é carregado a cada troca

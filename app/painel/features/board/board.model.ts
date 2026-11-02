@@ -56,12 +56,27 @@ export type DemandFilters = {
   due: string;
   sla: string;
   competence: string;
+  /** Etiqueta: o id dela, ou `all`. */
+  label: string;
+  /**
+   * Parada: o mínimo de dias sem alteração (`"5"`, `"14"`, `"30"`), ou `all`.
+   * Parada é diferente de atrasada — ver `staleDays`.
+   */
+  stale: string;
 };
 
 export const defaultDemandFilters: DemandFilters = {
   query: "", companyId: "all", processType: "all", listId: "all",
   assignee: "all", priority: "all", due: "all", sla: "all", competence: "",
+  label: "all", stale: "all",
 };
+
+/** As faixas do filtro "Parada há", em dias. A menor é o mesmo limite do aviso no cartão. */
+export const STALE_FILTER_OPTIONS = [
+  { value: "5", label: "5 dias ou mais" },
+  { value: "14", label: "2 semanas ou mais" },
+  { value: "30", label: "30 dias ou mais" },
+] as const;
 
 /** Contexto que o recorte não carrega: nomes de área e quem está olhando. */
 export type BoardContext = {
@@ -173,6 +188,10 @@ export function filterDemands(
   const hoje = startOfDay(now);
   const amanha = hoje + DAY;
   const semana = hoje + 7 * DAY;
+  /* Valor fora das faixas (um link editado à mão) desliga o filtro em vez de
+     esconder o quadro inteiro. */
+  const paradaMinima = Number(filters.stale);
+  const filtraParada = filters.stale !== "all" && Number.isFinite(paradaMinima) && paradaMinima > 0;
   return cards.filter((card) => {
     const prazo = dueTime(card);
     const prazoCombina = filters.due === "all"
@@ -190,6 +209,8 @@ export function filterDemands(
       && (filters.listId === "all" || card.listId === filters.listId)
       && (filters.priority === "all" || card.priority === filters.priority)
       && (filters.competence === "" || card.competence === filters.competence)
+      && (filters.label === "all" || card.labels.some((label) => label.id === filters.label))
+      && (!filtraParada || (staleDays(card, now) ?? 0) >= paradaMinima)
       && prazoCombina
       && matchesDemandSearch(card, filters.query, context);
   });
@@ -198,7 +219,7 @@ export function filterDemands(
 /** Quantos recortes estão ligados — o número ao lado de "Filtros". */
 export function activeFilterCount(filters: DemandFilters): number {
   let total = 0;
-  for (const key of ["companyId", "processType", "listId", "assignee", "priority", "due", "sla"] as const) {
+  for (const key of ["companyId", "processType", "listId", "assignee", "priority", "due", "sla", "label", "stale"] as const) {
     if (filters[key] !== "all") total += 1;
   }
   if (filters.competence !== "") total += 1;
@@ -306,6 +327,19 @@ export type ResponsibleColumn = {
 };
 
 /**
+ * Quem pode responder por demanda — vira coluna no quadro por responsável e
+ * opção nos seletores de responsável.
+ *
+ * Só admin e membro: observador e convidado não podem ser alvo de atribuição.
+ * E só quem tem o módulo Demandas liberado: uma colega de outro departamento,
+ * sem acesso ao quadro, não pode aparecer aqui nem receber demanda — o servidor
+ * recusaria a atribuição (lib/member-board-access.ts).
+ */
+export function canRespondForDemands(member: WorkspaceMember) {
+  return (member.role === "admin" || member.role === "member") && member.boardAccess !== false;
+}
+
+/**
  * As colunas do quadro operacional, uma por pessoa.
  *
  * Três decisões que mudam o que o gestor enxerga:
@@ -333,10 +367,7 @@ export function responsibleColumns(
     if (atual) atual.push(card); else porNome.set(nome, [card]);
   }
 
-  /* Só admin e membro respondem por demanda: observador e convidado não podem
-     ser alvo de atribuição, e uma coluna para eles seria um alvo de arrasto que
-     o servidor recusaria. */
-  const operacionais = members.filter((member) => member.role === "admin" || member.role === "member");
+  const operacionais = members.filter(canRespondForDemands);
   if (options.includeIdle !== false) {
     for (const member of operacionais) if (!porNome.has(member.name)) porNome.set(member.name, []);
   }
@@ -615,6 +646,8 @@ const FILTER_KEYS: Array<[keyof DemandFilters, string]> = [
   ["due", "prazo"],
   ["sla", "situacao"],
   ["competence", "competencia"],
+  ["label", "etiqueta"],
+  ["stale", "parada"],
 ];
 
 export function writeBoardFilters(filters: DemandFilters, into = new URLSearchParams()): URLSearchParams {
@@ -655,6 +688,8 @@ export function presetViews(currentMemberName: string): Array<{ id: string; labe
     { id: "atrasadas", label: "Atrasadas", filters: { sla: "overdue" } },
     { id: "hoje", label: "Hoje", filters: { due: "today" } },
     { id: "semana", label: "Esta semana", filters: { due: "week" } },
+    // A demanda esquecida que ainda está no prazo: parada há 5 dias ou mais.
+    { id: "paradas", label: "Paradas", filters: { stale: "5" } },
   ];
 }
 
@@ -721,4 +756,60 @@ export function applyAssigneeOptimistically(
         : card)),
     })),
   };
+}
+
+/**
+ * Mover uma demanda na tela antes de o servidor responder, como no Trello: o
+ * cartão cai onde foi solto na hora, e o snapshot do servidor confirma depois.
+ * Se a gravação falhar, quem chamou devolve o snapshot anterior.
+ *
+ * `beforeCardId` é a demanda que fica logo acima; `afterCardId`, a que fica
+ * logo abaixo. Sem nenhum dos dois, a demanda vai para o fim da coluna.
+ */
+export function applyMoveOptimistically(
+  snapshot: WorkspaceSnapshot,
+  cardId: string,
+  toListId: string,
+  neighbours: { beforeCardId?: string; afterCardId?: string } = {},
+): WorkspaceSnapshot {
+  const moving = snapshot.lists.flatMap((list) => list.cards).find((card) => card.id === cardId);
+  if (!moving || !snapshot.lists.some((list) => list.id === toListId)) return snapshot;
+  const moved = { ...moving, listId: toListId };
+  return {
+    ...snapshot,
+    lists: snapshot.lists.map((list) => {
+      const rest = list.cards.filter((card) => card.id !== cardId);
+      if (list.id !== toListId) return rest.length === list.cards.length ? list : { ...list, cards: rest };
+      let index = rest.length;
+      if (neighbours.afterCardId) {
+        const at = rest.findIndex((card) => card.id === neighbours.afterCardId);
+        if (at >= 0) index = at;
+      } else if (neighbours.beforeCardId) {
+        const at = rest.findIndex((card) => card.id === neighbours.beforeCardId);
+        if (at >= 0) index = at + 1;
+      }
+      return { ...list, cards: [...rest.slice(0, index), moved, ...rest.slice(index)] };
+    }),
+  };
+}
+
+/** A partir de quantos dias sem movimento a demanda aberta ganha o aviso. */
+export const STALE_AFTER_DAYS = 5;
+
+/**
+ * Há quantos dias a demanda está parada, ou `null` quando não interessa.
+ *
+ * Parada é diferente de atrasada (§17 de docs/engenharia-reversa-trello.md):
+ * uma demanda dentro do prazo que ninguém toca há uma semana é a que vai
+ * estourar sem aviso. Concluída e pausada não contam — a primeira terminou, a
+ * segunda está esperando alguém de fora de propósito.
+ */
+export function staleDays(card: Pick<Card, "updatedAt" | "slaStatus">, now = new Date()): number | null {
+  if (card.slaStatus === "completed" || card.slaStatus === "paused") return null;
+  const raw = String(card.updatedAt ?? "").trim();
+  if (!raw) return null;
+  const updated = new Date(raw.includes("T") ? raw : `${raw.replace(" ", "T")}Z`);
+  if (Number.isNaN(updated.getTime())) return null;
+  const days = Math.floor((now.getTime() - updated.getTime()) / 86_400_000);
+  return days >= STALE_AFTER_DAYS ? days : null;
 }

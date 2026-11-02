@@ -112,7 +112,8 @@ export async function POST(request: Request) {
       : null;
     if (requestedTemplateId && !template) return Response.json({ error: "Template inválido." }, { status: 400 });
     const processType = validProcessType(template ? template.process_type : body.processType);
-    let dueAt = validDueAt(body.dueAt);
+    // Sem prazo informado (o "Adicionar demanda" da coluna, a API) vale o SLA do processo.
+    let dueAt = body.dueAt === undefined ? null : validDueAt(body.dueAt);
     let slaTargetMinutes = 0;
     if (!dueAt) {
       const [settings, holidays, policy] = await Promise.all([

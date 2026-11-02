@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { X } from "lucide-react";
 import type { BoardList, WorkspaceMember } from "@/lib/fila-dp-types";
+import { canRespondForDemands } from "./board.model";
 import styles from "./board.module.css";
 
 export type BulkAction =
@@ -31,7 +32,7 @@ export function BulkBar({ count, members, lists, busy, onRun, onClear }: {
   onClear: () => void;
 }) {
   const [dueAt, setDueAt] = useState("");
-  const operacionais = members.filter((member) => member.role === "admin" || member.role === "member");
+  const operacionais = members.filter(canRespondForDemands);
 
   return (
     <div className={styles.bulkBar} role="region" aria-label="Ações para as demandas selecionadas">

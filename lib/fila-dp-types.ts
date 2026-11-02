@@ -296,6 +296,11 @@ export type WorkspaceMember = {
   /** Departamento principal no Workspace; dá os módulos padrão da pessoa. */
   departmentId: string | null;
   departmentName: string;
+  /**
+   * Se a pessoa tem o módulo Demandas liberado. Quem não tem não aparece como
+   * coluna do quadro nem como opção de responsável. Ausente = liberado.
+   */
+  boardAccess?: boolean;
   /** Portal do Gestor, passo 1 (§4.20): qual colaborador esta conta representa. */
   employeeId: string | null;
   employeeName: string;

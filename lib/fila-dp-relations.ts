@@ -1,6 +1,11 @@
 // Extensão explícita: sem ela o carregador de tipos do Node recusa o módulo, e
 // `addBusinessDays` precisa ser importável por teste sem passar pelo bundler.
 import { ApiError } from "./api-errors.ts";
+import { MEMBER_HAS_BOARD_ACCESS_SQL } from "./member-board-access.ts";
+
+function truthy(value: unknown) {
+  return value === true || Number(value) === 1;
+}
 
 export function addBusinessDays(start: string, days: number, businessDays: number[], holidays: Set<string>) {
   const cursor = new Date(`${start}T12:00:00Z`);
@@ -36,11 +41,27 @@ export async function replaceCardRelations(
   if (body.assigneeIds !== undefined) {
     const requestedIds = stringIds(body.assigneeIds);
     const members = requestedIds.length
-      ? await d1.prepare(`SELECT u.id, u.name FROM fdp_users u JOIN fdp_workspace_members wm ON wm.user_id = u.id
+      ? await d1.prepare(`SELECT u.id, u.name,
+            ${MEMBER_HAS_BOARD_ACCESS_SQL} AS board_access,
+            EXISTS (SELECT 1 FROM fdp_card_assignees current_assignee
+              WHERE current_assignee.card_id = ? AND current_assignee.user_id = u.id) AS already_assigned
+          FROM fdp_users u
+          JOIN fdp_workspace_members wm ON wm.user_id = u.id
+          JOIN fdp_workspaces w ON w.id = wm.workspace_id
           WHERE wm.workspace_id = ? AND u.id IN (${requestedIds.map(() => "?").join(",")}) AND wm.role IN ('admin','member')`)
-        .bind(workspaceId, ...requestedIds).all<Record<string, unknown>>()
+        .bind(cardId, workspaceId, ...requestedIds).all<Record<string, unknown>>()
       : { results: [] };
     if (members.results.length !== requestedIds.length) throw ApiError.badRequest("Um ou mais responsáveis são inválidos.", "INVALID_ASSIGNEES");
+    /* Só quem tem o módulo Demandas pode passar a responder por uma demanda.
+       Quem já era responsável antes da regra continua: editar outro campo da
+       demanda não pode falhar por causa de uma atribuição antiga. */
+    const semAcesso = members.results.filter((member) => !truthy(member.board_access) && !truthy(member.already_assigned));
+    if (semAcesso.length > 0) {
+      throw ApiError.badRequest(
+        "Esta pessoa não tem acesso ao módulo Demandas e não pode ser responsável. Libere o módulo para ela em Configurações › Equipe.",
+        "ASSIGNEE_WITHOUT_BOARD_ACCESS",
+      );
+    }
     statements.push(d1.prepare("DELETE FROM fdp_card_assignees WHERE card_id = ?").bind(cardId));
     for (const member of members.results) {
       statements.push(d1.prepare("INSERT INTO fdp_card_assignees (workspace_id, card_id, user_id) VALUES (?, ?, ?)").bind(workspaceId, cardId, String(member.id)));

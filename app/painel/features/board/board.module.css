@@ -277,6 +277,9 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
   box-shadow: var(--ui-shadow-modal);
 }
 .filterFields label, .sort { display: grid; gap: 4px; }
+/* Nome longo (etiqueta, empresa) corta com reticências em vez de cobrir a seta. */
+.filterFields label { min-width: 0; }
+.filterFields select { width: 100%; text-overflow: ellipsis; }
 .filterFields span, .sort > span { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: none; color: var(--ui-text-muted); }
 /* 36px, a mesma altura da caixa de busca ao lado.
    A régua de consistência do produto julga altura por repetição: um valor usado
@@ -284,6 +287,7 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
    de 32px aqui seria exatamente isso — e o quadro não ganha densidade nenhuma
    com 4px a menos num controle que aparece uma vez. */
 .filterFields select, .sort select {
+  min-width: 0;
   height: 40px;
   padding: 0 10px;
   border: 1px solid var(--ui-border);
