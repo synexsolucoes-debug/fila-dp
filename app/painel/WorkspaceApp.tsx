@@ -83,7 +83,7 @@ import { capabilitiesForRole, hasCapability, workspaceRoles } from "@/lib/author
 import { capabilityAreas, capabilitiesOfArea, capabilityCatalog, roleSummaries, type CapabilityArea } from "@/lib/capability-catalog";
 import { formatWorkingMinutes } from "@/lib/fila-dp-sla";
 import { overviewPeriodLabel, overviewPeriods, periodWindowEnd, periodWindowStart, withinPeriod, type OverviewPeriod } from "@/lib/overview-period";
-import { AnimatedDrawer, AnimatedTabs, competenceLabel, ProcessTabsProvider, connectionStatusLabel, connectionTone, lastSyncLabel, MemberModules, PageTransition } from "./features/shared";
+import { AnimatedDrawer, AnimatedTabs, CenterToast, competenceLabel, ProcessTabsProvider, connectionStatusLabel, connectionTone, lastSyncLabel, MemberModules, PageTransition } from "./features/shared";
 import { RequestError, requestErrorFrom, supportReference } from "./request-error";
 import { AssistantPanel } from "./features/assistant/AssistantPanel";
 import { RegistrationsView } from "./features/registrations";
@@ -3688,8 +3688,9 @@ export function WorkspaceApp({
         </footer>
       </section>
 
-      {error && <div className="workspace-toast error" role="alert"><span>!</span>{error}<button onClick={() => setError("")}>×</button></div>}
-      {toast && <div className="workspace-toast" role="status"><span>✓</span>{toast}</div>}
+      {/* Avisos no centro da tela, em vidro (CenterToast), iguais em todas as telas. */}
+      <CenterToast message={error} tone="error" onClose={() => setError("")} />
+      <CenterToast message={toast} />
       {/* O teto de favoritos precisa ser dito: sem o recado, marcar o nono
           simplesmente não faria nada, e a pessoa concluiria que o botão está
           quebrado. */}

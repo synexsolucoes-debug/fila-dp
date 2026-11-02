@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle, ArrowRight, CheckCircle2, ClipboardCheck, Inbox, RefreshCw, ShieldQuestion, UserRoundCog,
 } from "lucide-react";
-import { EmptyState, ErrorBanner, LoadingState, PanelHeader } from "../shared";
+import { EmptyState, ErrorBanner, LoadingState, PanelHeader, CenterToast } from "../shared";
 import { formatDateTime, normalizeTriagePayload, requestJson } from "./work.api";
 import type { TriageItem, TriagePayload } from "./work.types";
 import styles from "./work.module.css";
@@ -139,7 +139,7 @@ export function TriageView({ initialItemId = "" }: { initialItemId?: string }) {
     />
 
     {error ? <ErrorBanner message={error} onDismiss={() => setError("")} /> : null}
-    {toast ? <p className={styles.agentDetail} role="status">{toast}</p> : null}
+    <CenterToast message={toast} />
 
     {counts ? <div className={styles.counters} role="group" aria-label="Resumo da triagem">
       <Counter label="Sem identificação" value={counts.pendingTriage} tone="critical" />

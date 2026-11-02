@@ -8,7 +8,7 @@ import type { WorkspaceRole } from "@/lib/fila-dp-types";
 import { TimeDialog as TimeDialogView } from "./TimeDialogs";
 import { duration, normalizeCompany, normalizeOverview, requestJson, type Row } from "./time.api";
 import type { CompanyOption, TimeDialog, TimeOverview } from "./time.types";
-import { ErrorBanner } from "../shared";
+import { ErrorBanner, CenterToast } from "../shared";
 import styles from "./time.module.css";
 
 const statusLabels: Record<string, string> = {
@@ -445,7 +445,7 @@ export function TimeTrackingView({ role }: { role: WorkspaceRole }) {
           onSubmit={submitDialog}
         />
       )}
-      {toast && <p className={styles.toast} role="status">{toast}</p>}
+      <CenterToast message={toast} />
     </section>
   );
 }

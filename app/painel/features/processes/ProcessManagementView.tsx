@@ -11,7 +11,7 @@ import { processTemplates, templateShape } from "@/lib/process-templates";
 import {
   AnimatedDrawer, AnimatedModal, AnimatedTabs, ConfirmDialog, EmptyState, ErrorBanner, FadeIn,
   MotionCard, PageSkeleton, StaggerContainer, StaggerItem, StatusPill, type AnimatedTab,
-} from "../shared";
+ CenterToast } from "../shared";
 import { ProcessOperationPanel, type ProcessSheetSection } from "../work";
 import { ProcessModeler } from "./ProcessModeler";
 import { processRequest, processStatusLabel, processVersionLabel } from "./processes.api";
@@ -387,7 +387,7 @@ export function ProcessManagementView({ role }: { role: WorkspaceRole }) {
 
   return <div className={styles.workspace}>
     {error && <ErrorBanner message={error} onDismiss={() => setError("")} />}
-    {toast && <div className={styles.toast} role="status">{toast}</div>}
+    <CenterToast message={toast} />
 
     <header className={styles.pageHeader}>
       <div>

@@ -2,13 +2,13 @@
 
 import { channelLabel } from "./integrations.types";
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, Cable, CheckCircle2, Clock3, KeyRound, RefreshCw, RotateCw, Settings2, ShieldCheck, Unplug } from "lucide-react";
+import { AlertTriangle, Cable, Clock3, KeyRound, RefreshCw, RotateCw, Settings2, ShieldCheck, Unplug } from "lucide-react";
 import type { WorkspaceRole } from "@/lib/fila-dp-types";
 import { IntegrationDrawer } from "./IntegrationDrawers";
 import { normalizeOverview, requestJson, type Row } from "./integrations.api";
 import type { Connector, IntegrationEditor, IntegrationsOverview, StandardConnectorConfig } from "./integrations.types";
 import { SankhyaConnectorPanel } from "./SankhyaConnectorPanel";
-import { connectionStatusLabel, EmptyState, ErrorBanner, PageSkeleton, PanelHeader, StatusPill } from "../shared";
+import { connectionStatusLabel, EmptyState, ErrorBanner, PageSkeleton, PanelHeader, StatusPill, CenterToast } from "../shared";
 import styles from "./integrations.module.css";
 
 const empty: IntegrationsOverview = {
@@ -159,6 +159,6 @@ export function IntegrationsView({ role }: { role: WorkspaceRole }) {
     </section>
     {editor && <IntegrationDrawer key={`${editor.kind}-${"connector" in editor ? editor.connector.id : "new"}`} editor={editor} connectors={overview.connectors} mappings={overview.mappings} detail={null} detailLoading={false} detailError="" companies={overview.companies} busy={busy} onClose={() => setEditor(null)} onSubmit={submit} />}
     {webhookSetup && <div className={styles.overlay} role="presentation"><section className={styles.drawer} role="dialog" aria-modal="true" aria-labelledby="teams-webhook-title"><header className={styles.drawerHeader}><div><h2 id="teams-webhook-title">Webhook gerado</h2><p>Copie os três valores agora. O segredo não será mostrado novamente.</p></div></header><div className={styles.drawerBody}><section className={styles.formSection}><div className={styles.formGrid}><label className={styles.fieldWide}><span>URL do webhook</span><input readOnly value={webhookSetup.webhookUrl} onFocus={(event) => event.currentTarget.select()} /></label><label className={styles.fieldWide}><span>Cabeçalho</span><input readOnly value={webhookSetup.header} onFocus={(event) => event.currentTarget.select()} /></label><label className={styles.fieldWide}><span>Segredo (copie agora)</span><input readOnly value={webhookSetup.secret} onFocus={(event) => event.currentTarget.select()} /></label></div><aside className={styles.securityNotice}><KeyRound /><div><strong>Configure a ação HTTP do Power Automate</strong><span>Método POST, corpo da mensagem em JSON e o cabeçalho acima com este segredo.</span></div></aside></section></div><footer className={styles.drawerFooter}><button className={styles.primaryButton} type="button" onClick={() => setWebhookSetup(null)}>Já copiei e configurei</button></footer></section></div>}
-    {toast && <div className={styles.toast} role="status"><CheckCircle2 />{toast}</div>}
+    <CenterToast message={toast} />
   </section>;
 }

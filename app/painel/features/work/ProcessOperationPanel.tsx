@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { CheckCircle2, CircleDot, FileText, Lock, Play, ShieldCheck, Timer, Users } from "lucide-react";
-import { ErrorBanner, LoadingState } from "../shared";
+import { ErrorBanner, LoadingState, CenterToast } from "../shared";
 import { requestJson } from "./work.api";
 import styles from "./work.module.css";
 
@@ -230,7 +230,7 @@ export function ProcessOperationPanel({ processId, section = "flow", onStarted }
   return <section className={styles.workspace} aria-label="Ficha operacional do processo">
     {rascunho}
     {error ? <ErrorBanner message={error} onDismiss={() => setError("")} /> : null}
-    {toast ? <p className={styles.agentDetail} role="status">{toast}</p> : null}
+    <CenterToast message={toast} />
 
     {usage ? <div className={styles.counters} role="group" aria-label="Uso do processo">
       <div className={styles.counter}><strong>{usage.open}</strong><span>Demandas abertas</span></div>

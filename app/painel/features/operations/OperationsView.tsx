@@ -1,13 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  AlertTriangle, ArrowRight, BookOpenCheck, Building2, CalendarClock, Check, CheckCircle2, ChevronRight,
-  CircleDashed, CircleDot, ClipboardCheck, FilePlus2, Gauge, Inbox, ListChecks, LockKeyhole, LockOpen, Plus, RefreshCw,
-  Search, ShieldAlert, TimerReset, UserCheck, UsersRound,
-} from "lucide-react";
+import { AlertTriangle, ArrowRight, BookOpenCheck, Building2, CalendarClock, Check, ChevronRight, CircleDashed, CircleDot, ClipboardCheck, FilePlus2, Gauge, Inbox, ListChecks, LockKeyhole, LockOpen, Plus, RefreshCw, Search, ShieldAlert, TimerReset, UserCheck, UsersRound } from "lucide-react";
 import type { WorkspaceRole } from "@/lib/fila-dp-types";
-import { competenceWindow, EmptyState, ErrorBanner, PageSkeleton, PanelHeader, StatusPill } from "../shared";
+import { competenceWindow, EmptyState, ErrorBanner, PageSkeleton, PanelHeader, StatusPill, CenterToast } from "../shared";
 import { OperationDialog } from "./OperationDialogs";
 import {
   normalizeCompany, normalizeEmployee, normalizeMovement, normalizeOverview, normalizeProcess, normalizeVersion, requestJson,
@@ -257,7 +253,7 @@ export function OperationsView({ role }: { role: WorkspaceRole }) {
       </div>
 
       {editor && <OperationDialog editor={editor} cycle={cycle} companyId={companyId} competence={competence} openCompetences={openCompetences} employees={employees} approvers={data?.approvers ?? []} establishments={data?.establishments ?? []} busy={busy} onClose={() => setEditor(null)} onSubmit={handleDialogSubmit} />}
-      {toast && <div className={styles.toast} role="status"><CheckCircle2 aria-hidden="true" />{toast}</div>}
+      <CenterToast message={toast} />
     </section>
   );
 }
