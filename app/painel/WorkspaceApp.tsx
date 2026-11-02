@@ -86,7 +86,7 @@ import { contractorSections, isContractorSection, type ContractorSectionId } fro
 import { DemandDeadlineView } from "./features/work/DemandViews";
 import {
   BoardIndicators, BoardToolbar, BulkBar, QueueBoard, TeamBoard,
-  activeFilterCount, demandIndicators, filterDemands, operationalAlerts,
+  activeFilterCount, canRespondForDemands, demandIndicators, filterDemands, operationalAlerts,
   applyAssigneeOptimistically, boardViewModes, parseSavedViews, readBoardFilters,
   responsibleColumns, slaReading, toggleIndicator, writeBoardFilters,
   SAVED_VIEWS_LIMIT,
@@ -583,6 +583,7 @@ function normalizeWorkspaceSnapshot(snapshot: WorkspaceSnapshot): WorkspaceSnaps
       companyIds: Array.isArray(member.companyIds) ? member.companyIds : [],
       departmentId: member.departmentId ?? null,
       departmentName: member.departmentName ?? "",
+      boardAccess: member.boardAccess !== false,
       employeeId: member.employeeId ?? null,
       employeeName: member.employeeName ?? "",
     })) : [],
@@ -3985,7 +3986,7 @@ export function WorkspaceApp({
                 {selectedCard?.slaTargetMinutes ? <p className="card-sla-target full">SLA configurado: <strong>{formatWorkingMinutes(selectedCard.slaTargetMinutes)}</strong> de expediente. Pausas justificadas não entram na contagem.</p> : null}
                 <label>Prioridade<select value={cardForm.priority} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, priority: event.target.value })}>{["low", "normal", "high", "urgent"].map((nivel) => <option key={nivel} value={nivel}>{PRIORITY_LABELS[nivel]}</option>)}</select></label>
                 {!cardForm.processVersionId && <label>Coluna<select value={cardForm.listId} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, listId: event.target.value })}><option value="">Automática pelas regras</option>{snapshot.lists.map((list) => <option value={list.id} key={list.id}>{list.name}</option>)}</select></label>}
-                <section className="card-choice-section full" id="card-assignees" tabIndex={-1}><header><strong>Responsáveis</strong><span>A carga de cada um aparece junto do nome</span></header><div className="choice-chips">{snapshot.members.filter((member) => member.role === "admin" || member.role === "member").map((member) => {
+                <section className="card-choice-section full" id="card-assignees" tabIndex={-1}><header><strong>Responsáveis</strong><span>A carga de cada um aparece junto do nome</span></header><div className="choice-chips">{snapshot.members.filter((member) => canRespondForDemands(member) || (selectedCard?.assignees ?? []).some((assignee) => assignee.userId === member.userId)).map((member) => {
                   /* Quem já está com o quê, na hora de decidir para quem vai.
                      Atribuir às cegas é como a sobrecarga se forma: a pessoa
                      mais rápida recebe mais porque é a que vem à cabeça. O

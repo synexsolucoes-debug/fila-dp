@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import type { BoardList, Company, WorkspaceMember } from "@/lib/fila-dp-types";
 import {
-  activeFilterCount, defaultDemandFilters, presetViews,
+  activeFilterCount, canRespondForDemands, defaultDemandFilters, presetViews,
   type BoardViewMode, type DemandFilters, type DemandSort, type SavedBoardView,
 } from "./board.model";
 import styles from "./board.module.css";
@@ -265,7 +265,7 @@ export function BoardToolbar(props: BoardToolbarProps) {
                 <option value="all">Todos</option>
                 <option value="none">Sem responsável</option>
                 {props.members
-                  .filter((member) => member.role === "admin" || member.role === "member")
+                  .filter(canRespondForDemands)
                   .map((member) => <option key={member.userId} value={member.name}>{member.name}</option>)}
               </select>
             </label>

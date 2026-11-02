@@ -306,6 +306,19 @@ export type ResponsibleColumn = {
 };
 
 /**
+ * Quem pode responder por demanda — vira coluna no quadro por responsável e
+ * opção nos seletores de responsável.
+ *
+ * Só admin e membro: observador e convidado não podem ser alvo de atribuição.
+ * E só quem tem o módulo Demandas liberado: uma colega de outro departamento,
+ * sem acesso ao quadro, não pode aparecer aqui nem receber demanda — o servidor
+ * recusaria a atribuição (lib/member-board-access.ts).
+ */
+export function canRespondForDemands(member: WorkspaceMember) {
+  return (member.role === "admin" || member.role === "member") && member.boardAccess !== false;
+}
+
+/**
  * As colunas do quadro operacional, uma por pessoa.
  *
  * Três decisões que mudam o que o gestor enxerga:
@@ -333,10 +346,7 @@ export function responsibleColumns(
     if (atual) atual.push(card); else porNome.set(nome, [card]);
   }
 
-  /* Só admin e membro respondem por demanda: observador e convidado não podem
-     ser alvo de atribuição, e uma coluna para eles seria um alvo de arrasto que
-     o servidor recusaria. */
-  const operacionais = members.filter((member) => member.role === "admin" || member.role === "member");
+  const operacionais = members.filter(canRespondForDemands);
   if (options.includeIdle !== false) {
     for (const member of operacionais) if (!porNome.has(member.name)) porNome.set(member.name, []);
   }
