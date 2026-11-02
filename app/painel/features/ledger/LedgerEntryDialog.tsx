@@ -116,9 +116,9 @@ export function LedgerEntryDialog({
     || (draft.modality === "recurring" && !draft.recurringAmount);
 
   return (
-    <div className={styles.drawerBackdrop} role="dialog" aria-modal="true" aria-label="Novo lançamento">
+    <div className={styles.drawerBackdrop}>
       <form
-        className={styles.drawer}
+        className={styles.drawer} role="dialog" aria-modal="true" aria-label="Novo lançamento"
         onSubmit={(event) => { event.preventDefault(); setTouched(true); if (!missing && !previewError) onSubmit(); }}
       >
         <div className={styles.drawerHead}>

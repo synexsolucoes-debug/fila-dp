@@ -746,8 +746,8 @@ export function LedgerView({ members, currentUserId }: { members: Member[]; curr
       )}
 
       {detail && (
-        <div className={styles.drawerBackdrop} role="dialog" aria-modal="true" aria-label={detail.entry.title}>
-          <div className={styles.drawer}>
+        <div className={styles.drawerBackdrop}>
+          <div className={styles.drawer} role="dialog" aria-modal="true" aria-label={detail.entry.title}>
             <div className={styles.drawerHead}>
               <div>
                 <h2>{detail.entry.title}</h2>
