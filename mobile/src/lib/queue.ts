@@ -6,7 +6,7 @@
  * idempotência que nasce uma vez e acompanha a operação em todas as tentativas;
  * o servidor deduplica por ela, então reenviar nunca cria uma segunda entrega.
  *
- * A fila mora no SQLite do aparelho (incluído no Expo Go). O anexo — assinatura
+ * A fila mora no SQLite do aparelho (incluído no Expo Go), via `queueStore.ts`. O anexo — assinatura
  * ou foto — é um arquivo na pasta de documentos do app, que sobrevive a fechar
  * o app; a fila guarda só o caminho.
  *
@@ -19,9 +19,9 @@
  * um registro que já existe, e o servidor recusa a segunda decisão. Uma decisão
  * enfileirada poderia chegar depois de alguém decidir o contrário no painel.
  */
-import * as SQLite from "expo-sqlite";
 import { File } from "expo-file-system";
 import { api, isPermanent } from "./api";
+import { storeList, storePut, storeRemove } from "./queueStore";
 
 export type QueuedKind = "delivery" | "return" | "damage" | "stock_entry" | "stock_transfer";
 
@@ -61,33 +61,17 @@ const endpoints: Record<QueuedKind, string> = {
 /** Só os registros que aceitam anexo. Movimentação de estoque não leva evidência. */
 const entityTypes: Partial<Record<QueuedKind, string>> = { delivery: "delivery", return: "return", damage: "damage" };
 
-let database: SQLite.SQLiteDatabase | null = null;
-
-function db() {
-  if (!database) {
-    database = SQLite.openDatabaseSync("vinculato-campo.db");
-    database.execSync(`CREATE TABLE IF NOT EXISTS fila (
-      id TEXT PRIMARY KEY NOT NULL,
-      created_at INTEGER NOT NULL,
-      body TEXT NOT NULL
-    )`);
-  }
-  return database;
-}
-
 async function put(operation: QueuedOperation) {
-  await db().runAsync("INSERT OR REPLACE INTO fila (id, created_at, body) VALUES (?, ?, ?)",
-    operation.id, operation.createdAt, JSON.stringify(operation));
+  await storePut(operation.id, operation.createdAt, JSON.stringify(operation));
 }
 
 async function remove(id: string) {
-  await db().runAsync("DELETE FROM fila WHERE id = ?", id);
+  await storeRemove(id);
 }
 
 export async function listQueue(): Promise<QueuedOperation[]> {
   try {
-    const rows = await db().getAllAsync<{ body: string }>("SELECT body FROM fila ORDER BY created_at");
-    return rows.map((row) => JSON.parse(row.body) as QueuedOperation);
+    return (await storeList()).map((body) => JSON.parse(body) as QueuedOperation);
   } catch {
     // Armazenamento indisponível: a fila deixa de existir e o app segue com rede.
     return [];

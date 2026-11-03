@@ -5,7 +5,7 @@
  * As permissões vêm na resposta para a tela saber o que desenhar; o servidor
  * confere de novo em cada gravação — esconder um botão nunca foi proteção.
  */
-import * as SecureStore from "expo-secure-store";
+import { secureDelete, secureGet, secureSet } from "./secure";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AppState } from "react-native";
 import { api } from "./api";
@@ -74,8 +74,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       const [overview, stock, savedCompany, savedLocation] = await Promise.all([
         api<{ companies?: Row[]; permissions?: Record<string, boolean> }>("/api/epi/overview"),
         api<{ locations?: Row[] }>("/api/epi/stock/locations"),
-        SecureStore.getItemAsync(KEYS.company).catch(() => null),
-        SecureStore.getItemAsync(KEYS.location).catch(() => null),
+        secureGet(KEYS.company).catch(() => null),
+        secureGet(KEYS.location).catch(() => null),
       ]);
       const list = (overview.companies ?? []).map((row) => ({
         id: String(row.id), name: String(row.trade_name || row.legal_name || ""), status: String(row.status ?? "active"),
@@ -136,11 +136,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   const setCompanyId = useCallback((id: string) => {
     setCompanyIdState(id);
-    void SecureStore.setItemAsync(KEYS.company, id).catch(() => undefined);
+    void secureSet(KEYS.company, id).catch(() => undefined);
   }, []);
   const setLocationId = useCallback((id: string) => {
     setLocationIdState(id);
-    void SecureStore.setItemAsync(KEYS.location, id).catch(() => undefined);
+    void secureSet(KEYS.location, id).catch(() => undefined);
   }, []);
 
   const company = companies.find((item) => item.id === companyId) ?? null;

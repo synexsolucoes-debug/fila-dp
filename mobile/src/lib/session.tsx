@@ -6,7 +6,7 @@
  * painel com o nome "Vinculato Campo · app" e é encerrada por lá.
  */
 import Constants from "expo-constants";
-import * as SecureStore from "expo-secure-store";
+import { secureDelete, secureGet, secureSet } from "./secure";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { loginRequest, logoutRequest, normalizeServer, setCredentials, setUnauthorizedHandler } from "./api";
 
@@ -34,8 +34,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const forget = useCallback(async (server: string, notice?: string) => {
     setCredentials(null);
-    await SecureStore.deleteItemAsync(KEYS.token).catch(() => undefined);
-    await SecureStore.deleteItemAsync(KEYS.user).catch(() => undefined);
+    await secureDelete(KEYS.token).catch(() => undefined);
+    await secureDelete(KEYS.user).catch(() => undefined);
     setState({ status: "signedOut", server, user: null, notice });
   }, []);
 
@@ -43,7 +43,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     let alive = true;
     (async () => {
       const [server, token, rawUser] = await Promise.all([
-        SecureStore.getItemAsync(KEYS.server), SecureStore.getItemAsync(KEYS.token), SecureStore.getItemAsync(KEYS.user),
+        secureGet(KEYS.server), secureGet(KEYS.token), secureGet(KEYS.user),
       ]).catch(() => [null, null, null] as const);
       if (!alive) return;
       const savedServer = server || defaultServer;
@@ -70,9 +70,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const server = normalizeServer(serverInput);
     if (!server) throw new Error("Informe o endereço do Vinculato.");
     const result = await loginRequest(server, email.trim().toLowerCase(), password);
-    await SecureStore.setItemAsync(KEYS.server, server);
-    await SecureStore.setItemAsync(KEYS.token, result.token);
-    await SecureStore.setItemAsync(KEYS.user, JSON.stringify(result.user));
+    await secureSet(KEYS.server, server);
+    await secureSet(KEYS.token, result.token);
+    await secureSet(KEYS.user, JSON.stringify(result.user));
     setCredentials({ server, token: result.token });
     setState({ status: "signedIn", server, user: result.user, token: result.token });
   }, []);

@@ -7,3 +7,4 @@ expo-env.d.ts
 *.log
 ios/
 android/
+dist-web/
