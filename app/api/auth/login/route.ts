@@ -1,4 +1,4 @@
-import { safeRelativeReturnPath, setAuthSession, verifyPassword } from "@/lib/auth/session";
+import { createSessionToken, safeRelativeReturnPath, setAuthSession, verifyPassword } from "@/lib/auth/session";
 import { getD1 } from "@/db";
 import { checkLoginRateLimit, clearLoginIdentityFailures, clientAddress, recordLoginFailure } from "@/lib/auth-rate-limit";
 import { isPlatformAdmin } from "@/lib/platform-authorization";
@@ -17,7 +17,7 @@ function cleanReturnTo(value: unknown) {
   return !path || path === "/painel" ? ENTRY_PATH : path;
 }
 
-type LoginBody = { email?: string; password?: string; mode?: string; returnTo?: string };
+type LoginBody = { email?: string; password?: string; mode?: string; returnTo?: string; client?: string };
 type UserRow = {
   id: string; email: string; name: string; password_hash: string | null; password_salt: string | null;
   status?: string; status_reason?: string;
@@ -96,6 +96,24 @@ export async function POST(request: Request) {
     }
 
     await clearLoginIdentityFailures(email, address);
+
+    // Aplicativo Vinculato Campo: todas as verificações acima valem igual, e a
+    // única diferença é a entrega da sessão — token na resposta em vez de
+    // cookie. O app só serve a quem é membro de um grupo, por isso o
+    // administrador de plataforma sem grupo não recebe token.
+    if (body.client === "app") {
+      if (!access) {
+        await recordAuthEvent({ ...trail, action: "login", outcome: "denied", userId: current.id, reason: "sem associação a grupo" });
+        return Response.json({ error: "O aplicativo de campo precisa de acesso a um grupo." }, { status: 403 });
+      }
+      const session = await createSessionToken(identity, { address, userAgent, deviceLabel: "Vinculato Campo · app" });
+      await recordAuthEvent({ ...trail, action: "login", outcome: "success", userId: current.id });
+      return Response.json(
+        { ok: true, token: session.token, expiresAt: session.expiresAt, user: { name: current.name, email: current.email } },
+        { headers: { "Cache-Control": "no-store" } },
+      );
+    }
+
     await setAuthSession(identity, { address, userAgent });
     await recordAuthEvent({ ...trail, action: "login", outcome: "success", userId: current.id });
     return Response.json({

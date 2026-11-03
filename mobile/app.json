@@ -1,0 +1,59 @@
+{
+  "expo": {
+    "name": "Vinculato Campo",
+    "slug": "vinculato-campo",
+    "scheme": "vinculato-campo",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#07111f",
+    "splash": {
+      "backgroundColor": "#07111f",
+      "image": "./assets/icon.png",
+      "resizeMode": "contain"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "br.com.vinculato.campo",
+      "infoPlist": {
+        "NSCameraUsageDescription": "A câmera lê o crachá do colaborador, o código do EPI e fotografa o dano como evidência."
+      }
+    },
+    "android": {
+      "package": "br.com.vinculato.campo",
+      "adaptiveIcon": {
+        "backgroundColor": "#07111f",
+        "foregroundImage": "./assets/icon.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-sqlite",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "A câmera lê o crachá do colaborador e o código do EPI.",
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "A câmera fotografa o dano do EPI como evidência.",
+          "photosPermission": false,
+          "microphonePermission": false
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": false,
+      "tsconfigPaths": true
+    },
+    "extra": {
+      "defaultServer": "https://vinculato.vercel.app"
+    }
+  }
+}

@@ -82,6 +82,50 @@ async function readSessionToken(token: string | undefined): Promise<SessionUser 
   return { id: session.id, sessionId: session.session_id, email: session.email, displayName: session.name, fullName: session.name };
 }
 
+/**
+ * Cliente nativo: o aplicativo Vinculato Campo (Expo).
+ *
+ * Ele não tem cookie de navegador nem envia `Origin`, então se identifica por
+ * este cabeçalho e se autentica pelo token no `Authorization`. O cabeçalho em
+ * si não é credencial — é o que permite ao filtro de origem distinguir um
+ * cliente nativo de um navegador. Navegador nenhum envia um pedido sem
+ * `Origin` com cabeçalho próprio: isso exige `fetch` de outra origem, que passa
+ * por preflight de CORS, e este servidor não libera CORS.
+ */
+export const NATIVE_CLIENT_HEADER = "x-vinculato-client";
+export const NATIVE_CLIENT_VALUE = "campo-app";
+
+/** Token do cabeçalho `Authorization: Bearer …`, ou vazio. */
+export function bearerToken(value: string | null | undefined) {
+  const match = /^Bearer\s+([A-Za-z0-9_-]{32,200})$/u.exec(String(value ?? "").trim());
+  return match ? match[1] : "";
+}
+
+/**
+ * Cria a sessão no banco e devolve o token em claro, uma única vez.
+ *
+ * É a mesma tabela e o mesmo formato da sessão do navegador: o token do app
+ * aparece em "Sessões" no painel e é revogado por lá, sem mecanismo paralelo.
+ */
+export async function createSessionToken(user: SessionUser, metadata: { address?: string; userAgent?: string; deviceLabel?: string } = {}) {
+  if (!user.id) throw new Error("Não foi possível criar uma sessão sem usuário persistido.");
+  const token = randomBytes(32).toString("base64url");
+  const expiresAt = new Date(Date.now() + SESSION_TTL_SECONDS * 1000).toISOString();
+  await getD1().prepare(`INSERT INTO fdp_auth_sessions
+    (id, user_id, token_hash, expires_at, device_label, ip_hash)
+    VALUES (?, ?, ?, ?, ?, ?)`)
+    .bind(
+      crypto.randomUUID(),
+      user.id,
+      hashSessionToken(token),
+      expiresAt,
+      metadata.deviceLabel || sessionDeviceLabel(metadata.userAgent ?? ""),
+      hashSessionAddress(metadata.address ?? ""),
+    )
+    .run();
+  return { token, expiresAt };
+}
+
 export async function setAuthSession(user: SessionUser, metadata: { address?: string; userAgent?: string } = {}) {
   if (!user.id) throw new Error("Não foi possível criar uma sessão sem usuário persistido.");
   const token = randomBytes(32).toString("base64url");
@@ -109,6 +153,18 @@ export async function setAuthSession(user: SessionUser, metadata: { address?: st
 }
 
 export async function clearAuthSession() {
+  // Saída do app: revoga o token do cabeçalho. Não há cookie para apagar.
+  const appToken = bearerToken((await headers()).get("authorization"));
+  if (appToken) {
+    if (authSecret()) {
+      await getD1().prepare(`UPDATE fdp_auth_sessions
+        SET revoked_at = CURRENT_TIMESTAMP
+        WHERE token_hash = ? AND revoked_at IS NULL`)
+        .bind(hashSessionToken(appToken))
+        .run();
+    }
+    return;
+  }
   const store = await cookies();
   const token = store.get(SESSION_COOKIE)?.value;
   if (token && authSecret()) {
@@ -138,6 +194,11 @@ export async function verifyPassword(password: string, salt: string, expectedHas
 }
 
 export async function getSessionUser(): Promise<SessionUser | null> {
+  // Com `Authorization`, vale só o token: um pedido do app nunca cai para o
+  // cookie, e um token inválido não é "salvo" por um cookie que estiver junto.
+  const authorization = (await headers()).get("authorization");
+  if (authorization) return readSessionToken(bearerToken(authorization) || undefined);
+
   const requestCookies = await cookies();
   const sessionUser = await readSessionToken(requestCookies.get(SESSION_COOKIE)?.value);
   if (sessionUser) return sessionUser;

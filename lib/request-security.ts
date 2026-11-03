@@ -36,8 +36,17 @@ export function isAllowedRequestOrigin(input: {
   pathname: string;
   origin: string | null;
   requestOrigin: string;
+  /** Valor do cabeçalho `x-vinculato-client`. */
+  nativeClient?: string | null;
 }) {
   if (!requiresSameOrigin(input.method, input.pathname)) return true;
+  // App nativo (Vinculato Campo): `Origin` **ausente** e o cabeçalho
+  // próprio. Navegador sempre manda `Origin` numa mutação de outra origem, e
+  // não consegue juntar cabeçalho próprio sem um preflight que este servidor
+  // recusa — então esta combinação não sai de navegador. A autenticação segue
+  // sendo o token Bearer; isto só decide que a ausência de `Origin` é esperada.
+  // `Origin: null` (iframe com sandbox, arquivo local) continua recusado.
+  if (input.origin === null && input.nativeClient === "campo-app") return true;
   const origin = parseOrigin(input.origin);
   const requestOrigin = parseOrigin(input.requestOrigin);
   return Boolean(origin && requestOrigin && origin === requestOrigin);
