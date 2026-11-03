@@ -1,0 +1,25 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "paths": {
+      "@/*": [
+        "../*"
+      ]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    "../lib/epi.ts",
+    "../lib/epi-compliance.ts",
+    "../app/campo/sesmt.logic.ts",
+    "../app/painel/features/epi/epi.api.ts",
+    "../app/painel/features/epi/epi.types.ts",
+    "expo-env.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist-check"
+  ]
+}

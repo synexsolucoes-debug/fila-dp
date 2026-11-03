@@ -24,6 +24,7 @@ export function proxy(request: NextRequest) {
     pathname: request.nextUrl.pathname,
     origin: request.headers.get("origin"),
     requestOrigin: request.nextUrl.origin,
+    nativeClient: request.headers.get("x-vinculato-client"),
   });
 
   const nonce = createCspNonce();

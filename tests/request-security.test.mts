@@ -38,3 +38,14 @@ test("keeps only signed Tangerino attachment worker routes outside browser-origi
   assert.equal(requiresSameOrigin("POST", "/api/integrations/tangerino/attachments"), true);
   assert.equal(requiresSameOrigin("POST", "/api/integrations/tangerino/credentials"), true);
 });
+
+test("o app nativo muta sem Origin só com o próprio cabeçalho; navegador continua barrado", () => {
+  const base = { method: "POST", pathname: "/api/epi/deliveries", requestOrigin: "https://fila.example.com" };
+  assert.equal(isAllowedRequestOrigin({ ...base, origin: null, nativeClient: "campo-app" }), true);
+  // Cabeçalho do app não salva pedido que veio de outra origem: navegador sempre manda Origin.
+  assert.equal(isAllowedRequestOrigin({ ...base, origin: "https://attacker.example", nativeClient: "campo-app" }), false);
+  // `Origin: null` é iframe com sandbox ou arquivo local, não o app.
+  assert.equal(isAllowedRequestOrigin({ ...base, origin: "null", nativeClient: "campo-app" }), false);
+  assert.equal(isAllowedRequestOrigin({ ...base, origin: null, nativeClient: "outro" }), false);
+  assert.equal(isAllowedRequestOrigin({ ...base, origin: null }), false);
+});

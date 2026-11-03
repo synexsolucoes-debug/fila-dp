@@ -1,0 +1,9 @@
+node_modules/
+.expo/
+dist/
+dist-check/
+web-build/
+expo-env.d.ts
+*.log
+ios/
+android/
